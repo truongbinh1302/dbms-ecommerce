@@ -1,0 +1,44 @@
+services:
+  # SQL Server 2022
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver_dbms
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=SuperStrongPassword123!
+      - MSSQL_MEMORY_LIMIT_MB=1536       # Giới hạn SQL Server dùng tối đa 1.5 GB RAM
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "SuperStrongPassword123!", "-Q", "SELECT 1", "-No"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # MongoDB
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_dbms
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=adminpassword
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+# Volume để dữ liệu không mất khi restart
+volumes:
+  sqlserver_data:
+  mongodb_data:

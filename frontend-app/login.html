@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinhTinhStore - Auto Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px; width: 90%; }
+        h1 { color: #333; margin-bottom: 30px; text-align: center; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        .button-group { display: flex; gap: 10px; margin-top: 30px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .btn-login { background: #667eea; color: white; }
+        .btn-login:hover { background: #5568d3; }
+        .btn-register { background: #48bb78; color: white; }
+        .btn-register:hover { background: #38a169; }
+        .message { margin-top: 20px; padding: 15px; border-radius: 4px; text-align: center; display: none; }
+        .message.success { background: #c6f6d5; color: #22543d; display: block; }
+        .message.error { background: #fed7d7; color: #742a2a; display: block; }
+        .token-display { margin-top: 20px; padding: 15px; background: #f7fafc; border-radius: 4px; display: none; }
+        .token-display h3 { color: #2d3748; margin-bottom: 10px; font-size: 14px; }
+        .token-text { font-family: 'Courier New', monospace; font-size: 11px; word-break: break-all; color: #4a5568; padding: 10px; background: white; border-radius: 3px; border: 1px solid #e2e8f0; max-height: 150px; overflow-y: auto; }
+        .copy-btn { background: #667eea; color: white; padding: 8px 12px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; margin-top: 10px; }
+        .copy-btn:hover { background: #5568d3; }
+        .spinner { display: none; text-align: center; margin-top: 20px; }
+        .spinner.active { display: block; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛍️ BinhTinhStore Login</h1>
+        
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="email" placeholder="test@example.com" value="testuser@example.com">
+        </div>
+        
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="password" placeholder="password" value="testpass123">
+        </div>
+        
+        <div class="button-group">
+            <button class="btn-login" onclick="handleLogin()">🔓 Login</button>
+            <button class="btn-register" onclick="handleRegister()">✨ Register</button>
+        </div>
+        
+        <div class="spinner" id="spinner">
+            <div class="loader"></div>
+            <p style="margin-top: 10px; color: #667eea;">Processing...</p>
+        </div>
+        
+        <div class="message" id="message"></div>
+        
+        <div class="token-display" id="tokenDisplay">
+            <h3>✅ Token Saved to localStorage!</h3>
+            <div class="token-text" id="tokenText"></div>
+            <button class="copy-btn" onclick="copyToken()">📋 Copy Token</button>
+            <p style="margin-top: 10px; color: #4a5568; font-size: 13px;">
+                ✅ Token saved to: <code style="background: #edf2f7; padding: 2px 6px; border-radius: 2px;">bt_access_token</code>
+                <br><br>
+                👉 <a href="http://localhost:5175" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 600;">Click here to go to store →</a>
+                <br><br>
+                Your token will be automatically used for checkout!
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api/v1';
+        let currentToken = '';
+
+        function showMessage(text, type = 'success') {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.className = `message ${type}`;
+        }
+
+        function showSpinner(show = true) {
+            document.getElementById('spinner').classList.toggle('active', show);
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                showMessage('❌ Please fill in all fields', 'error');
+                return;
+            }
+
+            showSpinner(true);
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                showSpinner(false);
+
+                if (data.success && data.data?.accessToken) {
+                    currentToken = data.data.accessToken;
+                    saveToken(currentToken);
+                    showMessage(`✅ Login successful! Welcome ${data.data.user?.fullName || 'User'}`, 'success');
+                } else {
+                    showMessage(`❌ ${data.message || 'Login failed'}`, 'error');
+                }
+            } catch (error) {
+                showSpinner(false);
+                showMessage(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function handleRegister() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                showMessage('❌ Please fill in all fields', 'error');
+                return;
+            }
+
+            showSpinner(true);
+            try {
+                const response = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                        fullName: email.split('@')[0],
+                        phone: '0900000000'
+                    })
+                });
+
+                const data = await response.json();
+                showSpinner(false);
+
+                if (data.success && data.data?.accessToken) {
+                    currentToken = data.data.accessToken;
+                    saveToken(currentToken);
+                    showMessage(`✅ Registration successful! Welcome ${data.data.user?.fullName || 'User'}`, 'success');
+                } else {
+                    showMessage(`❌ ${data.message || 'Registration failed'}`, 'error');
+                }
+            } catch (error) {
+                showSpinner(false);
+                showMessage(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function saveToken(token) {
+            localStorage.setItem('bt_access_token', token);
+            document.getElementById('tokenText').textContent = token;
+            document.getElementById('tokenDisplay').style.display = 'block';
+            document.getElementById('message').style.display = 'none';
+        }
+
+        function copyToken() {
+            navigator.clipboard.writeText(currentToken).then(() => {
+                alert('✅ Token copied to clipboard!');
+            });
+        }
+
+        // Auto-login on page load if token exists
+        window.addEventListener('load', () => {
+            const existingToken = localStorage.getItem('bt_access_token');
+            if (existingToken) {
+                currentToken = existingToken;
+                document.getElementById('tokenText').textContent = existingToken;
+                document.getElementById('tokenDisplay').style.display = 'block';
+                showMessage('✅ Token already exists in localStorage', 'success');
+            }
+        });
+    </script>
+</body>
+</html>

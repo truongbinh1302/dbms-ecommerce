@@ -1,0 +1,38 @@
+# Dependencies and generated output
+node_modules/
+dist/
+dist-ssr/
+coverage/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Runtime data
+logs/
+*.log
+uploads/
+*.mdf
+*.ldf
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Private course deliverables containing student information
+final-deliverables/
+
+# Empty command-artifact files from the original archive
+binhtinhstore-backend@1.0.0
+docker
+nodemon
+npm
