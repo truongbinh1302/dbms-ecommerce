@@ -151,7 +151,9 @@ export default function ProductCard({
           <div className="rounded-[24px] bg-slate-50 p-4">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
+                {product.oldPrice > product.price ? (
+                  <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
+                ) : null}
                 <div className="text-2xl font-black text-red-600">{formatCurrency(product.price)}</div>
               </div>
               <div className="rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-slate-500 shadow-sm">

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Review = require('../models/review.model');
 const { pool } = require('../config/db.sql');
 
@@ -280,31 +281,35 @@ const deleteReview = async (reviewId, userId) => {
 };
 
 /**
- * Mark review as helpful (increment helpful count)
- * @param {number} reviewId - Review MongoDB ObjectId
- * @param {number} increment - Number to increment by (default: 1)
- * @returns {Promise} - Updated review object
+ * Đánh dấu review là hữu ích. Mỗi người dùng chỉ được tính một lần:
+ * điều kiện `helpful_by: { $ne: userId }` và $addToSet chạy trong cùng một lệnh
+ * findOneAndUpdate nên hai request đồng thời của cùng một người không cộng hai lần.
+ * @param {string} reviewId - Review MongoDB ObjectId
+ * @param {number} userId - SQL Server User ID của người bấm
+ * @returns {Promise} - Updated review document
  */
-const updateHelpfulCount = async (reviewId, increment = 1) => {
-  try {
-    if (!reviewId) {
-      throw new Error('Invalid review ID');
-    }
-
-    const updatedReview = await Review.findByIdAndUpdate(
-      reviewId,
-      { $inc: { helpful_count: increment } },
-      { new: true }
-    );
-
-    if (!updatedReview) {
-      throw new Error('Review not found');
-    }
-
-    return updatedReview;
-  } catch (error) {
-    throw new Error(`Failed to update helpful count: ${error.message}`);
+const markHelpful = async (reviewId, userId) => {
+  if (!mongoose.Types.ObjectId.isValid(String(reviewId))) {
+    const err = new Error('Invalid review ID');
+    err.status = 400;
+    throw err;
   }
+
+  const voterId = Number(userId);
+  const updatedReview = await Review.findOneAndUpdate(
+    { _id: reviewId, helpful_by: { $ne: voterId } },
+    { $addToSet: { helpful_by: voterId }, $inc: { helpful_count: 1 } },
+    { new: true }
+  );
+
+  if (updatedReview) {
+    return updatedReview;
+  }
+
+  const exists = await Review.exists({ _id: reviewId });
+  const err = new Error(exists ? 'You already marked this review as helpful' : 'Review not found');
+  err.status = exists ? 409 : 404;
+  throw err;
 };
 
 /**
@@ -371,7 +376,7 @@ module.exports = {
   addReview,
   updateReview,
   deleteReview,
-  updateHelpfulCount,
+  markHelpful,
   getUserReviews,
   getReviewById,
 };

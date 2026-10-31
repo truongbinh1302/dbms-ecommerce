@@ -1,4 +1,5 @@
 const { getPool, sql } = require('../config/db.sql');
+const orderService = require('../services/order.service');
 const { success, error } = require('../utils/response');
 
 const validateCart = async (req, res) => {
@@ -58,4 +59,19 @@ const validateCart = async (req, res) => {
   }
 };
 
-module.exports = { validateCart };
+/**
+ * Báo giá giỏ hàng: giá lấy từ DB, phí ship và giảm giá tính bằng cùng quy tắc với lúc tạo đơn.
+ * Không cần đăng nhập, không ghi gì vào DB.
+ */
+const quoteCart = async (req, res) => {
+  try {
+    const { items, voucherCode } = req.body || {};
+    const quote = await orderService.quoteCart(items, voucherCode);
+    return success(res, quote, 'Cart quote calculated');
+  } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
+    return error(res, err.message);
+  }
+};
+
+module.exports = { validateCart, quoteCart };

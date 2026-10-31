@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
  * - title: Review title
  * - content: Review content/description
  * - helpful_count: Number of users who found this review helpful
+ * - helpful_by: User IDs that marked the review helpful (hidden from queries)
  * - timestamps: createdAt, updatedAt
  */
 const reviewSchema = new mongoose.Schema(
@@ -45,6 +46,13 @@ const reviewSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    // Danh sách UserID đã bấm "hữu ích", để mỗi người chỉ tính một lần.
+    // select: false để không lộ danh sách người dùng ra API công khai.
+    helpful_by: {
+      type: [Number],
+      default: [],
+      select: false,
     },
   },
   {

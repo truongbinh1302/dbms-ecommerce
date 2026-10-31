@@ -644,6 +644,40 @@ Kiểm tra các sản phẩm trong giỏ hàng còn đủ hàng không — gọi
 }
 ```
 
+### POST `/cart/quote`
+
+Báo giá giỏ hàng — giá lấy từ DB, phí ship, ưu đãi và voucher tính bằng **cùng hàm** với `POST /orders`
+(`services/pricing.service.js`), nên số khách thấy luôn khớp số lưu vào đơn. Không cần đăng nhập, không ghi DB.
+
+**Request:**
+```json
+{
+  "items": [{ "productId": 1, "quantity": 2 }],
+  "voucherCode": "SALE10"
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "items": [{ "productId": 1, "name": "Laptop", "unitPrice": 6000000, "quantity": 2, "lineTotal": 12000000 }],
+    "issues": [],
+    "subtotal": 12000000,
+    "shippingFee": 0,
+    "promoDiscount": 200000,
+    "voucherDiscount": 100000,
+    "discount": 300000,
+    "total": 11700000,
+    "voucher": { "code": "SALE10", "discountType": "amount", "discountValue": 100000 },
+    "voucherError": null
+  }
+}
+```
+
+Voucher không dùng được thì báo giá vẫn trả 200, kèm `voucherError: { code, message }`.
+
 ---
 
 ## 10. Order APIs
@@ -653,6 +687,10 @@ Kiểm tra các sản phẩm trong giỏ hàng còn đủ hàng không — gọi
 Tạo đơn hàng — **có xử lý race condition với UPDLOCK**.
 
 **Auth:** customer
+
+> **Quan trọng:** `subtotal`, `discount`, `shippingFee`, `total` luôn do server tính. Các trường này
+> trong request bị bỏ qua; client chỉ gửi `voucherCode`. Voucher được khoá `UPDLOCK` và ghi
+> `VoucherUsages` trong cùng transaction với đơn hàng.
 
 **Request:**
 ```json
