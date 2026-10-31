@@ -20,6 +20,8 @@ const updateOnReturn = process.env.VNPAY_UPDATE_ON_RETURN
 module.exports = {
   port: Number(process.env.PORT || 3000),
   nodeEnv,
+  // Trang return của VNPay chuyển khách về trang đơn hàng trên frontend này.
+  clientUrl: (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, ''),
   vnpay: {
     tmnCode: process.env.VNPAY_TMN_CODE || '',
     hashSecret: process.env.VNPAY_HASH_SECRET || '',

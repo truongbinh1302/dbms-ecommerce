@@ -13,8 +13,10 @@ features and DBMS demonstrations.
 
 ## Highlights
 
-- Full customer flow: authentication, product browsing, cart, checkout, order
-  history, cancellation, reviews, vouchers, and VNPay sandbox integration.
+- Full customer flow: authentication, product pages, accent-insensitive search
+  across the whole catalog, a cart saved on the server for signed-in users,
+  checkout with a validated Vietnamese shipping address, order history and
+  detail pages, cancellation, reviews, vouchers, and VNPay sandbox integration.
 - Admin workflows for product, image, order, user, and analytics management.
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
@@ -80,6 +82,27 @@ indexing, query processing, transactions, and concurrency behavior.
 - The VNPay return page only displays the stored status in production. In
   development it records the result with the same logic as the IPN, because the
   sandbox cannot call an IPN URL on `localhost` (`VNPAY_UPDATE_ON_RETURN`).
+
+## Storefront pages
+
+The React app uses hash routes so it needs no router library or server rewrite rules:
+
+| Route | Page |
+| --- | --- |
+| `#/san-pham/:id` | Product detail (specs, stock, reviews from MongoDB) |
+| `#/tim-kiem?q=` | Search results with sorting and pagination |
+| `#/thanh-toan` | Checkout: shipping address, payment method, voucher |
+| `#/don-hang` | Order history |
+| `#/don-hang/:id` | Order detail: cancel, retry VNPay payment |
+
+Search matches Vietnamese text without accents ("man hinh" finds "Màn hình").
+Each product stores a folded `SearchText` column (migration `006`); the API
+fills it on startup for existing rows and whenever a product is created or
+edited.
+
+Shipping addresses follow the two-level administrative units in effect since
+1 July 2025 (province/city → ward/commune). The backend validates the address
+and phone number for every order.
 
 ## Transaction processing
 
@@ -204,7 +227,8 @@ The API is mounted under `/api/v1` and includes:
 - `/users` — profile and user management
 - `/categories` — category operations
 - `/products` — catalog and product management
-- `/cart` — cart validation and server-side price quote (`POST /cart/quote`)
+- `/cart` — saved cart (`GET`/`PUT /cart`), validation and server-side price quote (`POST /cart/quote`)
+- `/locations/provinces` — the 34 provinces and cities used by the address form
 - `/orders` — checkout, order history, status, cancellation
 - `/payments` — VNPay sandbox flow
 - `/reviews` — product reviews

@@ -1,5 +1,6 @@
-const { getPool } = require('../config/db.sql');
+const { getPool, sql } = require('../config/db.sql');
 const { success, error } = require('../utils/response');
+const { parseStoredAddress, validateShippingAddress } = require('../services/address.service');
 const { hashPassword, comparePassword } = require('../utils/hash');
 
 const getMe = async (req, res) => {
@@ -9,7 +10,13 @@ const getMe = async (req, res) => {
       .query(`SELECT UserID, FullName, Email, Phone, Address, Role 
               FROM Users WHERE UserID = @userId`);
 
-    return success(res, result.recordset[0]);
+    const user = result.recordset[0];
+    if (!user) {
+      return error(res, 'User not found', 404);
+    }
+
+    // Địa chỉ giao hàng mặc định lưu dạng JSON trong cột Address; dữ liệu cũ dạng chữ thì để null.
+    return success(res, { ...user, shippingAddress: parseStoredAddress(user.Address) });
   } catch (err) {
     return error(res, err.message);
   }
@@ -65,12 +72,25 @@ const updateAddress = async (req, res) => {
   const { address } = req.body;
 
   try {
+    // Địa chỉ có cấu trúc (người nhận, SĐT, tỉnh, phường, đường) được kiểm tra rồi lưu JSON.
+    // Vẫn nhận chuỗi chữ như trước để không phá client cũ.
+    let stored = address;
+    let shippingAddress = null;
+    if (address && typeof address === 'object') {
+      const { address: normalized, errors } = validateShippingAddress(address);
+      if (Object.keys(errors).length > 0) {
+        return error(res, 'Địa chỉ giao hàng chưa hợp lệ', 400, { code: 'invalid_address', fields: errors });
+      }
+      shippingAddress = normalized;
+      stored = JSON.stringify(normalized);
+    }
+
     await getPool().request()
-      .input('userId', req.user.id)
-      .input('address', address)
+      .input('userId', sql.Int, req.user.id)
+      .input('address', sql.NVarChar, stored === undefined || stored === null ? null : String(stored))
       .query(`UPDATE Users SET Address = @address WHERE UserID = @userId`);
 
-    return success(res, null, 'Address updated');
+    return success(res, { shippingAddress }, 'Address updated');
   } catch (err) {
     return error(res, err.message);
   }

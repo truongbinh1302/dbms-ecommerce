@@ -1,5 +1,6 @@
 const { getPool, sql } = require('../config/db.sql');
 const orderService = require('../services/order.service');
+const cartService = require('../services/cart.service');
 const { success, error } = require('../utils/response');
 
 const validateCart = async (req, res) => {
@@ -74,4 +75,24 @@ const quoteCart = async (req, res) => {
   }
 };
 
-module.exports = { validateCart, quoteCart };
+const getMyCart = async (req, res) => {
+  try {
+    const cart = await cartService.getCart(req.user.id);
+    return success(res, cart, 'Cart retrieved');
+  } catch (err) {
+    return error(res, err.message);
+  }
+};
+
+// Thay toàn bộ giỏ server bằng danh sách client gửi lên (frontend đã gộp giỏ local trước khi gửi).
+const replaceMyCart = async (req, res) => {
+  try {
+    const cart = await cartService.replaceCart(req.user.id, (req.body || {}).items);
+    return success(res, cart, 'Cart saved');
+  } catch (err) {
+    if (err.status) return error(res, err.message, err.status);
+    return error(res, err.message);
+  }
+};
+
+module.exports = { validateCart, quoteCart, getMyCart, replaceMyCart };
