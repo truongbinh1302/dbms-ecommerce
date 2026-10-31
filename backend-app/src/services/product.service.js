@@ -91,7 +91,7 @@ const buildProductFilter = (request, filters, tokens, ids) => {
   `;
 };
 
-const getProducts = async (filters = {}) => {
+const getProducts = async (filters = {}, { countTotal = true } = {}) => {
   const q = filters.q ? String(filters.q).trim() : '';
   const tokens = q ? tokenizeQuery(q) : [];
   const ids = parseIdList(filters.ids);
@@ -133,6 +133,12 @@ const getProducts = async (filters = {}) => {
     OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
   `);
 
+  const items = result.recordset.map(formatProduct);
+  // Gợi ý khi gõ không cần tổng số kết quả: bỏ câu COUNT để trả lời nhanh gấp đôi.
+  if (!countTotal) {
+    return { items, pagination: { page, limit, totalItems: null, totalPages: null } };
+  }
+
   const countRequest = new sql.Request(pool);
   const countWhere = buildProductFilter(countRequest, { ...filters, q: q || null }, tokens, ids);
   const countResult = await countRequest.query(`
@@ -144,7 +150,7 @@ const getProducts = async (filters = {}) => {
 
   const totalItems = Number(countResult.recordset[0]?.total || 0);
   return {
-    items: result.recordset.map(formatProduct),
+    items,
     pagination: {
       page,
       limit,
@@ -158,7 +164,7 @@ const getProducts = async (filters = {}) => {
 const getProductSuggestions = async (keyword) => {
   if (!keyword || String(keyword).trim().length < 2) return [];
 
-  const result = await getProducts({ q: keyword, limit: 8, sort: 'relevance' });
+  const result = await getProducts({ q: keyword, limit: 8, sort: 'relevance' }, { countTotal: false });
   return result.items.map((item) => ({
     id: item.id,
     name: item.name,

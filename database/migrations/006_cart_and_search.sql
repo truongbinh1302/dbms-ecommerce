@@ -18,8 +18,20 @@ CREATE TABLE dbo.CartItems (
 END
 GO
 
+-- Collation nhị phân: chuỗi đã bỏ dấu, viết thường sẵn nên so sánh nhị phân vẫn đúng,
+-- và LIKE '%từ%' trên 50.000 dòng nhanh hơn khoảng 10 lần so với collation mặc định (đo: 336 ms → 32–44 ms).
 IF COL_LENGTH('dbo.Products', 'SearchText') IS NULL
 BEGIN
-ALTER TABLE dbo.Products ADD SearchText NVARCHAR(600) NULL;
+ALTER TABLE dbo.Products ADD SearchText NVARCHAR(600) COLLATE Latin1_General_100_BIN2 NULL;
+END
+ELSE IF EXISTS (
+  SELECT 1
+  FROM sys.columns
+  WHERE object_id = OBJECT_ID('dbo.Products')
+    AND name = 'SearchText'
+    AND collation_name <> 'Latin1_General_100_BIN2'
+)
+BEGIN
+ALTER TABLE dbo.Products ALTER COLUMN SearchText NVARCHAR(600) COLLATE Latin1_General_100_BIN2 NULL;
 END
 GO

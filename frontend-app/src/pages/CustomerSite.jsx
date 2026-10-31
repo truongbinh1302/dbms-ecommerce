@@ -6,7 +6,7 @@ import ProductQuickView from '../components/ProductQuickView'
 import SectionHeader from '../components/SectionHeader'
 import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
-import { fetchCart, fetchProducts, fetchProductsByIds, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
+import { fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
 import useHashRoute, { navigate } from '../hooks/useHashRoute'
 import CheckoutPage from './CheckoutPage'
 import OrderDetailPage from './OrderDetailPage'
@@ -432,10 +432,14 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     if (trimmedSearch.length < 2) return undefined
     let cancelled = false
     const timer = window.setTimeout(() => {
-      fetchProducts({ q: trimmedSearch, limit: '6', sort: 'relevance' })
-        .then((result) => {
+      fetchSearchSuggestions(trimmedSearch)
+        .then((items) => {
           if (!cancelled) {
-            setSuggestionState({ query: trimmedSearch, items: (result.items || []).map(mapApiProductToStoreProduct) })
+            const list = Array.isArray(items) ? items.slice(0, 6) : []
+            setSuggestionState({
+              query: trimmedSearch,
+              items: list.map((item) => mapApiProductToStoreProduct({ ...item, images: item.thumbnail ? [item.thumbnail] : [] })),
+            })
           }
         })
         .catch(() => {})

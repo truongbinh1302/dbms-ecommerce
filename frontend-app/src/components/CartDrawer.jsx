@@ -24,7 +24,11 @@ export default function CartDrawer({
         onClick={onClose}
       />
 
+      {/* Khi đóng, giỏ chỉ trượt ra ngoài màn hình: inert để bàn phím và trình đọc màn hình bỏ qua nó. */}
       <aside
+        aria-label="Giỏ hàng"
+        aria-hidden={!open}
+        inert={!open}
         className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">

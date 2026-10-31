@@ -191,6 +191,11 @@ export function updateAdminOrderStatus(orderId, status, note, token) {
   });
 }
 
+// Gợi ý khi gõ: endpoint gọn hơn /products (không đếm tổng số kết quả).
+export function fetchSearchSuggestions(query) {
+  return request(`/products/suggestions?${new URLSearchParams({ q: query })}`);
+}
+
 export function fetchProduct(productId) {
   return request(`/products/${productId}`);
 }
