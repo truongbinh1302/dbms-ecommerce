@@ -3,6 +3,8 @@ const { getPool, sql } = require('../config/db.sql');
 const config = require('../config/env');
 const pricing = require('./pricing.service');
 const voucherService = require('./voucher.service');
+const cartService = require('./cart.service');
+const { assertShippingAddress } = require('./address.service');
 
 const allowedStatuses = ['pending', 'pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
 const allowedPaymentMethods = ['cod', 'vnpay'];
@@ -126,6 +128,8 @@ const createOrder = async (userId, orderData = {}) => {
   const items = normalizeItems(orderData.items);
   const paymentMethod = normalizePaymentMethod(orderData.paymentMethod);
   const voucherCode = voucherService.normalizeVoucherCode(orderData.voucherCode);
+  const shippingAddress = assertShippingAddress(orderData.shippingAddress);
+  const note = orderData.note ? String(orderData.note).trim().slice(0, 500) || null : null;
 
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
@@ -162,8 +166,8 @@ const createOrder = async (userId, orderData = {}) => {
       .input('discount', sql.Decimal(18, 2), quote.discount)
       .input('shippingFee', sql.Decimal(18, 2), quote.shippingFee)
       .input('total', sql.Decimal(18, 2), quote.total)
-      .input('shippingAddress', sql.NVarChar, JSON.stringify(orderData.shippingAddress || {}))
-      .input('note', sql.NVarChar, orderData.note || null)
+      .input('shippingAddress', sql.NVarChar, JSON.stringify(shippingAddress))
+      .input('note', sql.NVarChar, note)
       .query(`
         INSERT INTO Orders (UserID, PaymentMethod, Status, Subtotal, Discount, ShippingFee, Total, ShippingAddress, Note)
         OUTPUT INSERTED.OrderID, INSERTED.CreatedAt
@@ -225,6 +229,9 @@ const createOrder = async (userId, orderData = {}) => {
           VALUES (@voucherId, @userId, @orderId)
         `);
     }
+
+    // Sản phẩm đã mua thì bỏ khỏi giỏ server, cùng transaction với đơn hàng.
+    await cartService.removePurchasedItems(transaction, userId, products.map((item) => item.ProductID));
 
     await transaction.commit();
 
@@ -328,7 +335,7 @@ const getUserOrders = async (userId, status = null, page = 1, limit = 10) => {
   request.input('limit', sql.Int, pageSize);
 
   const result = await request.query(`
-    SELECT OrderID AS id, OrderCode AS orderCode, Status, PaymentMethod, Total,
+    SELECT OrderID AS id, OrderCode AS orderCode, Status, PaymentMethod, PaymentStatus, Total,
            (SELECT COUNT(*) FROM OrderItems oi WHERE oi.OrderID = o.OrderID) AS itemCount,
            CreatedAt
     FROM Orders o
@@ -367,8 +374,8 @@ const getOrderById = async (orderId, userId = null) => {
   const userCondition = userId ? 'AND o.UserID = @userId' : '';
 
   const result = await request.query(`
-    SELECT o.OrderID AS id, o.Status, o.PaymentMethod, o.PaymentStatus,
-           o.VNPayTxnRef AS txnRef,
+    SELECT o.OrderID AS id, o.OrderCode AS orderCode, o.Status, o.PaymentMethod, o.PaymentStatus,
+           o.VNPayTxnRef AS txnRef, o.CancelReason,
            o.Subtotal, o.Discount, o.ShippingFee, o.Total, o.Note,
            o.ShippingAddress, o.CreatedAt, o.UpdatedAt,
            u.FullName AS customerName, u.Email, u.Phone

@@ -21,6 +21,7 @@ const orderRoutes = require('./routes/order.route');
 const paymentRoutes = require('./routes/payment.route');
 const reviewRoutes = require('./routes/review.route');
 const analyticsRoutes = require('./routes/analytics.route');
+const locationRoutes = require('./routes/location.routes');
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
+app.use('/api/v1/locations', locationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
@@ -75,12 +77,27 @@ const startPaymentExpirySweeper = () => {
   timer.unref();
 };
 
+// Điền SearchText cho sản phẩm chưa có (dữ liệu seed). Chạy nền, lỗi chỉ ghi log.
+const backfillSearchIndex = async () => {
+  try {
+    const { backfillSearchText } = require('./services/searchIndex.service');
+    const { getPool } = require('./config/db.sql');
+    const updated = await backfillSearchText(getPool());
+    if (updated > 0) {
+      console.log(`[search] Filled search text for ${updated} product(s)`);
+    }
+  } catch (err) {
+    console.error('[search] Backfill failed (did you run migration 006?):', err.message);
+  }
+};
+
 const startServer = async () => {
   try {
     await connectSQL();
     await connectMongo();
 
     startPaymentExpirySweeper();
+    backfillSearchIndex();
 
     app.listen(config.port, () => {
       console.log(`Server running on port ${config.port}`);

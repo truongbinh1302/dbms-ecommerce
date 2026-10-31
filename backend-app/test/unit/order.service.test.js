@@ -2,8 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadOrderServiceWithFakeDb } = require('../helpers/fakeDb');
 
+const ADDRESS = {
+  recipientName: 'Nguyễn Văn A',
+  phone: '0901234567',
+  province: 'TP. Hồ Chí Minh',
+  ward: 'Phường Diên Hồng',
+  street: '268 Lý Thường Kiệt',
+};
+
 const setup = () => {
-  const { orderService, db } = loadOrderServiceWithFakeDb();
+  const { orderService, cartService, db } = loadOrderServiceWithFakeDb();
   db.store.products.push(
     { ProductID: 10, Name: 'Chuột', Price: 1000000, Stock: 5, IsDeleted: false },
     { ProductID: 20, Name: 'Màn hình', Price: 9000000, Stock: 1, IsDeleted: false },
@@ -19,7 +27,7 @@ const setup = () => {
     UsedCount: 0,
     IsActive: true,
   });
-  return { orderService, db };
+  return { orderService, cartService, db };
 };
 
 test('normalizeItems gộp sản phẩm trùng và sắp theo ProductID', () => {
@@ -38,6 +46,7 @@ test('normalizeItems gộp sản phẩm trùng và sắp theo ProductID', () => 
 test('createOrder bỏ qua discount/shippingFee/total do client gửi lên', async () => {
   const { orderService, db } = setup();
   const result = await orderService.createOrder(1, {
+    shippingAddress: ADDRESS,
     items: [{ productId: 10, quantity: 2 }],
     paymentMethod: 'cod',
     discount: 1999999,
@@ -60,6 +69,7 @@ test('createOrder bỏ qua discount/shippingFee/total do client gửi lên', asy
 test('createOrder áp voucher, tăng UsedCount và ghi VoucherUsages trong cùng transaction', async () => {
   const { orderService, db } = setup();
   const result = await orderService.createOrder(1, {
+    shippingAddress: ADDRESS,
     items: [{ productId: 20, quantity: 1 }],
     paymentMethod: 'cod',
     voucherCode: ' sv10 ',
@@ -77,7 +87,8 @@ test('voucher hết lượt thì rollback: không tạo đơn, không trừ kho'
   db.store.vouchers[0].UsedCount = 1;
 
   await assert.rejects(
-    orderService.createOrder(1, { items: [{ productId: 10, quantity: 1 }], voucherCode: 'SV10' }),
+    orderService.createOrder(1, {
+    shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 1 }], voucherCode: 'SV10' }),
     (err) => err.status === 400 && err.data.code === 'voucher_used_up',
   );
 
@@ -88,7 +99,8 @@ test('voucher hết lượt thì rollback: không tạo đơn, không trừ kho'
 test('hết hàng trả 409 và không ghi gì', async () => {
   const { orderService, db } = setup();
   await assert.rejects(
-    orderService.createOrder(1, { items: [{ productId: 20, quantity: 2 }] }),
+    orderService.createOrder(1, {
+    shippingAddress: ADDRESS, items: [{ productId: 20, quantity: 2 }] }),
     (err) => err.status === 409,
   );
   assert.equal(db.store.orders.length, 0);
@@ -97,7 +109,8 @@ test('hết hàng trả 409 và không ghi gì', async () => {
 test('phương thức thanh toán lạ bị từ chối', async () => {
   const { orderService } = setup();
   await assert.rejects(
-    orderService.createOrder(1, { items: [{ productId: 10, quantity: 1 }], paymentMethod: 'free' }),
+    orderService.createOrder(1, {
+    shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 1 }], paymentMethod: 'free' }),
     (err) => err.status === 400,
   );
 });
@@ -105,6 +118,7 @@ test('phương thức thanh toán lạ bị từ chối', async () => {
 test('huỷ đơn hoàn kho và trả lại lượt voucher', async () => {
   const { orderService, db } = setup();
   const created = await orderService.createOrder(1, {
+    shippingAddress: ADDRESS,
     items: [{ productId: 20, quantity: 1 }],
     voucherCode: 'SV10',
   });
@@ -119,7 +133,8 @@ test('huỷ đơn hoàn kho và trả lại lượt voucher', async () => {
 
 test('admin chuyển đơn sang cancelled cũng hoàn kho', async () => {
   const { orderService, db } = setup();
-  const created = await orderService.createOrder(1, { items: [{ productId: 10, quantity: 4 }] });
+  const created = await orderService.createOrder(1, {
+    shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 4 }] });
   await orderService.updateOrderStatus(created.orderId, 'cancelled', 'hết hàng nhà cung cấp');
   assert.equal(db.store.products[0].Stock, 5);
 });
@@ -134,7 +149,8 @@ test('quoteCart dùng cùng quy tắc và báo lỗi voucher mà không ném l�
 });
 
 const createVNPayOrder = async (orderService, db) => {
-  const created = await orderService.createOrder(1, { items: [{ productId: 10, quantity: 2 }], paymentMethod: 'vnpay' });
+  const created = await orderService.createOrder(1, {
+    shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 2 }], paymentMethod: 'vnpay' });
   const txnRef = `${created.orderId}_1700000000000`;
   db.store.orders.find((o) => o.OrderID === created.orderId).VNPayTxnRef = txnRef;
   return { created, txnRef, amount: String(created.total * 100) };
@@ -216,4 +232,53 @@ test('khách huỷ đơn đã thanh toán thì chuyển sang refund_required', a
 
   const result = await orderService.cancelOrder(created.orderId, 1, 'đặt nhầm');
   assert.equal(result.paymentStatus, 'refund_required');
+});
+
+test('đơn hàng thiếu hoặc sai địa chỉ bị từ chối kèm lỗi từng trường', async () => {
+  const { orderService, db } = setup();
+  await assert.rejects(
+    orderService.createOrder(1, {
+      items: [{ productId: 10, quantity: 1 }],
+      shippingAddress: { ...ADDRESS, phone: '12345', province: 'Sao Hỏa' },
+    }),
+    (err) => err.status === 400 && Boolean(err.data.fields.phone) && Boolean(err.data.fields.province),
+  );
+  await assert.rejects(
+    orderService.createOrder(1, { items: [{ productId: 10, quantity: 1 }] }),
+    (err) => err.status === 400 && err.data.code === 'invalid_address',
+  );
+  assert.equal(db.store.orders.length, 0);
+});
+
+test('địa chỉ được chuẩn hoá trước khi lưu vào đơn', async () => {
+  const { orderService, db } = setup();
+  await orderService.createOrder(1, {
+    items: [{ productId: 10, quantity: 1 }],
+    shippingAddress: { ...ADDRESS, phone: '+84 90 123 4567', province: 'thành phố hồ chí minh' },
+  });
+  const saved = JSON.parse(db.store.orders[0].ShippingAddress);
+  assert.deepEqual(saved, {
+    recipientName: 'Nguyễn Văn A',
+    phone: '0901234567',
+    province: 'TP. Hồ Chí Minh',
+    ward: 'Phường Diên Hồng',
+    street: '268 Lý Thường Kiệt',
+  });
+});
+
+test('đặt hàng xong thì sản phẩm đã mua bị bỏ khỏi giỏ server, sản phẩm khác giữ nguyên', async () => {
+  const { orderService, cartService, db } = setup();
+  await cartService.replaceCart(1, [{ productId: 10, quantity: 2 }, { productId: 20, quantity: 1 }]);
+  assert.equal(db.store.cartItems.length, 2);
+
+  await orderService.createOrder(1, { shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 2 }] });
+
+  assert.deepEqual(db.store.cartItems.map((c) => c.ProductID), [20]);
+});
+
+test('đặt hàng lỗi thì giỏ server không bị xoá (rollback)', async () => {
+  const { orderService, cartService, db } = setup();
+  await cartService.replaceCart(1, [{ productId: 20, quantity: 1 }]);
+  await assert.rejects(orderService.createOrder(1, { shippingAddress: ADDRESS, items: [{ productId: 20, quantity: 5 }] }));
+  assert.equal(db.store.cartItems.length, 1);
 });

@@ -106,7 +106,11 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok || payload.success === false) {
-    throw new Error(payload.message || `API request failed with status ${response.status}`);
+    const err = new Error(payload.message || `API request failed with status ${response.status}`);
+    err.status = response.status;
+    // Lỗi kèm chi tiết (ví dụ lỗi từng trường của địa chỉ giao hàng) nằm trong payload.errors.
+    err.details = payload.errors || null;
+    throw err;
   }
 
   return payload.data ?? payload;
@@ -184,6 +188,60 @@ export function updateAdminOrderStatus(orderId, status, note, token) {
     auth: true,
     token,
     body: JSON.stringify({ status, note }),
+  });
+}
+
+export function fetchProduct(productId) {
+  return request(`/products/${productId}`);
+}
+
+// Lấy thông tin nhiều sản phẩm theo ID (giỏ hàng cần tên, giá của sản phẩm chưa có trên trang).
+export function fetchProductsByIds(ids) {
+  const list = [...new Set(ids)].slice(0, 50);
+  return request(`/products?${new URLSearchParams({ ids: list.join(','), limit: String(list.length || 1) })}`);
+}
+
+export function fetchProvinces() {
+  return request('/locations/provinces');
+}
+
+export function fetchMe() {
+  return request('/users/me', { auth: true });
+}
+
+export function saveDefaultAddress(address) {
+  return request('/users/me/address', {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ address }),
+  });
+}
+
+export function fetchCart() {
+  return request('/cart', { auth: true });
+}
+
+export function saveCart(items) {
+  return request('/cart', {
+    method: 'PUT',
+    auth: true,
+    body: JSON.stringify({ items }),
+  });
+}
+
+export function fetchMyOrders(params = {}) {
+  return request(`/orders/my-orders?${new URLSearchParams(params)}`, { auth: true });
+}
+
+export function fetchOrder(orderId) {
+  return request(`/orders/${orderId}`, { auth: true });
+}
+
+export function cancelMyOrder(orderId, reason) {
+  return request(`/orders/${orderId}/cancel`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ reason }),
   });
 }
 

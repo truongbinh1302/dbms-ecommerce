@@ -8,14 +8,25 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { connectSQL, getPool, sql } = require('../../src/config/db.sql');
 const orderService = require('../../src/services/order.service');
+const cartService = require('../../src/services/cart.service');
+const productService = require('../../src/services/product.service');
+const { refreshSearchText } = require('../../src/services/searchIndex.service');
+
+const ADDRESS = {
+  recipientName: 'Integration Test',
+  phone: '0901234567',
+  province: 'TP. Hồ Chí Minh',
+  ward: 'Phường Diên Hồng',
+  street: '268 Lý Thường Kiệt',
+};
 
 const tag = `it${Date.now()}`;
 const ctx = { userId: null, categoryId: null, productCount: 0, voucherCount: 0 };
 
-const createProduct = async ({ stock, price }) => {
+const createProduct = async ({ stock, price, name = null }) => {
   ctx.productCount += 1;
   const result = await new sql.Request(getPool())
-    .input('name', sql.NVarChar, `Test product ${tag}-${ctx.productCount}`)
+    .input('name', sql.NVarChar, name || `Test product ${tag}-${ctx.productCount}`)
     .input('slug', sql.NVarChar, `${tag}-product-${ctx.productCount}`)
     .input('price', sql.Decimal(18, 2), price)
     .input('stock', sql.Int, stock)
@@ -100,6 +111,8 @@ test.after(async () => {
     .input('slugLike', sql.NVarChar, `${tag}-product-%`)
     .input('codeLike', sql.NVarChar, `${tag.toUpperCase()}V%`)
     .query(`
+      DELETE FROM CartItems WHERE UserID = @userId;
+      DELETE ci FROM CartItems ci JOIN Products p ON p.ProductID = ci.ProductID WHERE p.Slug LIKE @slugLike;
       DELETE vu FROM VoucherUsages vu JOIN Orders o ON o.OrderID = vu.OrderID WHERE o.UserID = @userId;
       DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID = @userId;
       DELETE FROM Orders WHERE UserID = @userId;
@@ -112,7 +125,8 @@ test.after(async () => {
 
 test('hai đơn tranh món cuối cùng: chỉ một đơn thành công, kho không âm', async () => {
   const productId = await createProduct({ stock: 1, price: 500000 });
-  const order = () => orderService.createOrder(ctx.userId, { items: [{ productId, quantity: 1 }] });
+  const order = () => orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
 
   const results = await Promise.allSettled([order(), order()]);
   const fulfilled = results.filter((r) => r.status === 'fulfilled');
@@ -127,6 +141,7 @@ test('hai đơn tranh món cuối cùng: chỉ một đơn thành công, kho kh�
 test('server tự tính tiền, bỏ qua discount do client gửi', async () => {
   const productId = await createProduct({ stock: 5, price: 1000000 });
   const result = await orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS,
     items: [{ productId, quantity: 1 }],
     discount: 999999,
     shippingFee: 0,
@@ -143,8 +158,10 @@ test('voucher còn 1 lượt, hai đơn dùng cùng lúc: chỉ một đơn đư
   const { code, voucherId } = await createVoucher({ usageLimit: 1 });
 
   const results = await Promise.allSettled([
-    orderService.createOrder(ctx.userId, { items: [{ productId: p1, quantity: 1 }], voucherCode: code }),
-    orderService.createOrder(ctx.userId, { items: [{ productId: p2, quantity: 1 }], voucherCode: code }),
+    orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS, items: [{ productId: p1, quantity: 1 }], voucherCode: code }),
+    orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS, items: [{ productId: p2, quantity: 1 }], voucherCode: code }),
   ]);
 
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
@@ -158,6 +175,7 @@ test('huỷ đơn hoàn kho và trả lượt voucher', async () => {
   const { code, voucherId } = await createVoucher({ usageLimit: 5 });
 
   const created = await orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS,
     items: [{ productId, quantity: 2 }],
     voucherCode: code,
   });
@@ -172,6 +190,7 @@ test('huỷ đơn hoàn kho và trả lượt voucher', async () => {
 test('VNPay: sai số tiền → 04; đúng → 00; gọi lại → 02', async () => {
   const productId = await createProduct({ stock: 2, price: 750000 });
   const created = await orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS,
     items: [{ productId, quantity: 1 }],
     paymentMethod: 'vnpay',
   });
@@ -196,6 +215,7 @@ test('VNPay: sai số tiền → 04; đúng → 00; gọi lại → 02', async (
 test('VNPay thất bại thì huỷ đơn và hoàn kho', async () => {
   const productId = await createProduct({ stock: 2, price: 750000 });
   const created = await orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS,
     items: [{ productId, quantity: 2 }],
     paymentMethod: 'vnpay',
   });
@@ -218,6 +238,7 @@ test('VNPay thất bại thì huỷ đơn và hoàn kho', async () => {
 test('đơn VNPay quá hạn tự huỷ; tiền về muộn thì đánh dấu cần hoàn', async () => {
   const productId = await createProduct({ stock: 1, price: 600000 });
   const created = await orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS,
     items: [{ productId, quantity: 1 }],
     paymentMethod: 'vnpay',
   });
@@ -254,9 +275,54 @@ test('báo giá giỏ hàng khớp số tiền lúc tạo đơn', async () => {
   const items = [{ productId, quantity: 2 }];
 
   const quote = await orderService.quoteCart(items, code);
-  const created = await orderService.createOrder(ctx.userId, { items, voucherCode: code });
+  const created = await orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS, items, voucherCode: code });
 
   assert.equal(quote.voucherError, null);
   assert.equal(created.total, quote.total);
   assert.equal(created.discount, quote.discount);
+});
+
+test('giỏ server: lưu, đọc lại, và đặt hàng xong thì bỏ sản phẩm đã mua', async () => {
+  const p1 = await createProduct({ stock: 5, price: 1500000 });
+  const p2 = await createProduct({ stock: 5, price: 2500000 });
+
+  const saved = await cartService.replaceCart(ctx.userId, [
+    { productId: p1, quantity: 2 },
+    { productId: p2, quantity: 1 },
+    { productId: p1, quantity: 1 },
+  ]);
+  assert.deepEqual(saved.items.map((i) => [i.productId, i.quantity]).sort((a, b) => a[0] - b[0]), [[p1, 3], [p2, 1]]);
+
+  await orderService.createOrder(ctx.userId, {
+    shippingAddress: ADDRESS,
+    items: [{ productId: p1, quantity: 3 }],
+  });
+
+  const after = await cartService.getCart(ctx.userId);
+  assert.deepEqual(after.items.map((i) => i.productId), [p2]);
+});
+
+test('địa chỉ giao hàng được lưu dạng JSON đã chuẩn hoá', async () => {
+  const productId = await createProduct({ stock: 2, price: 500000 });
+  const created = await orderService.createOrder(ctx.userId, {
+    shippingAddress: { ...ADDRESS, phone: '+84 901 234 567', province: 'thành phố hồ chí minh' },
+    items: [{ productId, quantity: 1 }],
+  });
+  const order = await orderService.getOrderById(created.orderId, ctx.userId);
+  assert.equal(order.shippingAddress.phone, '0901234567');
+  assert.equal(order.shippingAddress.province, 'TP. Hồ Chí Minh');
+  assert.equal(order.orderCode, created.orderCode);
+});
+
+test('tìm kiếm không dấu trên toàn catalog', async () => {
+  const productId = await createProduct({ stock: 3, price: 7000000, name: `Màn hình Đồ họa ${tag}` });
+  await refreshSearchText(getPool(), [productId]);
+
+  const result = await productService.getProducts({ q: `man hinh do hoa ${tag}`, limit: 5 });
+  assert.equal(result.pagination.totalItems, 1);
+  assert.equal(result.items[0].id, productId);
+
+  const byIds = await productService.getProducts({ ids: String(productId), limit: 5 });
+  assert.deepEqual(byIds.items.map((p) => p.id), [productId]);
 });

@@ -519,6 +519,10 @@ FETCH NEXT @limit ROWS ONLY
 
 ---
 
+> **Tìm kiếm (`q`)** không phân biệt dấu: mọi từ khoá đã bỏ dấu phải có trong `Products.SearchText`.
+> Thêm `ids=1,2,3` để lấy nhiều sản phẩm theo ID (tối đa 50), `sort=relevance` (mặc định khi có `q`)
+> hoặc `sort=featured` (sản phẩm nổi bật trước).
+
 ### GET `/products/suggestions`
 
 Gợi ý khi gõ search (debounce 300ms ở FE).
@@ -644,6 +648,22 @@ Kiểm tra các sản phẩm trong giỏ hàng còn đủ hàng không — gọi
 }
 ```
 
+### GET `/cart` · PUT `/cart`
+
+Giỏ hàng lưu ở server (bảng `CartItems`) cho khách đã đăng nhập. **Auth:** customer.
+`PUT` thay toàn bộ giỏ: gộp dòng trùng, số lượng 1–99, tối đa 50 sản phẩm, bỏ qua sản phẩm đã ẩn.
+Tạo đơn thành công thì các sản phẩm đã mua tự bị xoá khỏi giỏ (cùng transaction).
+
+```json
+{ "items": [{ "productId": 6, "quantity": 1 }] }
+```
+
+**Response 200:** `{ "items": [{ "productId": 6, "quantity": 1, "product": { "id": 6, "name": "...", "price": 11990000, ... } }] }`
+
+### GET `/locations/provinces`
+
+Danh sách 34 tỉnh/thành sau sắp xếp đơn vị hành chính (từ 01/7/2025), dùng cho form địa chỉ.
+
 ### POST `/cart/quote`
 
 Báo giá giỏ hàng — giá lấy từ DB, phí ship, ưu đãi và voucher tính bằng **cùng hàm** với `POST /orders`
@@ -687,6 +707,10 @@ Voucher không dùng được thì báo giá vẫn trả 200, kèm `voucherError
 Tạo đơn hàng — **có xử lý race condition với UPDLOCK**.
 
 **Auth:** customer
+
+> **Địa chỉ giao hàng bắt buộc** và được kiểm tra ở server: `recipientName`, `phone` (0xxxxxxxxx hoặc +84),
+> `province` (một trong 34 tỉnh/thành), `ward`, `street`. Sai thì trả `400` với
+> `errors: { code: "invalid_address", fields: { phone: "..." } }`.
 
 > **Quan trọng:** `subtotal`, `discount`, `shippingFee`, `total` luôn do server tính. Các trường này
 > trong request bị bỏ qua; client chỉ gửi `voucherCode`. Voucher được khoá `UPDLOCK` và ghi

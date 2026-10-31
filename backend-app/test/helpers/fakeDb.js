@@ -17,6 +17,7 @@ const createStore = () => ({
   orders: [],
   orderItems: [],
   voucherUsages: [],
+  cartItems: [],
   nextOrderId: 1,
 });
 
@@ -51,6 +52,8 @@ const createFakeDb = () => {
         Discount: i.discount,
         ShippingFee: i.shippingFee,
         Total: i.total,
+        ShippingAddress: i.shippingAddress,
+        Note: i.note,
         VNPayTxnRef: null,
         CreatedAt: new Date(),
         ageMinutes: 0,
@@ -134,6 +137,35 @@ const createFakeDb = () => {
         return [];
       }],
 
+    [/^DELETE FROM CartItems WHERE UserID = @userId AND ProductID IN \(.*\)$/, (inputs, s) => {
+      const ids = Object.keys(inputs).filter((k) => /^p\d+$/.test(k)).map((k) => inputs[k]);
+      s.cartItems = s.cartItems.filter((c) => !(c.UserID === inputs.userId && ids.includes(c.ProductID)));
+      return [];
+    }],
+
+    [/^DELETE FROM CartItems WHERE UserID = @userId$/, ({ userId }, s) => {
+      s.cartItems = s.cartItems.filter((c) => c.UserID !== userId);
+      return [];
+    }],
+
+    [/^SELECT ProductID FROM Products WHERE ProductID IN \(.*\) AND IsDeleted = 0$/, (inputs, s) => {
+      const ids = Object.keys(inputs).filter((k) => /^id\d+$/.test(k)).map((k) => inputs[k]);
+      return s.products.filter((p) => ids.includes(p.ProductID) && !p.IsDeleted).map((p) => ({ ProductID: p.ProductID }));
+    }],
+
+    [/^INSERT INTO CartItems \(UserID, ProductID, Quantity\) VALUES/, ({ userId, productId, quantity }, s) => {
+      if (quantity < 1 || quantity > 99) throw new Error('CHECK constraint CK_CartItems_Quantity');
+      s.cartItems.push({ UserID: userId, ProductID: productId, Quantity: quantity, UpdatedAt: new Date() });
+      return [];
+    }],
+
+    [/^SELECT ci.ProductID AS id, ci.Quantity AS cartQuantity, .* FROM CartItems ci JOIN Products p ON p.ProductID = ci.ProductID LEFT JOIN Categories c ON c.CategoryID = p.CategoryID WHERE ci.UserID = @userId AND p.IsDeleted = 0 ORDER BY ci.UpdatedAt DESC, ci.ProductID$/,
+      ({ userId }, s) => s.cartItems
+        .filter((c) => c.UserID === userId)
+        .map((c) => ({ c, p: s.products.find((p) => p.ProductID === c.ProductID) }))
+        .filter(({ p }) => p && !p.IsDeleted)
+        .map(({ c, p }) => ({ ...p, id: p.ProductID, cartQuantity: c.Quantity, cartUpdatedAt: c.UpdatedAt }))],
+
     [/^SELECT OrderID FROM Orders WHERE Status = 'pending_payment' AND PaymentStatus NOT IN \('paid', 'refund_required'\) AND CreatedAt < DATEADD\(MINUTE, -@minutes, SYSDATETIME\(\)\)$/,
       ({ minutes }, s) => s.orders
         .filter((o) => o.Status === 'pending_payment' && !['paid', 'refund_required'].includes(o.PaymentStatus) && o.ageMinutes > minutes)
@@ -209,26 +241,32 @@ const createFakeDb = () => {
   };
 };
 
+const SERVICES_USING_DB = ['order.service', 'voucher.service', 'pricing.service', 'cart.service'];
+
 /**
- * Nạp order.service với DB giả: thay module config/db.sql trong require.cache.
- * Mỗi lần gọi trả về một bản service mới gắn với một DB giả mới.
+ * Nạp các service với DB giả: thay module config/db.sql trong require.cache.
+ * Mỗi lần gọi trả về bản service mới gắn với một DB giả mới.
  */
-const loadOrderServiceWithFakeDb = () => {
+const loadServicesWithFakeDb = (names) => {
   const fake = createFakeDb();
   const src = path.join(__dirname, '..', '..', 'src');
   const dbPath = require.resolve(path.join(src, 'config', 'db.sql'));
-  const servicePaths = ['order.service', 'voucher.service', 'pricing.service']
-    .map((name) => require.resolve(path.join(src, 'services', name)));
+  const servicePaths = SERVICES_USING_DB.map((name) => require.resolve(path.join(src, 'services', name)));
 
   servicePaths.forEach((p) => delete require.cache[p]);
   require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: fake.module };
 
-  const orderService = require(path.join(src, 'services', 'order.service'));
+  const services = Object.fromEntries(names.map((name) => [name, require(path.join(src, 'services', name))]));
 
   delete require.cache[dbPath];
   servicePaths.forEach((p) => delete require.cache[p]);
 
-  return { orderService, db: fake.state };
+  return { services, db: fake.state };
 };
 
-module.exports = { loadOrderServiceWithFakeDb };
+const loadOrderServiceWithFakeDb = () => {
+  const { services, db } = loadServicesWithFakeDb(['order.service', 'cart.service']);
+  return { orderService: services['order.service'], cartService: services['cart.service'], db };
+};
+
+module.exports = { loadOrderServiceWithFakeDb, loadServicesWithFakeDb };

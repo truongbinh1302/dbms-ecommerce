@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import heroAsset from '../assets/hero.png'
 import CartDrawer from '../components/CartDrawer'
 import ProductCard, { ProductVisual } from '../components/ProductCard'
@@ -6,7 +6,13 @@ import ProductQuickView from '../components/ProductQuickView'
 import SectionHeader from '../components/SectionHeader'
 import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
-import { createOrder, createVNPayPaymentLink, fetchProducts, logout, normalizeUser, quoteCart } from '../api/client'
+import { fetchCart, fetchProducts, fetchProductsByIds, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
+import useHashRoute, { navigate } from '../hooks/useHashRoute'
+import CheckoutPage from './CheckoutPage'
+import OrderDetailPage from './OrderDetailPage'
+import OrdersPage from './OrdersPage'
+import ProductDetailPage from './ProductDetailPage'
+import SearchPage from './SearchPage'
 import {
   categories,
   featuredTiles,
@@ -19,6 +25,7 @@ import {
   trustHighlights,
 } from '../data/storeData'
 import { classNames, formatCurrency } from '../utils/format'
+import { mapApiProductToStoreProduct, normalizeText } from '../utils/productMapping'
 
 const CART_STORAGE_KEY = 'binhtinhstore-cart'
 const VIEWED_STORAGE_KEY = 'binhtinhstore-viewed'
@@ -48,152 +55,10 @@ const PROMO_TARGETS = {
   'mouse-deal': 'section-mice',
 }
 
-function getDemoVisualKind(productId, categorySlug = '', brand = '') {
-  const slug = normalizeText(categorySlug)
-  const brandText = normalizeText(brand)
-  const id = Math.abs(Number(productId) || 0)
 
-  if (brandText.includes('viewsonic') || brandText.includes('samsung') || brandText.includes('lg')) {
-    return 'monitor'
-  }
 
-  if (brandText.includes('logitech')) {
-    return id % 2 === 0 ? 'mouse' : 'keyboard'
-  }
 
-  if (brandText.includes('lenovo') || brandText.includes('asus') || brandText.includes('acer') || brandText.includes('msi')) {
-    return 'laptop'
-  }
 
-  if (brandText.includes('hp') || brandText.includes('dell')) {
-    return id % 2 === 0 ? 'desktop' : 'laptop'
-  }
-
-  if (slug.includes('laptop')) return 'laptop'
-  if (slug.includes('monitor') || slug.includes('screen') || slug.includes('man-hinh')) return 'monitor'
-  if (slug.includes('mouse') || slug.includes('chuot')) return 'mouse'
-  if (slug.includes('keyboard') || slug.includes('ban-phim')) return 'keyboard'
-  if (slug.includes('headset') || slug.includes('tai-nghe')) return 'headset'
-
-  const kinds = ['desktop', 'laptop', 'monitor', 'keyboard', 'mouse', 'headset']
-  return kinds[id % kinds.length]
-}
-
-function buildDisplayName({ id, rawName, brand, visualKind, price }) {
-  const isGenericDemoName = /^demo product\s+\d+/i.test(String(rawName || ''))
-
-  if (!isGenericDemoName && rawName) {
-    return rawName
-  }
-
-  const number = Math.abs(Number(id) || 0)
-  const cpu = number % 2 === 0 ? 'Intel Core i5' : 'AMD Ryzen 5'
-  const gpu = number % 3 === 0 ? 'RTX 5070' : number % 3 === 1 ? 'RTX 4060' : 'GTX 1660S'
-  const ram = number % 2 === 0 ? '16GB RAM' : '32GB RAM'
-  const refreshRate = number % 2 === 0 ? '100Hz' : '240Hz'
-  const size = number % 2 === 0 ? '24 inch' : '27 inch'
-
-  if (visualKind === 'laptop') {
-    return `Laptop gaming ${brand} ${cpu} ${gpu} ${ram}`
-  }
-
-  if (visualKind === 'monitor') {
-    return `Màn hình ${brand} ${size} IPS ${refreshRate}`
-  }
-
-  if (visualKind === 'keyboard') {
-    return `Bàn phím cơ ${brand} RGB Hot-swap`
-  }
-
-  if (visualKind === 'mouse') {
-    return `Chuột gaming không dây ${brand} 16000 DPI`
-  }
-
-  if (visualKind === 'headset') {
-    return `${brand} Gaming Headset 7.1 Surround`
-  }
-
-  if (price >= 30000000) {
-    return `${brand} PC Gaming ${cpu} ${gpu} ${ram}`
-  }
-
-  return `${brand} Desktop PC ${cpu} SSD 512GB`
-}
-
-function buildDisplaySpecs({ visualKind, id }) {
-  const number = Math.abs(Number(id) || 0)
-
-  if (visualKind === 'laptop') {
-    return [
-      number % 2 === 0 ? 'Core i5 / Ryzen 5' : 'Core i7 / Ryzen 7',
-      number % 3 === 0 ? 'RTX 5070' : 'RTX 4060',
-      number % 2 === 0 ? '16GB RAM' : '32GB RAM',
-    ]
-  }
-
-  if (visualKind === 'monitor') {
-    return [
-      number % 2 === 0 ? '24 inch' : '27 inch',
-      'IPS',
-      number % 2 === 0 ? '100Hz' : '240Hz',
-    ]
-  }
-
-  if (visualKind === 'keyboard') {
-    return ['Mechanical', 'RGB', 'Hot-swap']
-  }
-
-  if (visualKind === 'mouse') {
-    return ['Wireless', '16000 DPI', 'Gaming']
-  }
-
-  if (visualKind === 'headset') {
-    return ['7.1 Surround', 'USB', 'Noise Cancel']
-  }
-
-  return [
-    number % 2 === 0 ? 'Intel Core' : 'AMD Ryzen',
-    number % 3 === 0 ? 'RTX 5070' : 'RTX 4060',
-    'SSD NVMe',
-  ]
-}
-
-function mapApiProductToStoreProduct(product) {
-  const id = Number(product.id || product.ProductID || product.productId)
-  const categorySlug = product.category?.slug || product.CategorySlug || product.categorySlug || 'pc-gaming'
-  const brand = product.brand || product.Brand || 'BinhTinh'
-  const price = Number(product.price || product.Price || 0)
-  // Chỉ hiện giá gốc khi DB có giá gốc thật và cao hơn giá bán; không tự bịa giá gốc.
-  const rawOldPrice = Number(product.oldPrice ?? product.OldPrice ?? 0)
-  const oldPrice = rawOldPrice > price ? rawOldPrice : null
-  const rawName = product.name || product.Name
-  const visualKind = getDemoVisualKind(id, categorySlug, brand)
-
-  return {
-    id,
-    name: buildDisplayName({
-      id,
-      rawName,
-      brand,
-      visualKind,
-      price,
-    }),
-    brand,
-    price,
-    oldPrice,
-    stock: Number(product.stock || product.Stock || 0),
-    specs: buildDisplaySpecs({ visualKind, id }),
-    images: Array.isArray(product.images) ? product.images : [],
-    badge: 'SQL Server',
-    visual: { kind: visualKind },
-    categorySlug,
-    originalName: rawName,
-  }
-}
-
-function normalizeText(value) {
-  return String(value ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-}
 
 function loadFromStorage(key, fallback) {
   if (typeof window === 'undefined') {
@@ -289,11 +154,27 @@ function getMaxDiscountPercent(products) {
   }, 0)
 }
 
+const isApiProductId = (id) => Number.isInteger(Number(id)) && Number(id) > 0
+
+// Gộp giỏ trên máy với giỏ đã lưu ở server khi đăng nhập: lấy số lượng lớn hơn của mỗi sản phẩm.
+function mergeCarts(localCart, serverItems) {
+  const merged = new Map(localCart.map((item) => [String(item.id), { ...item }]))
+  for (const serverItem of serverItems) {
+    const key = String(serverItem.productId)
+    const existing = merged.get(key)
+    if (existing) {
+      existing.quantity = Math.max(existing.quantity, serverItem.quantity)
+    } else {
+      merged.set(key, { id: Number(serverItem.productId), quantity: serverItem.quantity })
+    }
+  }
+  return [...merged.values()]
+}
+
 export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isAdmin, onUserChange }) {
+  const route = useHashRoute()
   const [runtimeProducts, setRuntimeProducts] = useState([])
   const [apiStatus, setApiStatus] = useState('Đang kết nối API SQL Server')
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState('cod')
   const [isAuthModalOpen, setAuthModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -304,7 +185,20 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     }
   })
   
-  const productMap = useMemo(() => Object.fromEntries(runtimeProducts.map((product) => [product.id, product])), [runtimeProducts])
+  // Sản phẩm ngoài trang chủ (từ tìm kiếm, trang chi tiết, giỏ server) cũng cần biết tên, giá để hiện trong giỏ.
+  const [extraProducts, setExtraProducts] = useState({})
+  const rememberProducts = useCallback((products) => {
+    if (!products || products.length === 0) return
+    setExtraProducts((current) => ({
+      ...current,
+      ...Object.fromEntries(products.filter((product) => isApiProductId(product.id)).map((product) => [product.id, product])),
+    }))
+  }, [])
+  const productMap = useMemo(
+    () => ({ ...extraProducts, ...Object.fromEntries(runtimeProducts.map((product) => [product.id, product])) }),
+    [extraProducts, runtimeProducts],
+  )
+  const rememberProduct = useCallback((product) => rememberProducts([product]), [rememberProducts])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [cart, setCart] = useState(() => loadFromStorage(CART_STORAGE_KEY, []))
@@ -325,7 +219,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   useEffect(() => {
     let mounted = true
 
-    fetchProducts({ limit: 24, sort: 'newest' })
+    fetchProducts({ limit: 24, sort: 'featured' })
       .then((result) => {
         if (!mounted || !Array.isArray(result.items) || result.items.length === 0) {
           return
@@ -406,11 +300,82 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     [cart, productMap],
   )
 
+  // Giỏ có sản phẩm chưa biết thông tin (ví dụ sau khi tải lại trang): hỏi API theo ID.
+  // Trước đây giỏ bị xoá sạch mỗi lần tải lại vì danh sách sản phẩm chưa kịp tải.
+  const missingProductKey = useMemo(
+    () => cart
+      .map((item) => Number(item.id))
+      .filter((id) => isApiProductId(id) && !productMap[id])
+      .join(','),
+    [cart, productMap],
+  )
+
   useEffect(() => {
-    setCart((currentCart) =>
-      currentCart.filter((item) => productMap[item.id])
-    )
-  }, [productMap])  
+    if (!missingProductKey) return undefined
+    let cancelled = false
+    const ids = missingProductKey.split(',').map(Number)
+
+    fetchProductsByIds(ids)
+      .then((result) => {
+        if (cancelled) return
+        const found = (result.items || []).map(mapApiProductToStoreProduct)
+        rememberProducts(found)
+        const foundIds = new Set(found.map((product) => product.id))
+        const removed = ids.filter((id) => !foundIds.has(id))
+        if (removed.length > 0) {
+          setCart((currentCart) => currentCart.filter((item) => !removed.includes(Number(item.id))))
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [missingProductKey, rememberProducts])
+
+  // Đồng bộ giỏ với server khi đã đăng nhập: tải giỏ server, gộp với giỏ trên máy, rồi lưu lại khi thay đổi.
+  const userId = currentUser?.id
+  const cartSyncRef = useRef({ userId: null, ready: false })
+
+  useEffect(() => {
+    cartSyncRef.current = { userId: userId || null, ready: false }
+    if (!userId) return undefined
+    let cancelled = false
+
+    fetchCart()
+      .then((data) => {
+        if (cancelled) return
+        const serverItems = data.items || []
+        rememberProducts(serverItems.map((item) => mapApiProductToStoreProduct(item.product)))
+        setCart((currentCart) => mergeCarts(currentCart, serverItems))
+        cartSyncRef.current = { userId, ready: true }
+      })
+      .catch(() => {
+        if (!cancelled) cartSyncRef.current = { userId, ready: true }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [userId, rememberProducts])
+
+  const serverCartPayload = useMemo(
+    () => JSON.stringify(
+      cart
+        .filter((item) => isApiProductId(item.id))
+        .map((item) => ({ productId: Number(item.id), quantity: Math.min(item.quantity, 99) })),
+    ),
+    [cart],
+  )
+
+  useEffect(() => {
+    if (!userId) return undefined
+    const timer = window.setTimeout(() => {
+      if (!cartSyncRef.current.ready || cartSyncRef.current.userId !== userId) return
+      saveCart(JSON.parse(serverCartPayload)).catch(() => {})
+    }, 600)
+    return () => window.clearTimeout(timer)
+  }, [serverCartPayload, userId])  
   const cartCount = useMemo(
     () => cartItems.reduce((count, item) => count + item.quantity, 0),
     [cartItems],
@@ -458,19 +423,32 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     [productMap, viewedIds],
   )
 
-  const normalizedSearch = normalizeText(searchQuery.trim())
-  const searchResults = useMemo(() => {
-    if (normalizedSearch.length < 2) {
-      return []
+  // Gợi ý khi gõ: hỏi server (tìm không dấu trên toàn catalog), chờ 250ms sau lần gõ cuối.
+  const trimmedSearch = searchQuery.trim()
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [suggestionState, setSuggestionState] = useState({ query: '', items: [] })
+
+  useEffect(() => {
+    if (trimmedSearch.length < 2) return undefined
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      fetchProducts({ q: trimmedSearch, limit: '6', sort: 'relevance' })
+        .then((result) => {
+          if (!cancelled) {
+            setSuggestionState({ query: trimmedSearch, items: (result.items || []).map(mapApiProductToStoreProduct) })
+          }
+        })
+        .catch(() => {})
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
     }
+  }, [trimmedSearch])
 
-    return runtimeProducts.filter((product) => {
-      const haystack = normalizeText([product.name, product.brand, ...product.specs].join(' '))
-      return haystack.includes(normalizedSearch)
-    })
-  }, [normalizedSearch, runtimeProducts])
-
-  const searchSuggestions = searchResults.slice(0, 6)
+  const searchSuggestions = suggestionsOpen && suggestionState.query === trimmedSearch && trimmedSearch.length >= 2
+    ? suggestionState.items
+    : []
   const activeSlideData = heroSlides[activeSlide]
   const activeCategory = categories.find((category) => category.id === activeCategoryId) ?? categories[0]
 
@@ -482,18 +460,20 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     setViewedIds((currentIds) => [productId, ...currentIds.filter((id) => id !== productId)].slice(0, 8))
   }
 
-  function addToCart(product) {
+  function addToCart(product, quantity = 1, { openDrawer = true } = {}) {
+    const amount = Math.max(1, Number(quantity) || 1)
     markAsViewed(product.id)
+    rememberProducts([product])
     setCart((currentCart) => {
       const existingItem = currentCart.find((item) => item.id === product.id)
       if (existingItem) {
         return currentCart.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item,
+          item.id === product.id ? { ...item, quantity: Math.min(99, item.quantity + amount) } : item,
         )
       }
-      return [...currentCart, { id: product.id, quantity: 1 }]
+      return [...currentCart, { id: product.id, quantity: Math.min(99, amount) }]
     })
-    setCartOpen(true)
+    if (openDrawer) setCartOpen(true)
     showToast(`Đã thêm “${product.name}” vào giỏ hàng.`)
   }
 
@@ -503,7 +483,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   }
 
   function handleProductCardClick(product) {
-    handleQuickView(product)
+    openProduct(product)
   }
 
   function toggleFavorite(productId) {
@@ -548,65 +528,36 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
 
   function handleSearchSubmit(event) {
     event.preventDefault()
-    if (normalizedSearch.length >= 2) {
-      scrollToElement('search-results')
+    if (trimmedSearch.length >= 1) {
+      setSuggestionsOpen(false)
+      navigate(`/tim-kiem?q=${encodeURIComponent(trimmedSearch)}`)
     }
   }
 
-  async function handleCheckout() {
-    if (cartItems.length === 0) {
-      showToast('Giỏ hàng đang trống.')
-      return
+  function openProduct(product) {
+    if (isApiProductId(product.id)) {
+      markAsViewed(product.id)
+      rememberProducts([product])
+      navigate(`/san-pham/${product.id}`)
+    } else {
+      handleQuickView(product)
     }
+  }
 
-    const apiItems = cartItems
-      .map((item) => ({ productId: Number(item.id), quantity: item.quantity }))
-      .filter((item) => Number.isInteger(item.productId) && item.productId > 0)
+  function buyNow(product, quantity = 1) {
+    addToCart(product, quantity, { openDrawer: false })
+    navigate('/thanh-toan')
+  }
 
-    if (apiItems.length !== cartItems.length) {
-      showToast('Checkout API chỉ dùng sản phẩm lấy từ SQL Server. Hãy tìm và thêm sản phẩm API trước.')
-      return
-    }
+  function goToCheckout() {
+    setCartOpen(false)
+    navigate('/thanh-toan')
+  }
 
-    const token = window.localStorage.getItem('bt_access_token')
-    if (!token) {
-      showToast('Chưa có JWT token. Đăng nhập API rồi lưu token vào localStorage key bt_access_token.')
-      return
-    }
-
-    try {
-      setCheckoutLoading(true)
-    // Không gửi phí ship hay giảm giá: server tự tính, chỉ gửi mã voucher nếu có.
-    const orderResult = await createOrder({
-      items: apiItems,
-      paymentMethod,
-      voucherCode: voucherCode || undefined,
-      shippingAddress: { fullName: 'Customer Demo', city: 'Ho Chi Minh City' },
-      note: `Created from React frontend demo with ${paymentMethod}`,
-    }, token)
-
-    if (paymentMethod === 'vnpay') {
-      const paymentResult = await createVNPayPaymentLink(
-        orderResult.orderId,
-        `Thanh toán đơn hàng #${orderResult.orderId}`,
-        token
-      )
-
-      showToast('Tạo link VNPay thành công. Đang chuyển đến trang thanh toán...')
-      window.location.href = paymentResult.paymentUrl
-      return
-    }
-
+  const handleOrderPlaced = useCallback(() => {
     setCart([])
     setVoucherCode('')
-    setCartOpen(false)
-    showToast(`Đã tạo đơn ${orderResult.orderCode || ''} – tổng thanh toán ${formatCurrency(orderResult.total)}.`)
-    } catch (err) {
-      showToast(err.message || 'Không thể tạo đơn hàng.')
-    } finally {
-      setCheckoutLoading(false)
-    }
-  }
+  }, [])
 
   async function handleLogout() {
     try {
@@ -629,6 +580,74 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     if (target) {
       scrollToElement(target)
     }
+  }
+
+  // Trang con theo hash: #/san-pham/:id, #/tim-kiem?q=, #/thanh-toan, #/don-hang, #/don-hang/:id.
+  const routeSection = route.segments[0] || ''
+  const routeId = Number.parseInt(route.segments[1] || '', 10)
+  const routePage = Math.max(1, Number.parseInt(route.query.get('trang') || '1', 10) || 1)
+  const requireLogin = () => setAuthModalOpen(true)
+  let routeContent = null
+
+  if (routeSection === 'san-pham' && routeId > 0) {
+    routeContent = (
+      <ProductDetailPage
+        key={routeId}
+        productId={routeId}
+        onAddToCart={addToCart}
+        onBuyNow={buyNow}
+        onProductLoaded={rememberProduct}
+      />
+    )
+  } else if (routeSection === 'tim-kiem') {
+    routeContent = (
+      <SearchPage
+        query={(route.query.get('q') || '').trim()}
+        sort={route.query.get('sap-xep') || 'relevance'}
+        page={routePage}
+        favoriteIds={favoriteIds}
+        onToggleFavorite={toggleFavorite}
+        onAddToCart={addToCart}
+        onQuickView={handleQuickView}
+        onView={handleProductCardClick}
+        onProductsLoaded={rememberProducts}
+      />
+    )
+  } else if (routeSection === 'thanh-toan') {
+    routeContent = (
+      <CheckoutPage
+        cartItems={cartItems}
+        subtotal={subtotal}
+        quote={currentQuote?.data || null}
+        quoteError={currentQuote?.error || ''}
+        voucherCode={voucherCode}
+        onApplyVoucher={setVoucherCode}
+        currentUser={currentUser}
+        onRequireLogin={requireLogin}
+        onOrderPlaced={handleOrderPlaced}
+      />
+    )
+  } else if (routeSection === 'don-hang' && routeId > 0) {
+    routeContent = (
+      <OrderDetailPage
+        key={routeId}
+        orderId={routeId}
+        currentUser={currentUser}
+        onRequireLogin={requireLogin}
+        isNew={route.query.get('moi') === '1'}
+        paymentResult={route.query.get('ket-qua') || ''}
+        showToast={showToast}
+      />
+    )
+  } else if (routeSection === 'don-hang') {
+    routeContent = (
+      <OrdersPage
+        currentUser={currentUser}
+        onRequireLogin={requireLogin}
+        page={routePage}
+        paymentResult={route.query.get('ket-qua') || ''}
+      />
+    )
   }
 
   return (
@@ -692,7 +711,13 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
               <form onSubmit={handleSearchSubmit} className="relative">
                 <input
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value)
+                    setSuggestionsOpen(true)
+                  }}
+                  onBlur={() => window.setTimeout(() => setSuggestionsOpen(false), 150)}
+                  onFocus={() => setSuggestionsOpen(true)}
+                  aria-label="Tìm kiếm sản phẩm"
                   type="search"
                   placeholder="Bạn cần tìm laptop, PC, gear hay combo setup nào?"
                   className="h-12 w-full rounded-lg border border-white/25 bg-white px-4 pr-12 text-base text-slate-900 outline-none ring-0 transition placeholder:text-slate-400 focus:border-white focus:shadow-[0_0_0_4px_rgba(255,255,255,0.18)]"
@@ -711,9 +736,10 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                     <button
                       key={product.id}
                       type="button"
+                      onMouseDown={(event) => event.preventDefault()}
                       onClick={() => {
-                        setSearchQuery(product.name)
-                        handleQuickView(product)
+                        setSuggestionsOpen(false)
+                        openProduct(product)
                       }}
                       className="flex w-full items-center gap-4 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50"
                     >
@@ -743,6 +769,13 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                     <div className="text-xs font-medium uppercase tracking-[0.18em] text-red-100">Xin chào</div>
                     <div className="text-sm font-bold truncate max-w-[100px]">{currentUser.fullName || currentUser.email}</div>
                   </div>
+                  <a
+                    href="#/don-hang"
+                    title="Đơn hàng của tôi"
+                    className="ml-1 flex h-8 shrink-0 items-center justify-center rounded-xl bg-white/10 px-2 text-xs font-bold text-red-100 transition hover:bg-red-500 hover:text-white"
+                  >
+                    Đơn hàng
+                  </a>
                   <button
                     type="button"
                     onClick={handleLogout}
@@ -862,6 +895,9 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         </div>
       </div>
 
+      {routeContent ? (
+        <main className="mx-auto min-h-[60vh] max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">{routeContent}</main>
+      ) : (
       <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
         <section id="hero" className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
           <aside className="hidden h-fit rounded-[32px] bg-white p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] xl:block">
@@ -1215,48 +1251,6 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
           </div>
         </section>
 
-        {normalizedSearch.length >= 2 ? (
-          <section id="search-results" className="mt-5 rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-500">Kết quả tìm kiếm</div>
-                <h2 className="mt-2 text-3xl font-black text-slate-900">
-                  {searchResults.length > 0
-                    ? `Tìm thấy ${searchResults.length} sản phẩm cho “${searchQuery}”`
-                    : `Chưa thấy sản phẩm khớp “${searchQuery}”`}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-red-200 hover:text-red-600"
-              >
-                <StoreGlyph name="x" className="size-4" />
-                Xoá bộ lọc
-              </button>
-            </div>
-
-            {searchResults.length > 0 ? (
-              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {searchResults.slice(0, 8).map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    isFavorite={favoriteIds.includes(product.id)}
-                    onToggleFavorite={toggleFavorite}
-                    onAddToCart={addToCart}
-                    onQuickView={handleQuickView}
-                    onView={handleProductCardClick}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="mt-6 rounded-[30px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">
-                Thử lại với từ khoá như “RTX 5070”, “Laptop OLED”, “Chuột Logitech” hoặc “Màn hình 240Hz”.
-              </div>
-            )}
-          </section>
-        ) : null}
 
         {productSections.map((section) => {
           const sectionProducts = runtimeProducts
@@ -1297,6 +1291,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
 
         
       </main>
+      )}
 
       <footer className="mt-8 border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-[1480px] px-4 py-10 sm:px-6 lg:px-8">
@@ -1345,14 +1340,15 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         quoteError={currentQuote?.error || ''}
         voucherCode={voucherCode}
         onApplyVoucher={setVoucherCode}
-        paymentMethod={paymentMethod}
-        onPaymentMethodChange={setPaymentMethod}
         onClose={() => setCartOpen(false)}
         onIncrease={(productId) => changeQuantity(productId, 1)}
         onDecrease={(productId) => changeQuantity(productId, -1)}
         onRemove={removeFromCart}
-        onCheckout={handleCheckout}
-        checkoutLoading={checkoutLoading}
+        onCheckout={goToCheckout}
+        onOpenProduct={(product) => {
+          setCartOpen(false)
+          openProduct(product)
+        }}
       />
 
       <ProductQuickView
