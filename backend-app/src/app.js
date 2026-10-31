@@ -59,10 +59,28 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
+// Định kỳ huỷ đơn VNPay quá hạn chưa thanh toán để trả hàng về kho.
+const startPaymentExpirySweeper = () => {
+  const orderService = require('./services/order.service');
+  const timer = setInterval(async () => {
+    try {
+      const expired = await orderService.expireStalePayments();
+      if (expired > 0) {
+        console.log(`[payments] Expired ${expired} unpaid VNPay order(s)`);
+      }
+    } catch (err) {
+      console.error('[payments] Expiry sweep failed:', err.message);
+    }
+  }, config.payment.sweepIntervalMs);
+  timer.unref();
+};
+
 const startServer = async () => {
   try {
     await connectSQL();
     await connectMongo();
+
+    startPaymentExpirySweeper();
 
     app.listen(config.port, () => {
       console.log(`Server running on port ${config.port}`);

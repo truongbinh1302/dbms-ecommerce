@@ -6,7 +6,7 @@ import ProductQuickView from '../components/ProductQuickView'
 import SectionHeader from '../components/SectionHeader'
 import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
-import { createOrder, createVNPayPaymentLink, fetchProducts, logout, normalizeUser } from '../api/client'
+import { createOrder, createVNPayPaymentLink, fetchProducts, logout, normalizeUser, quoteCart } from '../api/client'
 import {
   categories,
   featuredTiles,
@@ -163,7 +163,9 @@ function mapApiProductToStoreProduct(product) {
   const categorySlug = product.category?.slug || product.CategorySlug || product.categorySlug || 'pc-gaming'
   const brand = product.brand || product.Brand || 'BinhTinh'
   const price = Number(product.price || product.Price || 0)
-  const oldPrice = product.oldPrice ?? product.OldPrice ?? Math.round(price + 1000000)
+  // Chỉ hiện giá gốc khi DB có giá gốc thật và cao hơn giá bán; không tự bịa giá gốc.
+  const rawOldPrice = Number(product.oldPrice ?? product.OldPrice ?? 0)
+  const oldPrice = rawOldPrice > price ? rawOldPrice : null
   const rawName = product.name || product.Name
   const visualKind = getDemoVisualKind(id, categorySlug, brand)
 
@@ -278,13 +280,13 @@ function scrollToElement(elementId) {
   }
 }
 
-function formatCountdownParts(ms) {
-  const totalSeconds = Math.max(Math.floor(ms / 1000), 0)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-
-  return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0'))
+function getMaxDiscountPercent(products) {
+  return products.reduce((max, product) => {
+    if (!product.oldPrice || product.oldPrice <= product.price) {
+      return max
+    }
+    return Math.max(max, Math.round((1 - product.price / product.oldPrice) * 100))
+  }, 0)
 }
 
 export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isAdmin, onUserChange }) {
@@ -317,8 +319,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   const [activeCategoryId, setActiveCategoryId] = useState('all')
   const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false)
   const [toast, setToast] = useState('')
-  const [dealEndsAt, setDealEndsAt] = useState(() => Date.now() + 1000 * 60 * 60 * 6)
-  const [now, setNow] = useState(() => Date.now())
+  const [voucherCode, setVoucherCode] = useState('')
+  const [quoteState, setQuoteState] = useState(null)
 
   useEffect(() => {
     let mounted = true
@@ -353,18 +355,6 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     const timer = window.setInterval(() => {
       setActiveSlide((currentSlide) => (currentSlide + 1) % heroSlides.length)
     }, 4800)
-
-    return () => window.clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const currentTime = Date.now()
-      setNow(currentTime)
-      setDealEndsAt((currentDeadline) =>
-        currentTime > currentDeadline ? currentTime + 1000 * 60 * 60 * 6 : currentDeadline,
-      )
-    }, 1000)
 
     return () => window.clearInterval(timer)
   }, [])
@@ -431,8 +421,37 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     [cartItems],
   )
 
-  const shippingFee = subtotal > 3000000 || subtotal === 0 ? 0 : 30000
-  const discount = subtotal > 30000000 ? 500000 : subtotal > 10000000 ? 200000 : 0
+  // Phí ship, giảm giá và voucher do server tính (POST /cart/quote) theo đúng quy tắc lúc tạo đơn.
+  // Giỏ còn sản phẩm demo (không có trong SQL Server) thì không báo giá được.
+  const quoteKey = useMemo(() => {
+    const items = cartItems.map((item) => ({ productId: Number(item.id), quantity: item.quantity }))
+    const canQuote = items.length > 0 && items.every((item) => Number.isInteger(item.productId) && item.productId > 0)
+    return canQuote ? JSON.stringify({ items, voucherCode }) : ''
+  }, [cartItems, voucherCode])
+
+  useEffect(() => {
+    if (!quoteKey) {
+      return undefined
+    }
+
+    let cancelled = false
+    const { items, voucherCode: code } = JSON.parse(quoteKey)
+
+    quoteCart(items, code)
+      .then((data) => {
+        if (!cancelled) setQuoteState({ key: quoteKey, data, error: '' })
+      })
+      .catch((err) => {
+        if (!cancelled) setQuoteState({ key: quoteKey, data: null, error: err.message || 'Không tính được giá' })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [quoteKey])
+
+  const currentQuote = quoteState && quoteState.key === quoteKey ? quoteState : null
+  const maxDiscountPercent = useMemo(() => getMaxDiscountPercent(runtimeProducts), [runtimeProducts])
 
   const viewedProducts = useMemo(
     () => viewedIds.map((id) => productMap[id]).filter(Boolean),
@@ -452,7 +471,6 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   }, [normalizedSearch, runtimeProducts])
 
   const searchSuggestions = searchResults.slice(0, 6)
-  const [hours, minutes, seconds] = formatCountdownParts(dealEndsAt - now)
   const activeSlideData = heroSlides[activeSlide]
   const activeCategory = categories.find((category) => category.id === activeCategoryId) ?? categories[0]
 
@@ -558,11 +576,11 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
 
     try {
       setCheckoutLoading(true)
+    // Không gửi phí ship hay giảm giá: server tự tính, chỉ gửi mã voucher nếu có.
     const orderResult = await createOrder({
       items: apiItems,
       paymentMethod,
-      shippingFee,
-      discount,
+      voucherCode: voucherCode || undefined,
       shippingAddress: { fullName: 'Customer Demo', city: 'Ho Chi Minh City' },
       note: `Created from React frontend demo with ${paymentMethod}`,
     }, token)
@@ -580,8 +598,9 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     }
 
     setCart([])
+    setVoucherCode('')
     setCartOpen(false)
-    showToast('Tạo đơn hàng COD thành công qua API SQL Server transaction.')
+    showToast(`Đã tạo đơn ${orderResult.orderCode || ''} – tổng thanh toán ${formatCurrency(orderResult.total)}.`)
     } catch (err) {
       showToast(err.message || 'Không thể tạo đơn hàng.')
     } finally {
@@ -1167,13 +1186,9 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 {flashDeal.title}
               </div>
               <h2 className="mt-4 text-4xl font-black leading-tight">{flashDeal.subtitle}</h2>
-              <div className="mt-3 text-lg text-white/80">{flashDeal.discount}</div>
-
-              <div className="mt-6 flex flex-wrap gap-3 text-center">
-                <CountdownBadge value={hours} label="Giờ" />
-                <CountdownBadge value={minutes} label="Phút" />
-                <CountdownBadge value={seconds} label="Giây" />
-              </div>
+              {maxDiscountPercent > 0 ? (
+                <div className="mt-3 text-lg text-white/80">Giảm tới {maxDiscountPercent}% so với giá gốc</div>
+              ) : null}
             </div>
 
             <div className="grid gap-3">
@@ -1325,9 +1340,11 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
       <CartDrawer
         open={isCartOpen}
         items={cartItems}
-        subtotal={subtotal}
-        shippingFee={shippingFee}
-        discount={discount}
+        subtotal={currentQuote?.data ? currentQuote.data.subtotal : subtotal}
+        quote={currentQuote?.data || null}
+        quoteError={currentQuote?.error || ''}
+        voucherCode={voucherCode}
+        onApplyVoucher={setVoucherCode}
         paymentMethod={paymentMethod}
         onPaymentMethodChange={setPaymentMethod}
         onClose={() => setCartOpen(false)}
@@ -1392,15 +1409,6 @@ function MiniFeature({ label, value }) {
     <div className="rounded-[26px] bg-white/12 px-5 py-4 backdrop-blur-sm">
       <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/75">{label}</div>
       <div className="mt-2 text-2xl font-black text-white">{value}</div>
-    </div>
-  )
-}
-
-function CountdownBadge({ value, label }) {
-  return (
-    <div className="rounded-[28px] bg-white/8 px-5 py-4 backdrop-blur-sm">
-      <div className="text-3xl font-black text-white">{value}</div>
-      <div className="mt-1 text-xs font-semibold uppercase tracking-[0.24em] text-white/65">{label}</div>
     </div>
   )
 }

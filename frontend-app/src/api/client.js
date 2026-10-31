@@ -146,6 +146,14 @@ export function validateCart(items, token) {
   });
 }
 
+// Báo giá giỏ hàng: server tính tạm tính, phí ship, giảm giá và kiểm tra voucher.
+export function quoteCart(items, voucherCode) {
+  return request('/cart/quote', {
+    method: 'POST',
+    body: JSON.stringify({ items, voucherCode: voucherCode || undefined }),
+  });
+}
+
 export function createOrder(order, token) {
   return request('/orders', {
     method: 'POST',

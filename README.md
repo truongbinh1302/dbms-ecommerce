@@ -67,6 +67,20 @@ MongoDB is used for product logs and reviews, with additional scripts under
 [`database-demo/mongo_db_demo`](database-demo/mongo_db_demo) to demonstrate
 indexing, query processing, transactions, and concurrency behavior.
 
+## Money handling
+
+- Shipping fee, automatic discounts and voucher discounts are computed only on the
+  server (`backend-app/src/services/pricing.service.js`). Any `discount`,
+  `shippingFee` or `total` sent by the client is ignored.
+- Vouchers are locked with `UPDLOCK` and recorded in `VoucherUsages` inside the
+  same transaction as the order, so a voucher's last use cannot be taken twice.
+- VNPay IPN checks the signature, compares `vnp_Amount` with the order total and
+  ignores repeated callbacks. A failed payment or an unpaid order older than
+  `PAYMENT_EXPIRE_MINUTES` is cancelled and its stock and voucher use are released.
+- The VNPay return page only displays the stored status in production. In
+  development it records the result with the same logic as the IPN, because the
+  sandbox cannot call an IPN URL on `localhost` (`VNPAY_UPDATE_ON_RETURN`).
+
 ## Transaction processing
 
 The order service treats checkout as one atomic unit of work:
@@ -190,7 +204,7 @@ The API is mounted under `/api/v1` and includes:
 - `/users` — profile and user management
 - `/categories` — category operations
 - `/products` — catalog and product management
-- `/cart` — shopping cart operations
+- `/cart` — cart validation and server-side price quote (`POST /cart/quote`)
 - `/orders` — checkout, order history, status, cancellation
 - `/payments` — VNPay sandbox flow
 - `/reviews` — product reviews
@@ -217,8 +231,15 @@ both SQL Server and MongoDB:
 Useful local checks:
 
 ```bash
-# Backend JavaScript syntax
+# Backend unit tests (Node's built-in test runner, no database needed)
 cd backend-app
+npm test
+
+# Backend integration tests against the Docker SQL Server
+# (start dbms-env and run the migration + seed steps first)
+npm run test:db
+
+# Backend JavaScript syntax
 node --check src/app.js
 
 # Frontend lint and production build

@@ -1,43 +1,27 @@
 const { getPool, sql } = require('../config/db.sql');
+const pricing = require('../services/pricing.service');
+const voucherService = require('../services/voucher.service');
 const { success, error } = require('../utils/response');
 
+// Dùng chung quy tắc với lúc tạo đơn (pricing.service), nên kết quả kiểm tra luôn khớp số tiền thật.
 const validateVoucher = async (req, res) => {
   const { code, subtotal = 0 } = req.body;
 
-  if (!code) {
+  if (!voucherService.normalizeVoucherCode(code)) {
     return error(res, 'Voucher code is required', 400);
   }
 
   try {
-    const result = await getPool().request()
-      .input('code', sql.NVarChar, String(code).trim().toUpperCase())
-      .input('subtotal', sql.Decimal(18, 2), Number(subtotal) || 0)
-      .query(`
-        SELECT TOP 1 VoucherID, Code, DiscountType, DiscountValue, MinOrderAmount,
-               MaxDiscount, UsageLimit, UsedCount, StartDate, EndDate, IsActive
-        FROM Vouchers
-        WHERE Code = @code
-          AND IsActive = 1
-          AND (StartDate IS NULL OR StartDate <= GETDATE())
-          AND (EndDate IS NULL OR EndDate >= GETDATE())
-          AND (UsageLimit IS NULL OR UsedCount < UsageLimit)
-          AND (@subtotal >= ISNULL(MinOrderAmount, 0))
-      `);
+    const amount = Number(subtotal) || 0;
+    const voucher = await voucherService.findVoucherByCode(getPool(), code);
+    const problem = pricing.checkVoucher(voucher, amount);
 
-    if (result.recordset.length === 0) {
-      return error(res, 'Invalid, expired, or ineligible voucher', 400);
+    if (problem) {
+      return error(res, problem.message, 400, { code: problem.code });
     }
 
-    const voucher = result.recordset[0];
-    const value = Number(voucher.DiscountValue || 0);
-    const rawDiscount = voucher.DiscountType === 'percent'
-      ? (Number(subtotal) || 0) * value / 100
-      : value;
-    const discount = voucher.MaxDiscount
-      ? Math.min(rawDiscount, Number(voucher.MaxDiscount))
-      : rawDiscount;
-
-    return success(res, { voucher, discount }, 'Voucher validated successfully');
+    const discount = pricing.calcVoucherDiscount(voucher, amount);
+    return success(res, { voucher: voucherService.toPublicVoucher(voucher), discount }, 'Voucher validated successfully');
   } catch (err) {
     return error(res, err.message);
   }

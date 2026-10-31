@@ -65,8 +65,8 @@ export const heroSlides = [
     secondaryCta: 'Nhận mã giảm giá',
     accent: 'from-slate-800 via-indigo-700 to-sky-500',
     stats: [
-      { value: '5.4★', label: 'điểm hài lòng' },
-      { value: 'Free ship', label: 'toàn quốc' },
+      { value: 'Free ship', label: 'đơn từ 3 triệu' },
+      { value: 'COD', label: 'hoặc VNPay' },
       { value: '1-1', label: 'đổi mới nếu lỗi' },
     ],
     badges: ['Minimal', 'Ergonomic', 'Học tập hiệu quả'],
@@ -182,10 +182,11 @@ export const trustHighlights = [
   },
 ]
 
+// Không dùng đồng hồ đếm ngược hay % giảm giá cố định: mức giảm hiển thị
+// được tính từ giá gốc thật của sản phẩm (xem getMaxDiscountPercent trong CustomerSite).
 export const flashDeal = {
-  title: 'Flash Deal cuối ngày',
-  subtitle: 'Giảm sâu cho chuột, phím cơ và màn hình gaming',
-  discount: 'Giảm tới 51%',
+  title: 'Đang giảm giá',
+  subtitle: 'Chuột, phím cơ và màn hình gaming đang có giá tốt',
 }
 
 const products = [

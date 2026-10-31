@@ -9,6 +9,6 @@ router.get('/products/:productId', reviewController.getProductReviews);
 router.post('/products/:productId', authenticate, reviewController.createReview);
 router.patch('/:reviewId', authenticate, reviewController.updateReview);
 router.delete('/:reviewId', authenticate, reviewController.deleteReview);
-router.patch('/:reviewId/helpful', reviewController.markHelpful);
+router.patch('/:reviewId/helpful', authenticate, reviewController.markHelpful);
 
 module.exports = router;
