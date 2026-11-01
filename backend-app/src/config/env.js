@@ -5,6 +5,18 @@ const [sqlHost, sqlPortFromHost] = sqlServerRaw.split(',');
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
+// Production không được chạy với khoá JWT mặc định (ai đọc mã nguồn cũng biết, giả token được).
+if (nodeEnv === 'production' && (!process.env.JWT_ACCESS_SECRET || !process.env.JWT_REFRESH_SECRET)) {
+  throw new Error('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be set when NODE_ENV=production');
+}
+
+// TRUST_PROXY: số proxy đứng trước API (ví dụ 1 khi chạy sau nginx). Bỏ trống = không có proxy.
+const parseTrustProxy = (value) => {
+  if (value === undefined || String(value).trim() === '' || value === 'false') return false;
+  const hops = Number(value);
+  return Number.isInteger(hops) && hops >= 0 ? hops : value;
+};
+
 const toNumber = (value, fallback) => {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const parsed = Number(value);
@@ -20,6 +32,7 @@ const updateOnReturn = process.env.VNPAY_UPDATE_ON_RETURN
 module.exports = {
   port: Number(process.env.PORT || 3000),
   nodeEnv,
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   // Trang return của VNPay chuyển khách về trang đơn hàng trên frontend này.
   clientUrl: (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, ''),
   vnpay: {

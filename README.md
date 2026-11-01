@@ -233,6 +233,30 @@ npm run dev
 Open `http://localhost:5173`. The API health check is available at
 `http://localhost:3000/health`.
 
+### Run everything with Docker
+
+`docker-compose.yml` at the repository root runs SQL Server, MongoDB, the API
+and the web app (nginx serving the Vite build and proxying `/api`):
+
+```bash
+cp .env.docker.example .env      # then set passwords and two long random JWT secrets
+docker compose up -d sqlserver mongodb
+docker compose run --rm backend node run-migration.js
+docker compose run --rm backend node run-seed.js
+docker compose up -d --build
+```
+
+Open `http://localhost:8080`. The API refuses to start in production mode
+without `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`. Uploaded product images
+are kept in the `uploads` volume.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request: backend unit
+tests, backend integration tests against fresh SQL Server and MongoDB
+containers (schema, sample data, then `npm run test:db`), frontend lint and
+build, and a build of both Docker images.
+
 ## Demo accounts
 
 After seeding the local database:

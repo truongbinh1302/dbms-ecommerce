@@ -27,6 +27,12 @@ const warrantyRoutes = require('./routes/warranty.routes');
 
 const app = express();
 
+// Chạy sau reverse proxy (nginx trong docker-compose): tin header X-Forwarded-For của proxy
+// để giới hạn request theo IP thật của khách, không gộp mọi khách vào IP của proxy.
+if (config.trustProxy !== false) {
+  app.set('trust proxy', config.trustProxy);
+}
+
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
