@@ -295,6 +295,15 @@ export function lookupWarranty(serial) {
   return request(`/warranties/${encodeURIComponent(serial)}`);
 }
 
+export function registerWarranty(payload, token) {
+  return request('/warranties/admin', {
+    method: 'POST',
+    auth: true,
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
 export function fetchMyWarranties() {
   return request('/warranties/me', { auth: true });
 }
