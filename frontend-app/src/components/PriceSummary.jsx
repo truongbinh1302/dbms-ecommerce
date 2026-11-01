@@ -57,9 +57,17 @@ export function VoucherField({ voucherCode, voucherError, onApply, disabled = fa
   )
 }
 
+function formatExpiry(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+}
+
 // Các dòng tạm tính / phí ship / giảm giá / tổng. Số liệu lấy từ API báo giá của server.
-export default function PriceSummary({ subtotal, quote, quoteError }) {
+export default function PriceSummary({ subtotal, quote, quoteError, onClearPriceLock }) {
   const stockIssues = quote?.issues?.filter((issue) => issue.issue === 'insufficient_stock') || []
+  const lockedLines = quote?.items?.filter((line) => line.priceLocked) || []
+  const lockSaving = lockedLines.reduce((sum, line) => sum + (line.listPrice - line.unitPrice) * line.quantity, 0)
 
   return (
     <div>
@@ -87,6 +95,31 @@ export default function PriceSummary({ subtotal, quote, quoteError }) {
           </div>
         ) : null}
       </div>
+
+      {quote?.priceLock ? (
+        <div className="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Giữ giá theo báo giá <strong>{quote.priceLock.code}</strong> đến {formatExpiry(quote.priceLock.expiresAt)}
+          {lockSaving > 0 ? <> · rẻ hơn giá hiện tại {formatCurrency(lockSaving)}</> : null}
+          {onClearPriceLock ? (
+            <button type="button" onClick={onClearPriceLock} className="ml-2 font-semibold text-slate-500 underline hover:text-red-600">
+              Bỏ báo giá
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {quote?.priceLockError ? (
+        <div className="mt-3 rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {quote.priceLockError.code === 'quote_expired'
+            ? `Báo giá ${quote.priceLockError.quoteCode || ''} đã hết hạn giữ giá, đơn được tính theo giá hiện tại.`
+            : 'Không tìm thấy báo giá, đơn được tính theo giá hiện tại.'}
+          {onClearPriceLock ? (
+            <button type="button" onClick={onClearPriceLock} className="ml-2 font-semibold underline">
+              Đã hiểu
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {stockIssues.length > 0 ? (
         <p className="mt-3 text-sm text-red-600">

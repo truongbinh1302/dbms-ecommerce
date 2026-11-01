@@ -125,6 +125,12 @@ svg {
   }
 }
 
+@media (min-width: 1280px) and (max-width: 1535.98px) {
+  .header-action-wide {
+    display: none;
+  }
+}
+
 @media (min-width: 1536px) {
   .storefront-header-grid {
     grid-template-columns: 310px minmax(520px, 1fr) auto;

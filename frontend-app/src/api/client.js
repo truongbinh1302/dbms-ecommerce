@@ -151,10 +151,11 @@ export function validateCart(items, token) {
 }
 
 // Báo giá giỏ hàng: server tính tạm tính, phí ship, giảm giá và kiểm tra voucher.
-export function quoteCart(items, voucherCode) {
+// quoteCode: mã báo giá Build PC đang giữ giá (nếu khách mua theo báo giá).
+export function quoteCart(items, voucherCode, quoteCode) {
   return request('/cart/quote', {
     method: 'POST',
-    body: JSON.stringify({ items, voucherCode: voucherCode || undefined }),
+    body: JSON.stringify({ items, voucherCode: voucherCode || undefined, quoteCode: quoteCode || undefined }),
   });
 }
 
@@ -248,6 +249,54 @@ export function cancelMyOrder(orderId, reason) {
     auth: true,
     body: JSON.stringify({ reason }),
   });
+}
+
+export function fetchPriceHistory(productId, days = 180) {
+  return request(`/products/${productId}/price-history?${new URLSearchParams({ days: String(days) })}`);
+}
+
+// --- Build PC ---
+export function fetchBuilderComponents() {
+  return request('/builder/components');
+}
+
+export function fetchBuilderPresets() {
+  return request('/builder/presets');
+}
+
+export function checkBuild(items) {
+  return request('/builder/check', { method: 'POST', body: JSON.stringify({ items }) });
+}
+
+export function autoBuild(presetId) {
+  return request('/builder/auto', { method: 'POST', body: JSON.stringify({ presetId }) });
+}
+
+export function suggestUpgrades(current) {
+  return request('/builder/upgrade', { method: 'POST', body: JSON.stringify(current) });
+}
+
+// Đăng nhập thì báo giá gắn với tài khoản; chưa đăng nhập vẫn tạo được.
+export function createBuildQuote(items, title) {
+  return request('/builder/quotes', {
+    method: 'POST',
+    auth: true,
+    retryOnAuth: false,
+    body: JSON.stringify({ items, title: title || undefined }),
+  });
+}
+
+export function fetchBuildQuote(code) {
+  return request(`/builder/quotes/${encodeURIComponent(code)}`);
+}
+
+// --- Bảo hành ---
+export function lookupWarranty(serial) {
+  return request(`/warranties/${encodeURIComponent(serial)}`);
+}
+
+export function fetchMyWarranties() {
+  return request('/warranties/me', { auth: true });
 }
 
 export function fetchReviews(productId) {

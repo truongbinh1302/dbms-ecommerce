@@ -150,7 +150,10 @@ const createOrder = async (userId, orderData = {}) => {
 
     // Đặt theo báo giá Build PC: báo giá hết hạn thì báo lỗi để khách xem lại giá mới,
     // không âm thầm tính giá khác với giá khách đã thấy.
-    const lockedQuote = quoteCode ? await priceQuoteService.loadLockedPrices(transaction, quoteCode) : null;
+    let lockedQuote = quoteCode ? await priceQuoteService.loadLockedPrices(transaction, quoteCode) : null;
+    if (lockedQuote && !products.some((product) => lockedQuote.prices.has(product.ProductID))) {
+      lockedQuote = null;
+    }
     const lines = pricing.applyLockedPrices(
       products.map((product) => ({ productId: product.ProductID, quantity: product.quantity, unitPrice: Number(product.Price) })),
       lockedQuote ? lockedQuote.prices : null,
@@ -318,6 +321,10 @@ const quoteCart = async (rawItems, rawVoucherCode = null, rawQuoteCode = null) =
       if (!err.status) throw err;
       quoteError = { ...(err.data || {}), message: err.message };
     }
+  }
+  // Giỏ không còn sản phẩm nào của báo giá thì coi như không dùng báo giá.
+  if (lockedQuote && !baseLines.some((line) => lockedQuote.prices.has(line.productId))) {
+    lockedQuote = null;
   }
   const lines = pricing.applyLockedPrices(baseLines, lockedQuote ? lockedQuote.prices : null);
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);

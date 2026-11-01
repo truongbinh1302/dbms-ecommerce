@@ -352,3 +352,12 @@ test('quoteCart với mã báo giá sai: vẫn báo giá theo giá hiện tại,
   assert.equal(missing.priceLock, null);
   assert.equal(missing.priceLockError.code, 'quote_not_found');
 });
+
+test('quoteCart: giỏ không có sản phẩm nào của báo giá thì không hiện giữ giá', async () => {
+  const { orderService, db } = setup();
+  addQuote(db, { items: [{ productId: 10, quantity: 1, unitPrice: 800000 }] });
+  const result = await orderService.quoteCart([{ productId: 20, quantity: 1 }], null, 'BQABCDEFGH');
+  assert.equal(result.priceLock, null);
+  assert.equal(result.priceLockError, null);
+  assert.equal(result.subtotal, 9000000);
+});

@@ -1,5 +1,5 @@
 export const quickLinks = [
-  'Build PC AI',
+  'Build PC',
   'Hot Deal',
   'Tin công nghệ',
   'Dịch vụ kỹ thuật tại nhà',

@@ -132,6 +132,11 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
               <p className="mt-2 text-slate-500">Đơn cũ không có địa chỉ chi tiết.</p>
             )}
             {order.Note ? <p className="mt-2 text-slate-500">Ghi chú: {order.Note}</p> : null}
+            {order.quoteCode ? (
+              <p className="mt-2 text-slate-500">
+                Giá theo báo giá <a href={hrefFor(`/bao-gia/${order.quoteCode}`)} className="font-semibold text-slate-700 hover:text-red-600">{order.quoteCode}</a>
+              </p>
+            ) : null}
           </div>
           <div className="rounded-2xl bg-slate-50 p-4 text-sm">
             <h2 className="font-bold text-slate-900">Thanh toán</h2>
@@ -146,6 +151,11 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
               <span>
                 <a href={hrefFor(`/san-pham/${item.ProductID}`)} className="font-semibold text-slate-900 hover:text-red-600">{item.productName}</a>
                 <span className="text-slate-400"> × {item.Quantity}</span>
+                {(order.warranties || []).filter((warranty) => warranty.productId === item.ProductID).map((warranty) => (
+                  <span key={warranty.serialNumber} className="block text-xs text-slate-500">
+                    Serial {warranty.serialNumber} · bảo hành đến hết {warranty.endDate.split('-').reverse().join('/')}
+                  </span>
+                ))}
               </span>
               <span className="shrink-0 font-semibold">{formatCurrency(Number(item.UnitPrice) * item.Quantity)}</span>
             </li>
