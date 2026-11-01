@@ -138,9 +138,11 @@ const createOrder = async (userId, orderData = {}) => {
   await transaction.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
 
   try {
+    // UPDLOCK trên dòng Users: đặt hàng và xoá tài khoản cùng lúc sẽ chạy lần lượt,
+    // nên không có đơn mới lọt vào tài khoản vừa bị xoá.
     const userCheck = await new sql.Request(transaction)
       .input('userId', sql.Int, Number(userId))
-      .query(`SELECT UserID FROM Users WHERE UserID = @userId AND IsActive = 1`);
+      .query(`SELECT UserID FROM Users WITH (UPDLOCK, ROWLOCK) WHERE UserID = @userId AND IsActive = 1`);
 
     if (!userCheck.recordset[0]) {
       throw createHttpError(401, 'Invalid user or user not found');

@@ -2,6 +2,7 @@ const { getPool, sql } = require('../config/db.sql');
 const { success, error } = require('../utils/response');
 const { parseStoredAddress, validateShippingAddress } = require('../services/address.service');
 const { hashPassword, comparePassword } = require('../utils/hash');
+const accountService = require('../services/account.service');
 
 const getMe = async (req, res) => {
   try {
@@ -96,7 +97,31 @@ const updateAddress = async (req, res) => {
   }
 };
 
+// Tải bản sao dữ liệu cá nhân (quyền được biết, được cung cấp dữ liệu).
+const exportMyData = async (req, res) => {
+  try {
+    const data = await accountService.exportMyData(req.user.id);
+    return success(res, data, 'Personal data exported');
+  } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
+    return error(res, err.message);
+  }
+};
+
+// Xoá tài khoản theo yêu cầu của chính khách hàng, cần nhập lại mật khẩu.
+const deleteMyAccount = async (req, res) => {
+  try {
+    const result = await accountService.deleteAccount(req.user.id, (req.body || {}).password);
+    return success(res, result, 'Account deleted');
+  } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
+    return error(res, err.message);
+  }
+};
+
 module.exports = {
+  exportMyData,
+  deleteMyAccount,
   getMe,
   updateProfile,
   changePassword,

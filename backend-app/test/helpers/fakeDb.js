@@ -26,7 +26,7 @@ const createFakeDb = () => {
   const state = { store: createStore(), queries: [] };
 
   const handlers = [
-    [/^SELECT UserID FROM Users WHERE UserID = @userId AND IsActive = 1$/, ({ userId }, s) =>
+    [/^SELECT UserID FROM Users WITH \(UPDLOCK, ROWLOCK\) WHERE UserID = @userId AND IsActive = 1$/, ({ userId }, s) =>
       s.users.filter((u) => u.UserID === userId && u.IsActive)],
 
     [/^SELECT ProductID, Name, Price, Stock FROM Products WITH \(UPDLOCK, ROWLOCK\) WHERE ProductID = @productId AND IsDeleted = 0$/,

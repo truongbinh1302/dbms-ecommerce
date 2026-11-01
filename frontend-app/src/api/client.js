@@ -131,10 +131,16 @@ export async function login(email, password) {
   return session;
 }
 
-export async function register({ fullName, email, password, phone }) {
+export async function register({ fullName, email, password, phone, acceptPrivacy }) {
   const data = await request('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ fullName, email: String(email || '').trim().toLowerCase(), password, phone }),
+    body: JSON.stringify({
+      fullName,
+      email: String(email || '').trim().toLowerCase(),
+      password,
+      phone: phone || undefined,
+      acceptPrivacy: acceptPrivacy === true,
+    }),
   });
   const session = { ...data, user: normalizeUser(data.user) };
   storeAuthSession(session);
@@ -301,6 +307,20 @@ export function registerWarranty(payload, token) {
     auth: true,
     token,
     body: JSON.stringify(payload),
+  });
+}
+
+// --- Quyền dữ liệu cá nhân ---
+export function exportMyData() {
+  return request('/users/me/export', { auth: true });
+}
+
+export function deleteMyAccount(password) {
+  return request('/users/me', {
+    method: 'DELETE',
+    auth: true,
+    retryOnAuth: false,
+    body: JSON.stringify({ password }),
   });
 }
 

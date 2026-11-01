@@ -6,12 +6,14 @@ import ProductQuickView from '../components/ProductQuickView'
 import SectionHeader from '../components/SectionHeader'
 import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
-import { fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
+import { clearAuthSession, fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
 import useHashRoute, { navigate } from '../hooks/useHashRoute'
+import AccountPage from './AccountPage'
 import BuildPcPage from './BuildPcPage'
 import CheckoutPage from './CheckoutPage'
 import OrderDetailPage from './OrderDetailPage'
 import OrdersPage from './OrdersPage'
+import PrivacyPolicyPage from './PrivacyPolicyPage'
 import ProductDetailPage from './ProductDetailPage'
 import QuotePage from './QuotePage'
 import SearchPage from './SearchPage'
@@ -39,6 +41,12 @@ const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
 const QUICK_LINK_ROUTES = {
   'Build PC': '/build-pc',
   'Tra cứu bảo hành': '/bao-hanh',
+}
+// Liên kết chân trang đã có trang riêng; các mục còn lại chưa có nội dung.
+const FOOTER_LINK_ROUTES = {
+  'Tra cứu đơn hàng': '/don-hang',
+  'Bảo hành': '/bao-hanh',
+  'Bảo mật thông tin': '/chinh-sach-bao-mat',
 }
 const SEEDED_VIEWED = []
 
@@ -620,13 +628,24 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         await logout(token).catch(() => {/* backend error không block logout */})
       }
     } finally {
-      window.localStorage.removeItem('bt_access_token')
-      window.localStorage.removeItem('bt_user')
+      clearAuthSession()
       setCurrentUser(null)
       if (onUserChange) onUserChange(null)
       setCart([])
       showToast('Đã đăng xuất thành công.')
     }
+  }
+
+  // Tài khoản đã xoá: token không còn dùng được nên chỉ dọn dữ liệu trên trình duyệt.
+  function handleAccountDeleted() {
+    clearAuthSession()
+    setCurrentUser(null)
+    if (onUserChange) onUserChange(null)
+    setCart([])
+    setPriceLockCode('')
+    setVoucherCode('')
+    navigate('/')
+    showToast('Tài khoản của bạn đã được xoá.')
   }
 
   function handleHeroAction(slideId) {
@@ -712,6 +731,10 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     routeContent = <QuotePage key={route.segments[1]} code={route.segments[1]} onBuyBuild={buyBuild} />
   } else if (routeSection === 'bao-hanh') {
     routeContent = <WarrantyPage currentUser={currentUser} />
+  } else if (routeSection === 'tai-khoan') {
+    routeContent = <AccountPage currentUser={currentUser} onRequireLogin={requireLogin} onAccountDeleted={handleAccountDeleted} />
+  } else if (routeSection === 'chinh-sach-bao-mat') {
+    routeContent = <PrivacyPolicyPage />
   } else if (routeSection === 'don-hang') {
     routeContent = (
       <OrdersPage
@@ -839,10 +862,10 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
               {currentUser ? (
                 <div className="flex min-h-14 items-center gap-2 rounded-2xl bg-white/10 px-3 text-white">
                   <StoreGlyph name="user" className="size-5 shrink-0" />
-                  <div className="min-w-0">
+                  <a href="#/tai-khoan" title="Tài khoản của tôi" className="min-w-0 hover:underline">
                     <div className="text-xs font-medium uppercase tracking-[0.18em] text-red-100">Xin chào</div>
                     <div className="text-sm font-bold truncate max-w-[100px]">{currentUser.fullName || currentUser.email}</div>
-                  </div>
+                  </a>
                   <a
                     href="#/don-hang"
                     title="Đơn hàng của tôi"
@@ -1392,6 +1415,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                       <button
                         key={link}
                         type="button"
+                        onClick={FOOTER_LINK_ROUTES[link] ? () => navigate(FOOTER_LINK_ROUTES[link]) : undefined}
                         className="block transition hover:text-red-600"
                       >
                         {link}
