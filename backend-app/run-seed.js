@@ -31,7 +31,8 @@ const config = {
   requestTimeout: 120000,
 };
 
-const seedFile = path.join(__dirname, '..', 'database', 'seeds', '002_seed_demo_data.sql');
+// Chạy mọi file .sql trong database/seeds theo thứ tự tên (002 dữ liệu demo, 003 linh kiện Build PC...).
+const seedDir = path.join(__dirname, '..', 'database', 'seeds');
 
 async function runSeed() {
   console.log('🔌 Connecting to SQL Server at', config.server + ':' + config.port, '...');
@@ -46,20 +47,22 @@ async function runSeed() {
     process.exit(1);
   }
 
-  let scriptContent;
+  let batches = [];
   try {
-    scriptContent = fs.readFileSync(seedFile, 'utf8');
+    const seedFiles = fs.readdirSync(seedDir).filter((file) => file.toLowerCase().endsWith('.sql')).sort();
+    for (const file of seedFiles) {
+      const fileBatches = fs.readFileSync(path.join(seedDir, file), 'utf8')
+        .split(/^\s*GO\s*$/im)
+        .map((b) => b.trim())
+        .filter((b) => b.length > 0);
+      console.log(`📄 Đọc ${fileBatches.length} batch từ ${file}`);
+      batches = batches.concat(fileBatches);
+    }
   } catch (err) {
-    console.error('❌ Cannot read seed file:', seedFile);
+    console.error('❌ Cannot read seed files in:', seedDir);
     process.exit(1);
   }
 
-  const batches = scriptContent
-    .split(/^\s*GO\s*$/im)
-    .map((b) => b.trim())
-    .filter((b) => b.length > 0);
-
-  console.log(`📄 Đọc ${batches.length} batch từ 002_seed_demo_data.sql`);
   console.log('⏳ Đang nạp dữ liệu (50.000 sản phẩm + 5.000 đơn hàng — mất 2-5 phút)...\n');
 
   let successCount = 0;

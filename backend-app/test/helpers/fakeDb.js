@@ -18,6 +18,7 @@ const createStore = () => ({
   orderItems: [],
   voucherUsages: [],
   cartItems: [],
+  buildQuotes: [],
   nextOrderId: 1,
 });
 
@@ -54,6 +55,7 @@ const createFakeDb = () => {
         Total: i.total,
         ShippingAddress: i.shippingAddress,
         Note: i.note,
+        QuoteCode: i.quoteCode ?? null,
         VNPayTxnRef: null,
         CreatedAt: new Date(),
         ageMinutes: 0,
@@ -61,6 +63,11 @@ const createFakeDb = () => {
       s.orders.push(order);
       return [{ OrderID: order.OrderID, CreatedAt: order.CreatedAt }];
     }],
+
+    [/^SELECT QuoteID, Code, UserID, Title, ItemsJson, Subtotal, CreatedAt, ExpiresAt, CASE WHEN ExpiresAt <= SYSDATETIME\(\) THEN 1 ELSE 0 END AS IsExpired FROM BuildQuotes WHERE Code = @code$/,
+      ({ code }, s) => s.buildQuotes
+        .filter((q) => q.Code === code)
+        .map((q) => ({ ...q, IsExpired: q.expired ? 1 : 0 }))],
 
     [/^UPDATE Orders SET OrderCode = @orderCode/, ({ orderId, orderCode }, s) => {
       s.orders.find((o) => o.OrderID === orderId).OrderCode = orderCode;
@@ -241,7 +248,14 @@ const createFakeDb = () => {
   };
 };
 
-const SERVICES_USING_DB = ['order.service', 'voucher.service', 'pricing.service', 'cart.service'];
+const SERVICES_USING_DB = [
+  'order.service',
+  'voucher.service',
+  'pricing.service',
+  'cart.service',
+  'priceQuote.service',
+  'builder.service',
+];
 
 /**
  * Nạp các service với DB giả: thay module config/db.sql trong require.cache.

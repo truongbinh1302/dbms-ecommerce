@@ -4,6 +4,7 @@ const config = require('../config/env');
 const pricing = require('./pricing.service');
 const voucherService = require('./voucher.service');
 const cartService = require('./cart.service');
+const priceQuoteService = require('./priceQuote.service');
 const { assertShippingAddress } = require('./address.service');
 
 const allowedStatuses = ['pending', 'pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -130,6 +131,7 @@ const createOrder = async (userId, orderData = {}) => {
   const voucherCode = voucherService.normalizeVoucherCode(orderData.voucherCode);
   const shippingAddress = assertShippingAddress(orderData.shippingAddress);
   const note = orderData.note ? String(orderData.note).trim().slice(0, 500) || null : null;
+  const quoteCode = orderData.quoteCode ? String(orderData.quoteCode).trim().toUpperCase() : null;
 
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
@@ -144,7 +146,16 @@ const createOrder = async (userId, orderData = {}) => {
       throw createHttpError(401, 'Invalid user or user not found');
     }
 
-    const { products, subtotal } = await lockProductsForOrder(transaction, items);
+    const { products } = await lockProductsForOrder(transaction, items);
+
+    // Đặt theo báo giá Build PC: báo giá hết hạn thì báo lỗi để khách xem lại giá mới,
+    // không âm thầm tính giá khác với giá khách đã thấy.
+    const lockedQuote = quoteCode ? await priceQuoteService.loadLockedPrices(transaction, quoteCode) : null;
+    const lines = pricing.applyLockedPrices(
+      products.map((product) => ({ productId: product.ProductID, quantity: product.quantity, unitPrice: Number(product.Price) })),
+      lockedQuote ? lockedQuote.prices : null,
+    );
+    const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
 
     let voucher = null;
     if (voucherCode) {
@@ -168,10 +179,11 @@ const createOrder = async (userId, orderData = {}) => {
       .input('total', sql.Decimal(18, 2), quote.total)
       .input('shippingAddress', sql.NVarChar, JSON.stringify(shippingAddress))
       .input('note', sql.NVarChar, note)
+      .input('quoteCode', sql.NVarChar(20), lockedQuote ? lockedQuote.code : null)
       .query(`
-        INSERT INTO Orders (UserID, PaymentMethod, Status, Subtotal, Discount, ShippingFee, Total, ShippingAddress, Note)
+        INSERT INTO Orders (UserID, PaymentMethod, Status, Subtotal, Discount, ShippingFee, Total, ShippingAddress, Note, QuoteCode)
         OUTPUT INSERTED.OrderID, INSERTED.CreatedAt
-        VALUES (@userId, @paymentMethod, @status, @subtotal, @discount, @shippingFee, @total, @shippingAddress, @note)
+        VALUES (@userId, @paymentMethod, @status, @subtotal, @discount, @shippingFee, @total, @shippingAddress, @note, @quoteCode)
       `);
 
     const orderId = orderResult.recordset[0].OrderID;
@@ -188,12 +200,12 @@ const createOrder = async (userId, orderData = {}) => {
         WHERE OrderID = @orderId
       `);
 
-    for (const item of products) {
+    for (const [index, item] of products.entries()) {
       await new sql.Request(transaction)
         .input('orderId', sql.Int, orderId)
         .input('productId', sql.Int, item.ProductID)
         .input('quantity', sql.Int, item.quantity)
-        .input('unitPrice', sql.Decimal(18, 2), Number(item.Price))
+        .input('unitPrice', sql.Decimal(18, 2), lines[index].unitPrice)
         .query(`
           INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice)
           VALUES (@orderId, @productId, @quantity, @unitPrice)
@@ -242,6 +254,7 @@ const createOrder = async (userId, orderData = {}) => {
       paymentMethod,
       ...quote,
       voucherCode: voucher ? voucher.Code : null,
+      quoteCode: lockedQuote ? lockedQuote.code : null,
       createdAt,
     };
   } catch (err) {
@@ -254,7 +267,7 @@ const createOrder = async (userId, orderData = {}) => {
  * Báo giá giỏ hàng (không khoá, không ghi gì). Dùng chung quy tắc với createOrder.
  * Voucher không hợp lệ không làm hỏng báo giá, chỉ trả về voucherError.
  */
-const quoteCart = async (rawItems, rawVoucherCode = null) => {
+const quoteCart = async (rawItems, rawVoucherCode = null, rawQuoteCode = null) => {
   const items = normalizeItems(rawItems);
   const pool = getPool();
 
@@ -269,9 +282,8 @@ const quoteCart = async (rawItems, rawVoucherCode = null) => {
   `);
 
   const productsById = new Map(result.recordset.map((product) => [product.ProductID, product]));
-  const lines = [];
+  const baseLines = [];
   const issues = [];
-  let subtotal = 0;
 
   for (const item of items) {
     const product = productsById.get(item.productId);
@@ -288,16 +300,27 @@ const quoteCart = async (rawItems, rawVoucherCode = null) => {
         issue: 'insufficient_stock',
       });
     }
-    const unitPrice = Number(product.Price);
-    subtotal += unitPrice * item.quantity;
-    lines.push({
+    baseLines.push({
       productId: item.productId,
       name: product.Name,
-      unitPrice,
+      unitPrice: Number(product.Price),
       quantity: item.quantity,
-      lineTotal: unitPrice * item.quantity,
     });
   }
+
+  // Báo giá Build PC sai hoặc hết hạn không làm hỏng báo giá giỏ hàng, chỉ trả về priceLockError.
+  let lockedQuote = null;
+  let quoteError = null;
+  if (rawQuoteCode) {
+    try {
+      lockedQuote = await priceQuoteService.loadLockedPrices(pool, rawQuoteCode);
+    } catch (err) {
+      if (!err.status) throw err;
+      quoteError = { ...(err.data || {}), message: err.message };
+    }
+  }
+  const lines = pricing.applyLockedPrices(baseLines, lockedQuote ? lockedQuote.prices : null);
+  const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
 
   let voucher = null;
   let voucherError = null;
@@ -318,6 +341,8 @@ const quoteCart = async (rawItems, rawVoucherCode = null) => {
     ...pricing.buildQuote(subtotal, voucher),
     voucher: voucherService.toPublicVoucher(voucher),
     voucherError,
+    priceLock: lockedQuote ? { code: lockedQuote.code, expiresAt: lockedQuote.expiresAt } : null,
+    priceLockError: quoteError,
   };
 };
 
@@ -376,7 +401,7 @@ const getOrderById = async (orderId, userId = null) => {
   const result = await request.query(`
     SELECT o.OrderID AS id, o.OrderCode AS orderCode, o.Status, o.PaymentMethod, o.PaymentStatus,
            o.VNPayTxnRef AS txnRef, o.CancelReason,
-           o.Subtotal, o.Discount, o.ShippingFee, o.Total, o.Note,
+           o.Subtotal, o.Discount, o.ShippingFee, o.Total, o.Note, o.QuoteCode AS quoteCode,
            o.ShippingAddress, o.CreatedAt, o.UpdatedAt,
            u.FullName AS customerName, u.Email, u.Phone
     FROM Orders o
@@ -399,6 +424,18 @@ const getOrderById = async (orderId, userId = null) => {
     `);
 
   order.items = itemsResult.recordset;
+
+  const warrantiesResult = await new sql.Request(getPool())
+    .input('orderId', sql.Int, Number(orderId))
+    .query(`
+      SELECT SerialNumber AS serialNumber, ProductID AS productId,
+             CONVERT(CHAR(10), StartDate, 23) AS startDate, CONVERT(CHAR(10), EndDate, 23) AS endDate
+      FROM Warranties
+      WHERE OrderID = @orderId
+      ORDER BY ProductID, SerialNumber
+    `);
+  order.warranties = warrantiesResult.recordset;
+
   try {
     order.shippingAddress = JSON.parse(order.ShippingAddress || '{}');
   } catch {

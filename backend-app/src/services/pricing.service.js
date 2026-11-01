@@ -78,7 +78,29 @@ const buildQuote = (subtotal, voucher = null, rules = config.pricing) => {
   };
 };
 
+/**
+ * Áp giá đã giữ theo báo giá cấu hình.
+ * Mỗi dòng được tính theo giá thấp hơn giữa giá hiện tại và giá trong báo giá,
+ * chỉ khi số lượng mua không vượt số lượng đã báo giá. Khách không bao giờ trả cao hơn giá hiện tại.
+ * @param {Array<{productId, quantity, unitPrice}>} lines giá hiện tại lấy từ DB
+ * @param {Map<number, {unitPrice, quantity}>} lockedPrices giá trong báo giá
+ */
+const applyLockedPrices = (lines, lockedPrices) => lines.map((line) => {
+  const listPrice = roundMoney(line.unitPrice);
+  const locked = lockedPrices ? lockedPrices.get(Number(line.productId)) : null;
+  const canLock = locked && line.quantity <= locked.quantity && roundMoney(locked.unitPrice) < listPrice;
+  const unitPrice = canLock ? roundMoney(locked.unitPrice) : listPrice;
+  return {
+    ...line,
+    listPrice,
+    unitPrice,
+    priceLocked: Boolean(canLock),
+    lineTotal: unitPrice * line.quantity,
+  };
+});
+
 module.exports = {
+  applyLockedPrices,
   calcShippingFee,
   calcPromoDiscount,
   checkVoucher,

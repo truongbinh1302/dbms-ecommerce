@@ -35,6 +35,18 @@ const getProductById = async (req, res) => {
     }
 };
 
+const getPriceHistory = async (req, res) => {
+    try {
+        const history = await productService.getPriceHistory(req.params.id, req.query.days);
+        if (!history) {
+            return error(res, 'Product not found', 404);
+        }
+        return success(res, history, 'Price history retrieved successfully');
+    } catch (err) {
+        return error(res, err.message);
+    }
+};
+
 const createProduct = async (req, res) => {
     try {
         const result = await productService.createProduct(req.body, req.user.id);
@@ -89,6 +101,7 @@ const uploadProductImage = async (req, res) => {
 };
 
 module.exports = {
+    getPriceHistory,
     getProducts,
     getProductSuggestions,
     getProductById,

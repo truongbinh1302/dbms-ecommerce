@@ -41,6 +41,8 @@ module.exports = {
       { minSubtotal: 30000000, amount: 500000 },
       { minSubtotal: 10000000, amount: 200000 },
     ],
+    // Báo giá cấu hình Build PC giữ giá trong ngần này giờ.
+    quoteValidHours: toNumber(process.env.QUOTE_VALID_HOURS, 48),
   },
 
   payment: {

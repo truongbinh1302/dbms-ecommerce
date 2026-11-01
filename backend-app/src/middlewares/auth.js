@@ -24,6 +24,20 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+// Đăng nhập không bắt buộc: có token hợp lệ thì gắn req.user, không có hoặc sai thì coi như khách vãng lai.
+const optionalAuthenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const decoded = verifyAccessToken(authHeader.split(' ')[1]);
+      req.user = { ...decoded, role: normalizeRole(decoded.role) };
+    } catch {
+      req.user = null;
+    }
+  }
+  next();
+};
+
 const authorize = (...roles) => {
   const allowedRoles = roles.map(normalizeRole);
 
@@ -42,4 +56,4 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { authenticate, authorize };
+module.exports = { authenticate, optionalAuthenticate, authorize };

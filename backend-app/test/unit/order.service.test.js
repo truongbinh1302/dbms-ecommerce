@@ -282,3 +282,73 @@ test('đặt hàng lỗi thì giỏ server không bị xoá (rollback)', async (
   await assert.rejects(orderService.createOrder(1, { shippingAddress: ADDRESS, items: [{ productId: 20, quantity: 5 }] }));
   assert.equal(db.store.cartItems.length, 1);
 });
+
+// --- Giá giữ theo báo giá Build PC ---
+
+const addQuote = (db, { code = 'BQABCDEFGH', expired = false, items }) => {
+  db.store.buildQuotes.push({
+    QuoteID: db.store.buildQuotes.length + 1,
+    Code: code,
+    ItemsJson: JSON.stringify({ items, owned: [] }),
+    Subtotal: items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
+    ExpiresAt: new Date(),
+    expired,
+  });
+};
+
+test('createOrder theo báo giá còn hạn: dùng giá đã giữ khi giá hiện tại cao hơn', async () => {
+  const { orderService, db } = setup();
+  // Báo giá chuột 800k (giá hiện tại 1tr), màn hình 9.5tr (giá hiện tại 9tr → giữ giá thấp hơn là 9tr).
+  addQuote(db, { items: [{ productId: 10, quantity: 1, unitPrice: 800000 }, { productId: 20, quantity: 1, unitPrice: 9500000 }] });
+
+  const result = await orderService.createOrder(1, {
+    shippingAddress: ADDRESS,
+    items: [{ productId: 10, quantity: 1 }, { productId: 20, quantity: 1 }],
+    quoteCode: 'bqabcdefgh',
+  });
+
+  assert.equal(result.quoteCode, 'BQABCDEFGH');
+  assert.equal(result.subtotal, 800000 + 9000000);
+  assert.deepEqual(db.store.orderItems.map((item) => [item.ProductID, item.UnitPrice]), [[10, 800000], [20, 9000000]]);
+  assert.equal(db.store.orders[0].QuoteCode, 'BQABCDEFGH');
+});
+
+test('createOrder theo báo giá: mua nhiều hơn số lượng báo giá thì tính giá hiện tại', async () => {
+  const { orderService, db } = setup();
+  addQuote(db, { items: [{ productId: 10, quantity: 1, unitPrice: 800000 }] });
+
+  const result = await orderService.createOrder(1, {
+    shippingAddress: ADDRESS,
+    items: [{ productId: 10, quantity: 2 }],
+    quoteCode: 'BQABCDEFGH',
+  });
+  assert.equal(result.subtotal, 2000000);
+});
+
+test('createOrder theo báo giá hết hạn: báo lỗi 410, không tạo đơn, không trừ kho', async () => {
+  const { orderService, db } = setup();
+  addQuote(db, { expired: true, items: [{ productId: 10, quantity: 1, unitPrice: 800000 }] });
+
+  await assert.rejects(
+    orderService.createOrder(1, { shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 1 }], quoteCode: 'BQABCDEFGH' }),
+    (err) => Boolean(err.status === 410 && err.data.code === 'quote_expired'),
+  );
+  assert.equal(db.store.orders.length, 0);
+  assert.equal(db.store.products[0].Stock, 5);
+});
+
+test('quoteCart với mã báo giá sai: vẫn báo giá theo giá hiện tại, kèm priceLockError', async () => {
+  const { orderService, db } = setup();
+  addQuote(db, { items: [{ productId: 10, quantity: 1, unitPrice: 800000 }] });
+
+  const ok = await orderService.quoteCart([{ productId: 10, quantity: 1 }], null, 'BQABCDEFGH');
+  assert.equal(ok.subtotal, 800000);
+  assert.equal(ok.items[0].priceLocked, true);
+  assert.equal(ok.items[0].listPrice, 1000000);
+  assert.equal(ok.priceLock.code, 'BQABCDEFGH');
+
+  const missing = await orderService.quoteCart([{ productId: 10, quantity: 1 }], null, 'BQZZZZZZZZ');
+  assert.equal(missing.subtotal, 1000000);
+  assert.equal(missing.priceLock, null);
+  assert.equal(missing.priceLockError.code, 'quote_not_found');
+});
