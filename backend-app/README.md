@@ -115,12 +115,15 @@ node run-seed.js
 node fix-password.js
 ```
 
-Database cũ từ bản trước: chạy thêm trong SSMS/Azure Data Studio:
+Database đã có dữ liệu: chỉ cần chạy lại `node run-migration.js`. Lệnh này bỏ qua
+`001_create_schema.sql` (file xoá và tạo lại mọi bảng) và áp các migration mới hơn,
+dữ liệu được giữ nguyên.
 
-```text
-database/migrations/002_admin_product_upload_patch.sql
-database/migrations/003_fix_admin_login.sql
-```
+Muốn tạo lại từ đầu (**xoá hết dữ liệu**): `node run-migration.js --reset`, rồi chạy lại `node run-seed.js`.
+Chỉ chạy `run-seed.js` một lần trên database mới; chạy lại sẽ thêm trùng đơn hàng mẫu.
+
+Lưu ý: `003_fix_admin_login.sql` đặt lại mật khẩu admin demo thành `password` mỗi lần chạy migration.
+Khi triển khai thật phải bỏ file này hoặc đổi mật khẩu ngay sau khi migrate.
 
 ---
 

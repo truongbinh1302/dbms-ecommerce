@@ -208,6 +208,12 @@ node fix-password.js
 cd ..
 ```
 
+`run-migration.js` creates the schema on an empty server. On a database that
+already has tables it keeps the data and only applies the newer, re-runnable
+migrations. To drop everything and start over, run
+`node run-migration.js --reset` (this deletes all data). Run `run-seed.js`
+only once on a fresh database; running it again adds duplicate demo orders.
+
 ### 5. Run the application
 
 In one terminal:
