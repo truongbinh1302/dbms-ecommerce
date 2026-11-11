@@ -202,6 +202,8 @@ test('báo khi có hàng: chỉ cho sản phẩm đang hết, báo một lần k
 
   await notificationService.sweepStockWatches();
   assert.equal((await backInStock()).length, 0, 'còn hết hàng thì chưa báo');
+  const low = await inventoryService.listLowStock({ threshold: 0, limit: 100 });
+  assert.equal(low.items.find((item) => item.productId === soldOut)?.waiting, 1, 'admin thấy số khách đang chờ hàng');
 
   const receipt = await inventoryService.createReceipt({ supplier: 'NCC báo có hàng', items: [{ productId: soldOut, quantity: 4, unitCost: 2000000 }] }, admin.UserID);
   ctx.receiptIds.push(receipt.id);

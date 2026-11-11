@@ -30,8 +30,8 @@ export default function TodoPanel({ token, version = 0, onOpenOrders }) {
           returns: valueOf(returns, (value) => Number(value.pagination?.totalItems || 0)),
           questions: valueOf(questions, (value) => Number(value.pendingCount || 0)),
           services: valueOf(services, (value) => (Array.isArray(value) ? value.length : 0)),
-          // Sắp hết (≤ 5) trong số hàng đã bán được trong 30 ngày: cần nhập thêm.
-          lowStock: valueOf(lowStock, (value) => (value.items || []).filter((item) => item.sold30 > 0).length),
+          // Sắp hết (≤ 5) mà có bán trong 30 ngày hoặc có khách đang chờ hàng: cần nhập thêm.
+          lowStock: valueOf(lowStock, (value) => (value.items || []).filter((item) => item.sold30 > 0 || item.waiting > 0).length),
         },
       })
     })
@@ -47,7 +47,7 @@ export default function TodoPanel({ token, version = 0, onOpenOrders }) {
     { key: 'returns', label: 'Yêu cầu đổi trả', hint: 'chờ duyệt, chờ nhận hàng, chờ hoàn tất', href: '#admin-returns' },
     { key: 'questions', label: 'Câu hỏi chờ trả lời', hint: 'ở trang sản phẩm', href: '#admin-questions' },
     { key: 'services', label: 'Yêu cầu dịch vụ đang mở', hint: 'kỹ thuật tại nhà, thu cũ, bảo hành', href: '#admin-services' },
-    { key: 'lowStock', label: 'Hàng bán chạy sắp hết', hint: 'còn ≤ 5, có bán trong 30 ngày', href: '#admin-stock' },
+    { key: 'lowStock', label: 'Hàng cần nhập thêm', hint: 'còn ≤ 5, có bán trong 30 ngày hoặc có khách chờ', href: '#admin-stock' },
   ]
 
   return (

@@ -245,7 +245,7 @@ export default function InventoryPanel({ token, onChanged }) {
       <div className="space-y-6">
         <div className={PANEL}>
           <h3 className="text-xl font-black">Sắp hết hàng</h3>
-          <p className="text-sm text-slate-400">Tồn từ 5 trở xuống, xếp theo tồn thấp và bán chạy 30 ngày qua.</p>
+          <p className="text-sm text-slate-400">Tồn từ 5 trở xuống, xếp theo tồn thấp, số khách chờ có hàng và bán chạy 30 ngày qua.</p>
           {lists.lowStockError ? <p className={`${ERROR_BOX} mt-3`}>{lists.lowStockError}</p> : null}
           {!lists.lowStockError && lists.version >= 0 && lists.lowStock.length === 0 ? <p className="mt-3 text-sm text-slate-400">Không có sản phẩm nào sắp hết.</p> : null}
           <ul className="mt-3 space-y-2">
@@ -255,6 +255,7 @@ export default function InventoryPanel({ token, onChanged }) {
                   <span className="block truncate font-semibold text-white">{item.name}</span>
                   <span className="text-xs text-slate-400">
                     Còn <strong className="text-white">{item.stock}</strong> · bán 30 ngày: {item.sold30}
+                    {item.waiting ? <> · <strong className="text-amber-200">{item.waiting} khách chờ có hàng</strong></> : null}
                     {item.lastUnitCost !== null ? ` · giá nhập gần nhất ${formatCurrency(item.lastUnitCost)}` : ''}
                   </span>
                 </span>

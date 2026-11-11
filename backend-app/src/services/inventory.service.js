@@ -278,8 +278,11 @@ const listLowStock = async ({ threshold = 5, limit = 20 } = {}) => {
     .query(`
       SELECT TOP (@limit) p.ProductID, p.Name, p.Brand, p.Stock, p.Price,
              ISNULL(sold.Units, 0) AS Sold30,
-             lastReceipt.UnitCost AS LastUnitCost
+             lastReceipt.UnitCost AS LastUnitCost,
+             waiting.Customers AS Waiting
       FROM Products p
+      -- Số khách đang bấm "Báo khi có hàng": nhu cầu thật cho lần nhập tới.
+      OUTER APPLY (SELECT COUNT(*) AS Customers FROM StockWatches w WHERE w.ProductID = p.ProductID) waiting
       OUTER APPLY (
         SELECT SUM(oi.Quantity) AS Units
         FROM OrderItems oi
@@ -293,7 +296,7 @@ const listLowStock = async ({ threshold = 5, limit = 20 } = {}) => {
         WHERE i.ProductID = p.ProductID ORDER BY i.ReceiptID DESC
       ) lastReceipt
       WHERE p.IsDeleted = 0 AND p.Stock <= @threshold
-      ORDER BY p.Stock, ISNULL(sold.Units, 0) DESC, p.Name
+      ORDER BY p.Stock, waiting.Customers DESC, ISNULL(sold.Units, 0) DESC, p.Name
     `);
   return {
     threshold: safeThreshold,
@@ -304,6 +307,7 @@ const listLowStock = async ({ threshold = 5, limit = 20 } = {}) => {
       stock: Number(row.Stock),
       price: Number(row.Price),
       sold30: Number(row.Sold30),
+      waiting: Number(row.Waiting || 0),
       lastUnitCost: row.LastUnitCost === null || row.LastUnitCost === undefined ? null : Number(row.LastUnitCost),
     })),
   };
