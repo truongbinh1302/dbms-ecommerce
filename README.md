@@ -410,6 +410,12 @@ npm run build
 - Credentials in `.env.example`, Docker Compose, seed files, and this README are
   intentionally local demo values—not live secrets.
 - Replace all example passwords and JWT secrets before deployment.
+- The refresh token lives in an `HttpOnly; SameSite=Strict` cookie scoped to
+  `/api/v1/auth` (`Secure` in production), is rotated with a random `jti` on
+  every use, and is revoked on logout and password change. Only the
+  short-lived access token is kept by the page. If the frontend is served from
+  a different origin than the API, list it in `CORS_ORIGINS` so the cookie is
+  sent; the default proxy setup needs nothing.
 - VNPay credentials are not included in this repository.
 
 ## License

@@ -9,7 +9,9 @@ function getStoredToken() {
   return window.localStorage.getItem('bt_access_token') || '';
 }
 
-function getStoredRefreshToken() {
+// Refresh token nay nằm trong cookie httpOnly do server đặt. Khoá này chỉ còn ở trình duyệt đăng nhập
+// từ trước khi chuyển sang cookie: gửi một lần để server đổi sang cookie rồi xoá.
+function getLegacyRefreshToken() {
   if (!isBrowser()) return '';
   return window.localStorage.getItem('bt_refresh_token') || '';
 }
@@ -30,7 +32,7 @@ function normalizeUser(user = null) {
 function storeAuthSession(data = {}) {
   if (!isBrowser()) return;
   if (data.accessToken) window.localStorage.setItem('bt_access_token', data.accessToken);
-  if (data.refreshToken) window.localStorage.setItem('bt_refresh_token', data.refreshToken);
+  window.localStorage.removeItem('bt_refresh_token');
   if (data.user) window.localStorage.setItem('bt_user', JSON.stringify(normalizeUser(data.user)));
 }
 
@@ -68,13 +70,15 @@ async function parsePayload(response) {
 }
 
 async function refreshAccessToken() {
-  const refreshToken = getStoredRefreshToken();
-  if (!refreshToken) return '';
+  if (!getStoredToken() && !getLegacyRefreshToken()) return '';
+  const legacy = getLegacyRefreshToken();
 
+  // credentials: 'include' để trình duyệt gửi cookie refresh token (cả khi API ở origin khác, xem CORS_ORIGINS).
   const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+    body: JSON.stringify(legacy ? { refreshToken: legacy } : {}),
   });
 
   const payload = await parsePayload(response);
@@ -124,6 +128,7 @@ export function fetchProducts(params = {}) {
 export async function login(email, password) {
   const data = await request('/auth/login', {
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), password }),
   });
   const session = { ...data, user: normalizeUser(data.user) };
@@ -134,6 +139,7 @@ export async function login(email, password) {
 export async function register({ fullName, email, password, phone, acceptPrivacy }) {
   const data = await request('/auth/register', {
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify({
       fullName,
       email: String(email || '').trim().toLowerCase(),
@@ -567,6 +573,7 @@ export async function logout(token) {
   try {
     return await request('/auth/logout', {
       method: 'POST',
+      credentials: 'include',
       auth: true,
       token,
     });
@@ -617,4 +624,4 @@ export function deleteProduct(productId, token) {
   });
 }
 
-export { getStoredToken, getStoredRefreshToken, storeAuthSession, clearAuthSession, normalizeUser };
+export { getStoredToken, storeAuthSession, clearAuthSession, normalizeUser };

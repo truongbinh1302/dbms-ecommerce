@@ -113,6 +113,13 @@ module.exports = {
 
   mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/ecommerce_mongo',
 
+  auth: {
+    // Cookie refresh token chỉ gửi qua HTTPS khi chạy production; đặt COOKIE_SECURE=false nếu thử production qua http.
+    cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : nodeEnv === 'production',
+    // Danh sách origin được gọi API kèm cookie khi frontend chạy khác origin (vd. http://localhost:5173), cách nhau bằng dấu phẩy.
+    corsOrigins: String(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+  },
+
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET || 'replace_me_access_secret_for_dev_only',
     refreshSecret: process.env.JWT_REFRESH_SECRET || 'replace_me_refresh_secret_for_dev_only',

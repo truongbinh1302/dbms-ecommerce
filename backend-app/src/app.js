@@ -39,7 +39,9 @@ if (config.trustProxy !== false) {
 }
 
 app.use(helmet());
-app.use(cors());
+// Mặc định (frontend cùng origin qua proxy/nginx) giữ cors() như cũ. Frontend khác origin cần gửi cookie
+// refresh token thì khai báo CORS_ORIGINS để bật credentials cho đúng các origin đó.
+app.use(config.auth.corsOrigins.length ? cors({ origin: config.auth.corsOrigins, credentials: true }) : cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));

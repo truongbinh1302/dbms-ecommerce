@@ -17,13 +17,18 @@ const run = promisify(execFile);
 const tag = `sec${Date.now()}`;
 const ctx = { server: null, base: '', userIds: [] };
 
-const api = async (method, url, body, token) => {
+const api = async (method, url, body, token, cookie = null) => {
   const res = await fetch(`${ctx.base}${url}`, {
     method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
-  return { status: res.status, body: await res.json() };
+  const setCookie = res.headers.getSetCookie().find((value) => value.startsWith('bt_refresh=')) || null;
+  return { status: res.status, body: await res.json(), setCookie, cookie: setCookie ? setCookie.split(';')[0] : null };
 };
 
 test.before(async () => {
@@ -84,7 +89,8 @@ test('đổi mật khẩu: kiểm tra đầu vào, thu hồi refresh token cũ, 
   const registered = await api('POST', '/auth/register', { fullName: 'Security Test', email, password: oldPassword, acceptPrivacy: true });
   assert.equal(registered.status, 201);
   ctx.userIds.push(registered.body.data.user.id);
-  const { accessToken, refreshToken } = registered.body.data;
+  const { accessToken } = registered.body.data;
+  const sessionCookie = registered.cookie;
 
   assert.equal((await api('PATCH', '/users/me/password', { oldPassword, newPassword: 'short' }, accessToken)).status, 400);
   assert.equal((await api('PATCH', '/users/me/password', { oldPassword: 'wrong-password', newPassword }, accessToken)).status, 400);
@@ -93,7 +99,7 @@ test('đổi mật khẩu: kiểm tra đầu vào, thu hồi refresh token cũ, 
   const changed = await api('PATCH', '/users/me/password', { oldPassword, newPassword }, accessToken);
   assert.equal(changed.status, 200);
 
-  const refreshed = await api('POST', '/auth/refresh', { refreshToken });
+  const refreshed = await api('POST', '/auth/refresh', null, null, sessionCookie);
   assert.notEqual(refreshed.status, 200, 'refresh token cũ phải bị thu hồi');
 
   assert.notEqual((await api('POST', '/auth/login', { email, password: oldPassword })).status, 200);
@@ -149,4 +155,42 @@ test('đặt hàng qua API: bắt buộc đồng ý điều khoản, đơn ghi p
         DELETE FROM Products WHERE ProductID = @productId;
       `);
   }
+});
+
+test('refresh token nằm trong cookie httpOnly, đổi mới mỗi lần dùng, đăng xuất thì xoá', async () => {
+  const email = `${tag}-cookie@btstore.test`;
+  const password = 'Cookie-password-1';
+  const registered = await api('POST', '/auth/register', { fullName: 'Cookie Test', email, password, acceptPrivacy: true });
+  assert.equal(registered.status, 201);
+  ctx.userIds.push(registered.body.data.user.id);
+  assert.equal(registered.body.data.refreshToken, undefined, 'không trả refresh token cho JavaScript đọc');
+  assert.match(registered.setCookie, /HttpOnly/i);
+  assert.match(registered.setCookie, /SameSite=Strict/i);
+  assert.match(registered.setCookie, /Path=\/api\/v1\/auth/);
+  assert.match(registered.setCookie, /Max-Age=\d+/);
+
+  const login = await api('POST', '/auth/login', { email, password });
+  assert.equal(login.status, 200);
+  assert.equal(login.body.data.refreshToken, undefined);
+
+  const first = await api('POST', '/auth/refresh', null, null, login.cookie);
+  assert.equal(first.status, 200);
+  assert.ok(first.body.data.accessToken);
+  assert.equal(first.body.data.refreshToken, undefined);
+  assert.ok(first.cookie && first.cookie !== login.cookie, 'cookie được đổi mới');
+
+  // Token đã dùng không dùng lại được (chống dùng lại khi bị lộ).
+  assert.equal((await api('POST', '/auth/refresh', null, null, login.cookie)).status, 401);
+  assert.equal((await api('POST', '/auth/refresh')).status, 401, 'không có cookie');
+
+  // Phiên cũ (token trong body từ trước khi chuyển sang cookie) vẫn đổi được sang cookie một lần.
+  const current = first.cookie.slice('bt_refresh='.length);
+  const legacy = await api('POST', '/auth/refresh', { refreshToken: decodeURIComponent(current) });
+  assert.equal(legacy.status, 200);
+  assert.ok(legacy.cookie);
+
+  const logout = await api('POST', '/auth/logout', null, legacy.body.data.accessToken, legacy.cookie);
+  assert.equal(logout.status, 200);
+  assert.match(logout.setCookie, /bt_refresh=;/);
+  assert.equal((await api('POST', '/auth/refresh', null, null, legacy.cookie)).status, 401, 'đăng xuất thu hồi refresh token');
 });

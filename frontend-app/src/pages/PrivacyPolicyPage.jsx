@@ -43,7 +43,7 @@ export default function PrivacyPolicyPage() {
           <li><strong>Yêu cầu dịch vụ:</strong> khi bạn đặt lịch kỹ thuật tại nhà, gửi yêu cầu thu cũ hoặc bảo hành: địa chỉ và ngày giờ hẹn, số điện thoại liên hệ, mô tả lỗi, thông tin máy cũ (loại, mẫu, giá mua, thời gian dùng, tình trạng).</li>
           <li><strong>Hỏi đáp:</strong> câu hỏi bạn gửi ở trang sản phẩm. Sau khi cửa hàng trả lời, câu hỏi hiện công khai kèm tên gọi của bạn (chữ cuối trong họ tên), không kèm họ tên đầy đủ hay email.</li>
           <li><strong>Đổi trả:</strong> sản phẩm, số lượng, lý do và mô tả tình trạng bạn nhập khi yêu cầu đổi hoặc trả hàng; số tiền cửa hàng đã hoàn.</li>
-          <li><strong>Trên trình duyệt của bạn (localStorage):</strong> phiên đăng nhập, giỏ hàng, sản phẩm đã xem, sản phẩm yêu thích, cấu hình Build PC đang chọn. Website không dùng cookie quảng cáo hay công cụ theo dõi của bên thứ ba.</li>
+          <li><strong>Trên trình duyệt của bạn:</strong> một cookie đăng nhập (<code>bt_refresh</code>, chỉ gửi tới máy chủ khi gia hạn phiên, trang web không đọc được, hết hạn sau 7 ngày hoặc khi bạn đăng xuất); trong localStorage: phiên đăng nhập ngắn hạn, giỏ hàng, sản phẩm đã xem, yêu thích, đang so sánh, cấu hình Build PC đang chọn. Website không dùng cookie quảng cáo hay công cụ theo dõi của bên thứ ba.</li>
           <li><strong>Kỹ thuật:</strong> địa chỉ IP và thời điểm truy cập, dùng để giới hạn số lần gọi và chống tấn công.</li>
         </ul>
       </Section>

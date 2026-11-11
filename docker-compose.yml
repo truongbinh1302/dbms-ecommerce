@@ -66,6 +66,8 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Đặt JWT_ACCESS_SECRET trong .env}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Đặt JWT_REFRESH_SECRET trong .env}
       CLIENT_URL: ${PUBLIC_URL:-http://localhost:8080}
+      # Cookie refresh token chỉ gửi qua HTTPS. Trình duyệt vẫn nhận ở http://localhost; mở qua http bằng IP LAN thì đặt false.
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
       VNPAY_RETURN_URL: ${PUBLIC_URL:-http://localhost:8080}/api/v1/payments/vnpay/return

@@ -54,6 +54,10 @@ Nếu không muốn dùng proxy, đổi thành:
 VITE_API_BASE_URL=http://localhost:3000/api/v1
 ```
 
+Khi đó backend cần `CORS_ORIGINS=http://localhost:5173` trong `backend-app/.env` để trình duyệt gửi cookie
+refresh token (`bt_refresh`, httpOnly) sang API khác origin; thiếu dòng này thì sau khi access token hết hạn
+(15 phút) bạn sẽ phải đăng nhập lại.
+
 Sau khi sửa `.env`, restart lại `npm run dev`.
 
 ---

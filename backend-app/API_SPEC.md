@@ -233,11 +233,12 @@ Tạo tài khoản mới.
       "email": "shopper@example.com",
       "role": "customer"
     },
-    "accessToken": "eyJhbGci...",
-    "refreshToken": "eyJhbGci..."
+    "accessToken": "eyJhbGci..."
   }
 }
 ```
+Refresh token không nằm trong body: server đặt cookie `bt_refresh` (`HttpOnly; SameSite=Strict; Path=/api/v1/auth`,
+`Secure` khi production hoặc `COOKIE_SECURE=true`, hết hạn theo `JWT_REFRESH_EXPIRES`). JavaScript trên trang không đọc được cookie này.
 
 **Errors:**
 - `409` — Email đã tồn tại
@@ -260,11 +261,11 @@ Tạo tài khoản mới.
   "success": true,
   "data": {
     "user": { "id": 1, "fullName": "Nguyen Van A", "role": "customer" },
-    "accessToken": "eyJhbGci...",
-    "refreshToken": "eyJhbGci..."
+    "accessToken": "eyJhbGci..."
   }
 }
 ```
+Kèm cookie `bt_refresh` như khi đăng ký.
 
 **Errors:**
 - `401` — Sai email hoặc mật khẩu
@@ -273,28 +274,23 @@ Tạo tài khoản mới.
 
 ### POST `/auth/refresh`
 
-Dùng refresh token để lấy access token mới — **không cần đăng nhập lại**.
+Lấy access token mới bằng cookie `bt_refresh` (trình duyệt tự gửi; gọi `fetch` với `credentials: 'include'`) — **không cần đăng nhập lại**.
+Mỗi lần dùng, refresh token được đổi mới (có `jti` ngẫu nhiên) và token cũ hết hiệu lực.
 
-**Request:**
-```json
-{
-  "refreshToken": "eyJhbGci..."
-}
-```
+**Request:** body rỗng. Phiên đăng nhập từ trước khi chuyển sang cookie có thể gửi `{ "refreshToken": "..." }` một lần;
+server đặt cookie và từ đó dùng cookie.
 
 **Response 200:**
 ```json
 {
   "success": true,
-  "data": {
-    "accessToken": "eyJhbGci...(mới)...",
-    "refreshToken": "eyJhbGci...(mới)..."
-  }
+  "data": { "accessToken": "eyJhbGci...(mới)..." }
 }
 ```
+Kèm cookie `bt_refresh` mới.
 
 **Errors:**
-- `401` — Refresh token hết hạn hoặc không hợp lệ
+- `401` — Thiếu cookie, refresh token hết hạn, đã dùng hoặc đã bị thu hồi (cookie bị xoá)
 
 ---
 
@@ -302,7 +298,7 @@ Dùng refresh token để lấy access token mới — **không cần đăng nh�
 
 **Headers:** `Authorization: Bearer <token>`
 
-Invalidate refresh token.
+Thu hồi refresh token trong DB và xoá cookie `bt_refresh`.
 
 **Response 200:**
 ```json
