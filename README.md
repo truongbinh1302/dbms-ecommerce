@@ -56,6 +56,15 @@ features and DBMS demonstrations.
 - Product Q&A: signed-in customers ask about a product, the store answers and
   the answer is published under the question with the asker's given name only;
   the asker is notified. Unanswered questions are visible only to the asker.
+- Review moderation: reviews come only from customers who received the product.
+  The store can reply publicly under a review, and can hide a review only for
+  one of four stated reasons (spam, offensive language, personal information,
+  off topic); hidden reviews are not shown and not counted in the star rating,
+  and the author is told why. The admin to-do list counts 1-2 star reviews
+  still waiting for a reply.
+- Favorites (`#/yeu-thich`) with current price and stock, recently viewed
+  products, and a page that recovers by itself when a new version is deployed
+  while a tab is open (no blank screen).
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -138,6 +147,7 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/dich-vu/:tab` | After-sales services: technician at home (`tai-nha`), trade-in (`thu-cu`), my requests (`cua-toi`) |
 | `#/tai-khoan` | Account: change password, download personal data, delete account |
 | `#/so-sanh?ids=1,2,3` | Compare up to 3 products side by side; parts of the same type get their Build PC specs (VRAM, socket, length…) |
+| `#/yeu-thich` | Favorite products saved in this browser, with current price and stock |
 | `#/chinh-sach/:slug` | Purchase terms, shipping, payment, returns, warranty, complaints, seller information |
 | `#/chinh-sach-bao-mat` | Privacy policy |
 
@@ -381,7 +391,7 @@ The API is mounted under `/api/v1` and includes:
 - `/products/:id/price-history` — price changes over the last 180 days
 - `/orders` — checkout, order history, status (with carrier and tracking code), cancellation, return requests (`/orders/:id/returns`, admin `/orders/admin/returns`)
 - `/payments` — VNPay sandbox flow
-- `/reviews` — product reviews
+- `/reviews` — product reviews from verified buyers, helpful votes, admin moderation (`/reviews/admin`: list, hide with a reason, show again, public reply)
 - `/vouchers` — voucher validation; admin create (validated, time-zone aware), list with state and usage, switch off/on
 - `/analytics` — admin dashboard numbers and the daily report (`/analytics/daily`)
 - `/inventory` — stock receipts, stock ledger, low-stock list (admin)

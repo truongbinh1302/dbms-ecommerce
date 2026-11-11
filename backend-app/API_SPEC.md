@@ -1226,81 +1226,96 @@ FE polling để kiểm tra trạng thái thanh toán.
 
 ## 12. Review APIs
 
-### GET `/products/:id/reviews`
+Đánh giá lưu ở MongoDB (collection `reviews`); điểm sao và số đánh giá trong bảng `Products` được tính lại từ
+các đánh giá **đang hiện** mỗi khi đánh giá được thêm, sửa, xoá, ẩn hoặc hiện lại (và đồng bộ toàn bộ khi API khởi động).
 
-**Query:**
-```http
-/products/1/reviews?page=1&limit=10&rating=5
-```
+### GET `/reviews/products/:productId?page=1&limit=10`
 
-**Response 200** (từ MongoDB):
+Công khai. Chỉ trả đánh giá đang hiện, mới nhất trước, kèm phản hồi của cửa hàng nếu có. Không trả thông tin kiểm duyệt.
+
 ```json
 {
   "success": true,
   "data": {
-    "items": [
+    "reviews": [
       {
-        "id": "rev_001",
-        "rating": 5,
-        "comment": "Máy đẹp, màn hình ngon",
-        "userName": "Nguyen Van A",
-        "userAvatar": "https://...",
-        "createdAt": "2026-04-04T11:00:00Z"
+        "_id": "6731…",
+        "productId": 1,
+        "userId": 7,
+        "rating": 1,
+        "title": "Quạt kêu to",
+        "content": "Card chạy được nhưng quạt kêu to khi chơi game.",
+        "helpful_count": 3,
+        "storeReply": { "content": "Cửa hàng sẽ gọi để đổi quạt cho bạn.", "repliedAt": "2026-11-12T04:21:00Z" },
+        "createdAt": "2026-11-10T08:00:00Z"
       }
     ],
-    "summary": {
-      "avgRating": 4.9,
-      "totalReviews": 27,
-      "breakdown": { "5": 20, "4": 5, "3": 2, "2": 0, "1": 0 }
-    },
-    "pagination": { "page": 1, "limit": 10, "totalItems": 27, "totalPages": 3 }
+    "total": 1, "page": 1, "pages": 1,
+    "statistics": { "overall_rating": 1, "total_reviews": 1, "rating_breakdown": { "1": 1, "2": 0, "3": 0, "4": 0, "5": 0 } }
   }
 }
 ```
 
----
+### GET `/reviews/products/:productId/eligibility`
 
-### POST `/products/:id/reviews`
+**Auth:** customer. `{ canReview, reason }` với `reason` là `null`, `not_purchased` hoặc `already_reviewed`.
+Nếu đánh giá của chính khách đang bị ẩn: thêm `hidden: true` và `hiddenReason`.
 
-**Auth:** customer
+### POST `/reviews/products/:productId`
 
-**Business rule — kiểm tra bằng Subquery:**
+**Auth:** customer. Body `{ rating: 1..5, title, content (≥ 10 ký tự) }`. Chỉ khách có đơn chứa sản phẩm ở trạng thái
+`delivered` hoặc `completed` mới đánh giá được (truy vấn SQL Server), mỗi khách một đánh giá cho mỗi sản phẩm.
+
 ```sql
--- Chỉ cho review nếu đã mua và đơn ở trạng thái 'delivered' hoặc 'completed'
-SELECT COUNT(*) AS purchased
-FROM Orders o
-JOIN OrderItems oi ON o.OrderID = oi.OrderID
-WHERE o.UserID = @userId
-  AND oi.ProductID = @productId
-  AND o.Status IN ('delivered', 'completed')
+SELECT COUNT(*) AS purchase_count
+FROM Orders o JOIN OrderItems oi ON o.OrderID = oi.OrderID
+WHERE o.UserID = @userId AND oi.ProductID = @productId AND o.Status IN ('delivered', 'completed')
 ```
 
-**Request:**
+### PATCH `/reviews/:reviewId`, DELETE `/reviews/:reviewId`
+
+**Auth:** người viết. Sửa hoặc xoá đánh giá của mình.
+
+### PATCH `/reviews/:reviewId/helpful`
+
+**Auth:** customer. Mỗi người tính một lần (`409` nếu bấm lại); điều kiện và cập nhật nằm trong một lệnh `findOneAndUpdate`.
+
+### GET `/reviews/my`
+
+**Auth:** customer. Đánh giá của chính khách (kể cả đang bị ẩn).
+
+### GET `/reviews/admin?filter=needs_reply&page=1&limit=20`
+
+**Auth:** admin. `filter`: `all`, `visible`, `hidden`, `needs_reply` (1-2 sao, đang hiện, chưa phản hồi).
+
 ```json
 {
-  "rating": 5,
-  "comment": "Máy đẹp, màn hình ngon"
+  "items": [
+    {
+      "id": "6731…", "productId": 1, "productName": "MSI RTX 4060 Ventus",
+      "userId": 7, "author": { "fullName": "Nguyễn Văn Khách", "email": "khach@btstore.test" },
+      "rating": 1, "title": "Quạt kêu to", "content": "…", "helpfulCount": 3,
+      "hidden": false, "hiddenReason": null, "hiddenAt": null, "storeReply": null,
+      "createdAt": "2026-11-10T08:00:00Z"
+    }
+  ],
+  "total": 1, "page": 1, "pages": 1, "needsReply": 1
 }
 ```
 
-**Response 201** (lưu vào MongoDB):
-```json
-{
-  "success": true,
-  "message": "Review submitted",
-  "data": {
-    "id": "rev_001",
-    "rating": 5,
-    "comment": "Máy đẹp, màn hình ngon",
-    "userName": "Nguyen Van A",
-    "createdAt": "2026-04-04T11:00:00Z"
-  }
-}
-```
+### PATCH `/reviews/admin/:reviewId`
 
-**Errors:**
-- `422` — Chưa mua sản phẩm này
-- `409` — Đã review sản phẩm này rồi
+**Auth:** admin. Body gồm một hoặc nhiều trường:
+
+| Trường | Ý nghĩa |
+| --- | --- |
+| `hidden: true` + `reason` | Ẩn đánh giá. `reason` bắt buộc: `spam`, `offensive`, `personal_info`, `off_topic`. Người viết nhận thông báo (loại `review`) kèm lý do. |
+| `hidden: false` | Hiện lại. |
+| `reply: "…"` | Đăng hoặc sửa phản hồi công khai (2–1000 ký tự). Người viết được báo ở lần phản hồi đầu tiên; sửa phản hồi không báo lại. |
+| `reply: ""` hoặc `null` | Gỡ phản hồi. |
+
+Ẩn hoặc hiện lại thì điểm sao của sản phẩm được tính lại. Lỗi: `400` (thiếu lý do, phản hồi quá ngắn/dài,
+không có thay đổi, mã sai), `404` (không tìm thấy).
 
 ---
 
@@ -1663,7 +1678,7 @@ khuyến mãi khi cả dòng nằm trong giới hạn mỗi đơn và số suấ
 ### Thông báo và theo dõi giá — `/notifications` (đăng nhập)
 
 - `GET /notifications` → `{ unread, items: [{ id, type, title, body, link, read, createdAt }] }`;
-  `type` là `price_drop`, `order_status`, `service_update`, `back_in_stock` hoặc `question_answered`.
+  `type` là `price_drop`, `order_status`, `service_update`, `back_in_stock`, `question_answered` hoặc `review` (đánh giá bị ẩn, cửa hàng phản hồi).
 - `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`.
 - `GET /notifications/price-watches`, `POST /notifications/price-watches` `{ productId, targetPrice? }`,
   `DELETE /notifications/price-watches/:productId`.
@@ -2081,8 +2096,8 @@ Tuần 3 — Sprint 3 (Admin + Review):
   PATCH /admin/products/:id
   DELETE /admin/products/:id
   PATCH /admin/products/:id/stock
-  GET   /products/:id/reviews
-  POST  /products/:id/reviews
+  GET   /reviews/products/:id
+  POST  /reviews/products/:id
 
 Tuần 4 — Bonus (Payment + Voucher):
   POST  /payments/vnpay/create
