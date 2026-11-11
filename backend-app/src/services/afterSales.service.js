@@ -14,6 +14,7 @@ const notificationService = require('./notification.service');
 
 const HOME_SERVICE_KINDS = [
   { id: 'pc_assembly', label: 'Lắp ráp, lắp đặt PC mới mua' },
+  { id: 'upgrade', label: 'Nâng cấp RAM, SSD, card màn hình' },
   { id: 'device_setup', label: 'Lắp đặt màn hình, máy in, thiết bị mạng' },
   { id: 'cleaning', label: 'Vệ sinh máy, thay keo tản nhiệt' },
   { id: 'software', label: 'Cài Windows, phần mềm, driver' },

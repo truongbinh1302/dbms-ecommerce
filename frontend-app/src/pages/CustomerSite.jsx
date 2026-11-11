@@ -791,6 +791,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         currentUser={currentUser}
         onRequireLogin={requireLogin}
         orderId={Number(route.query.get('don')) || null}
+        serviceKind={route.query.get('dv') || ''}
       />
     )
   } else if (routeSection === 'tai-khoan') {

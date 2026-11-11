@@ -576,6 +576,10 @@ function UpgradeAdvisor({ onAddToCart }) {
               </div>
             )
           })}
+          <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 md:col-span-2">
+            Mua linh kiện xong mà không muốn tự lắp?{' '}
+            <a href={hrefFor('/dich-vu/tai-nha?dv=upgrade')} className="font-bold text-red-600 underline">Đặt kỹ thuật viên nâng cấp tại nhà</a>
+          </p>
         </section>
       ) : null}
     </div>

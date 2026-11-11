@@ -48,8 +48,11 @@ function Success({ request }) {
 }
 
 /* Đặt lịch kỹ thuật / lắp đặt tại nhà: chọn dịch vụ, ngày, khung giờ còn chỗ, địa chỉ trong tỉnh của cửa hàng. */
-function HomeServiceForm({ options, currentUser, onRequireLogin, orderId, onCreated }) {
-  const [kind, setKind] = useState(orderId ? 'pc_assembly' : '')
+function HomeServiceForm({ options, currentUser, onRequireLogin, orderId, initialKind, onCreated }) {
+  const [kind, setKind] = useState(() => {
+    if (options.kinds.some((item) => item.id === initialKind)) return initialKind
+    return orderId ? 'pc_assembly' : ''
+  })
   const [date, setDate] = useState('')
   const [slot, setSlot] = useState('')
   const [address, setAddress] = useState({ recipientName: '', phone: '', ward: '', street: '' })
@@ -394,7 +397,7 @@ function MyRequests({ requests, error, onCancel }) {
 }
 
 /* Trang dịch vụ sau bán: #/dich-vu/tai-nha, #/dich-vu/thu-cu, #/dich-vu/cua-toi */
-export default function ServicesPage({ tab = 'tai-nha', currentUser, onRequireLogin, orderId = null }) {
+export default function ServicesPage({ tab = 'tai-nha', currentUser, onRequireLogin, orderId = null, serviceKind = '' }) {
   const [options, setOptions] = useState({ data: null, error: '', version: 0 })
   const [mine, setMine] = useState({ userId: null, items: null, error: '', version: 0 })
   const [reload, setReload] = useState({ options: 0, mine: 0 })
@@ -463,7 +466,15 @@ export default function ServicesPage({ tab = 'tai-nha', currentUser, onRequireLo
       {options.error ? <p className="text-sm text-red-600">{options.error}</p> : null}
 
       {activeTab === 'tai-nha' && options.data ? (
-        <HomeServiceForm key={orderId || 'none'} options={options.data} currentUser={currentUser} onRequireLogin={onRequireLogin} orderId={orderId} onCreated={refresh} />
+        <HomeServiceForm
+          key={`${orderId || 'none'}-${serviceKind}`}
+          options={options.data}
+          currentUser={currentUser}
+          onRequireLogin={onRequireLogin}
+          orderId={orderId}
+          initialKind={serviceKind}
+          onCreated={refresh}
+        />
       ) : null}
       {activeTab === 'thu-cu' && options.data ? (
         <TradeInForm options={options.data} currentUser={currentUser} onRequireLogin={onRequireLogin} onCreated={refresh} />
