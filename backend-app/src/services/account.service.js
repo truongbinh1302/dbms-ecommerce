@@ -64,9 +64,13 @@ const exportMyData = async (userId) => {
       SELECT vu.OrderID, v.Code AS VoucherCode, vu.UsedAt
       FROM VoucherUsages vu JOIN Vouchers v ON v.VoucherID = vu.VoucherID
       WHERE vu.UserID = @userId;
+
+      SELECT Code, Type, Status, ServiceKind, OrderID, SerialNumber, ScheduledDate, TimeSlot, Address, ContactPhone,
+             Description, DeviceInfo, EstimateLow, EstimateHigh, FinalPrice, CreatedAt, UpdatedAt
+      FROM ServiceRequests WHERE UserID = @userId ORDER BY CreatedAt;
     `);
 
-  const [users, orders, orderItems, cart, quotes, warranties, vouchers] = result.recordsets;
+  const [users, orders, orderItems, cart, quotes, warranties, vouchers, serviceRequests = []] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
 
@@ -98,6 +102,11 @@ const exportMyData = async (userId) => {
     buildQuotes: quotes.map((quote) => ({ ...quote, ItemsJson: undefined, items: parseJson(quote.ItemsJson) })),
     warranties,
     voucherUsages: vouchers,
+    serviceRequests: serviceRequests.map((request) => ({
+      ...request,
+      Address: parseJson(request.Address),
+      DeviceInfo: parseJson(request.DeviceInfo),
+    })),
     reviews: reviews === null ? 'Không đọc được đánh giá lúc xuất dữ liệu, vui lòng thử lại sau' : reviews,
   };
 };
@@ -161,6 +170,14 @@ const deleteAccount = async (userId, password) => {
       .query(`
         DELETE FROM CartItems WHERE UserID = @userId;
         UPDATE BuildQuotes SET UserID = NULL WHERE UserID = @userId;
+        -- Yêu cầu dịch vụ: huỷ yêu cầu đang mở, xoá địa chỉ, số điện thoại và mô tả (giữ mã và ngày để đối soát).
+        INSERT INTO ServiceRequestEvents (RequestID, Status, Note, CreatedBy)
+        SELECT RequestID, N'cancelled', N'Khách xoá tài khoản', @userId
+        FROM ServiceRequests WHERE UserID = @userId AND Status IN (N'new', N'confirmed', N'in_progress');
+        UPDATE ServiceRequests
+        SET Status = CASE WHEN Status IN (N'new', N'confirmed', N'in_progress') THEN N'cancelled' ELSE Status END,
+            Address = NULL, ContactPhone = NULL, Description = NULL, DeviceInfo = NULL, UpdatedAt = SYSDATETIME()
+        WHERE UserID = @userId;
         UPDATE Users
         SET FullName = @name,
             Email = @email,

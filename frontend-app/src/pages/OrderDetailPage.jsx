@@ -185,6 +185,13 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
             ) : null}
           </div>
         ) : null}
+
+        {['shipped', 'delivered'].includes(order.Status) ? (
+          <p className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Cần lắp ráp, lắp đặt hoặc cài đặt?{' '}
+            <a href={hrefFor(`/dich-vu/tai-nha?don=${order.OrderID ?? order.id}`)} className="font-bold text-red-600 underline">Đặt lịch kỹ thuật viên tới nhà</a>
+          </p>
+        ) : null}
       </section>
     </div>
   )

@@ -27,6 +27,7 @@ const warrantyRoutes = require('./routes/warranty.routes');
 const storeRoutes = require('./routes/store.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
 const promotionRoutes = require('./routes/promotion.routes');
+const afterSalesRoutes = require('./routes/afterSales.routes');
 
 const app = express();
 
@@ -97,6 +98,7 @@ app.use('/api/v1/warranties', warrantyRoutes);
 app.use('/api/v1/store', storeRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/promotions', promotionRoutes);
+app.use('/api/v1/services', afterSalesRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });

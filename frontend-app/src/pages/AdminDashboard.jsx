@@ -4,6 +4,7 @@ import StoreGlyph from '../components/StoreGlyph'
 import DailyReport from '../components/admin/DailyReport'
 import InventoryPanel from '../components/admin/InventoryPanel'
 import PromotionsPanel from '../components/admin/PromotionsPanel'
+import ServiceRequestsPanel from '../components/admin/ServiceRequestsPanel'
 import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
 import { formatCurrency, formatCompactNumber } from '../utils/format'
 
@@ -197,11 +198,12 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <nav aria-label="Mục quản trị" className="flex gap-1 rounded-full border border-white/10 bg-white/5 p-1 text-sm font-semibold">
+              <nav aria-label="Mục quản trị" className="flex flex-wrap gap-1 rounded-[24px] border border-white/10 bg-white/5 p-1 text-sm font-semibold">
                 <a href="#admin-overview" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Tổng quan</a>
                 <a href="#admin-report" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Báo cáo</a>
                 <a href="#admin-stock" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Kho hàng</a>
                 <a href="#admin-promotions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Hot Deal</a>
+                <a href="#admin-services" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Dịch vụ</a>
               </nav>
               <button
                 type="button"
@@ -449,6 +451,10 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
 
         <div id="admin-promotions" className="mt-6 scroll-mt-32">
           <PromotionsPanel token={token} />
+        </div>
+
+        <div id="admin-services" className="mt-6 scroll-mt-32">
+          <ServiceRequestsPanel token={token} />
         </div>
       </div>
     </div>

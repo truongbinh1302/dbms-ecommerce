@@ -120,7 +120,7 @@ export default function HotDealSection({ fallbackProducts, onOpen, onAddToCart }
   if (!current && fallback.length === 0) return null
 
   return (
-    <section className="mt-5 overflow-hidden rounded-[36px] bg-slate-950 text-white shadow-[0_30px_80px_rgba(15,23,42,0.18)]" aria-labelledby="hot-deal-title">
+    <section id="hot-deal" className="mt-5 scroll-mt-40 overflow-hidden rounded-[36px] bg-slate-950 text-white shadow-[0_30px_80px_rgba(15,23,42,0.18)]" aria-labelledby="hot-deal-title">
       <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center">
         <div>
           <div className="inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-semibold uppercase tracking-[0.24em] text-red-200">

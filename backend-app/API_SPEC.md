@@ -1584,6 +1584,26 @@ khuyến mãi khi cả dòng nằm trong giới hạn mỗi đơn và số suấ
 
 ---
 
+### Dịch vụ sau bán — `/services`
+
+- `GET /services/options` (công khai): loại dịch vụ tại nhà, 14 ngày tới với số chỗ còn lại mỗi khung giờ,
+  danh mục và tình trạng cho thu cũ. Chỉ nhận lịch trong `STORE_PROVINCE`, mỗi khung giờ tối đa
+  `SERVICE_SLOT_CAPACITY` lịch.
+- `POST /services/trade-in/estimate` (công khai): `{ category, purchasePrice, ageMonths, condition }` →
+  `{ low, high, explanation }` (giá tham khảo, chốt sau khi kiểm tra máy).
+- `POST /services/requests` (đăng nhập), theo `type`:
+  - `home_service`: `{ serviceKind, scheduledDate: "YYYY-MM-DD", timeSlot: "08:00-10:00", address, description?, orderId? }`.
+    409 `slot_full` khi khung giờ vừa kín (đếm lịch bằng `UPDLOCK, HOLDLOCK`), 409 `duplicate_slot`.
+  - `trade_in`: `{ category, brandModel, purchasePrice, ageMonths, condition, contactPhone, description? }`.
+  - `warranty`: `{ serialNumber, description, contactPhone, handoff: "store" | "pickup" }`; chỉ serial trong đơn của
+    chính khách, còn hạn (400 `warranty_expired`), mỗi serial một yêu cầu đang mở (409 `open_request`).
+- `GET /services/requests`, `GET /services/requests/:id`, `PATCH /services/requests/:id/cancel` (khi còn `new`/`confirmed`).
+- Admin: `GET /services/admin/requests?type=&status=open|new|...`, `PATCH /services/admin/requests/:id`
+  `{ status?, note?, finalPrice?, internal? }`. Trạng thái: `new → confirmed → in_progress → completed`, huỷ được
+  trước khi hoàn tất. Ghi chú `internal` khách không thấy.
+
+---
+
 ## 17. Race Condition — Xử lý tồn kho đồng thời
 
 > Đây là phần quan trọng nhất liên quan đến **Transaction & Concurrency Control** trong assignment.

@@ -315,6 +315,35 @@ export function registerWarranty(payload, token) {
   });
 }
 
+// --- Dịch vụ sau bán ---
+export function fetchServiceOptions() {
+  return request('/services/options');
+}
+
+export function estimateTradeIn(payload) {
+  return request('/services/trade-in/estimate', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function createServiceRequest(payload) {
+  return request('/services/requests', { method: 'POST', auth: true, body: JSON.stringify(payload) });
+}
+
+export function fetchMyServiceRequests() {
+  return request('/services/requests', { method: 'GET', auth: true });
+}
+
+export function cancelServiceRequest(requestId, reason) {
+  return request(`/services/requests/${encodeURIComponent(requestId)}/cancel`, { method: 'PATCH', auth: true, body: JSON.stringify({ reason }) });
+}
+
+export function fetchAdminServiceRequests(params, token) {
+  return adminGet('/services/admin/requests', params, token);
+}
+
+export function updateAdminServiceRequest(requestId, payload, token) {
+  return request(`/services/admin/requests/${encodeURIComponent(requestId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
+}
+
 // --- Hot Deal ---
 export function fetchActivePromotions() {
   return request('/promotions/active');

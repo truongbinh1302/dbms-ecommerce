@@ -12,6 +12,7 @@ import { clearAuthSession, fetchCart, fetchProducts, fetchProductsByIds, fetchSe
 import useHashRoute, { navigate } from '../hooks/useHashRoute'
 import AccountPage from './AccountPage'
 import BuildPcPage from './BuildPcPage'
+import ServicesPage from './ServicesPage'
 import CheckoutPage from './CheckoutPage'
 import OrderDetailPage from './OrderDetailPage'
 import OrdersPage from './OrdersPage'
@@ -42,6 +43,8 @@ const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
 // Nút nhanh dưới header có trang riêng.
 const QUICK_LINK_ROUTES = {
   'Build PC': '/build-pc',
+  'Dịch vụ kỹ thuật tại nhà': '/dich-vu/tai-nha',
+  'Thu cũ đổi mới': '/dich-vu/thu-cu',
   'Tra cứu bảo hành': '/bao-hanh',
 }
 // Liên kết chân trang đã có trang riêng; các mục còn lại chưa có nội dung.
@@ -54,6 +57,7 @@ const FOOTER_LINK_ROUTES = {
   'Bảo hành': '/chinh-sach/bao-hanh',
   'Đổi trả': '/chinh-sach/doi-tra',
   'Bảo mật thông tin': '/chinh-sach-bao-mat',
+  'Lắp đặt tại nhà': '/dich-vu/tai-nha',
 }
 const SEEDED_VIEWED = []
 
@@ -732,7 +736,16 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   } else if (routeSection === 'bao-gia' && route.segments[1]) {
     routeContent = <QuotePage key={route.segments[1]} code={route.segments[1]} onBuyBuild={buyBuild} />
   } else if (routeSection === 'bao-hanh') {
-    routeContent = <WarrantyPage currentUser={currentUser} />
+    routeContent = <WarrantyPage currentUser={currentUser} onRequireLogin={requireLogin} />
+  } else if (routeSection === 'dich-vu') {
+    routeContent = (
+      <ServicesPage
+        tab={route.segments[1] || 'tai-nha'}
+        currentUser={currentUser}
+        onRequireLogin={requireLogin}
+        orderId={Number(route.query.get('don')) || null}
+      />
+    )
   } else if (routeSection === 'tai-khoan') {
     routeContent = <AccountPage currentUser={currentUser} onRequireLogin={requireLogin} onAccountDeleted={handleAccountDeleted} />
   } else if (routeSection === 'chinh-sach-bao-mat') {
@@ -970,7 +983,14 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
             <button
               key={link}
               type="button"
-              onClick={QUICK_LINK_ROUTES[link] ? () => navigate(QUICK_LINK_ROUTES[link]) : undefined}
+              onClick={QUICK_LINK_ROUTES[link]
+                ? () => navigate(QUICK_LINK_ROUTES[link])
+                : link === 'Hot Deal'
+                  ? () => {
+                    navigate('/')
+                    window.setTimeout(() => scrollToElement('hot-deal'), 80)
+                  }
+                  : undefined}
               className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-red-200 hover:text-red-600"
             >
               {link}

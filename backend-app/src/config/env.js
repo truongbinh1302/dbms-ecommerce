@@ -77,6 +77,12 @@ module.exports = {
     pricesIncludeTax: process.env.PRICES_INCLUDE_TAX !== 'false',
   },
 
+  services: {
+    // Dịch vụ tại nhà: số lịch tối đa mỗi khung giờ (số kỹ thuật viên) và số ngày mở đặt lịch.
+    slotCapacity: toNumber(process.env.SERVICE_SLOT_CAPACITY, 2),
+    bookingDays: toNumber(process.env.SERVICE_BOOKING_DAYS, 14),
+  },
+
   payment: {
     // Đơn VNPay chưa thanh toán sau ngần này phút sẽ tự huỷ và hoàn kho.
     expireMinutes: toNumber(process.env.PAYMENT_EXPIRE_MINUTES, 30),

@@ -17,6 +17,9 @@ IF OBJECT_ID(N'dbo.Customers', N'V') IS NOT NULL DROP VIEW dbo.Customers;
 -- CartItems (migration 006) tham chiếu Users/Products nên phải xoá trước.
 IF OBJECT_ID(N'dbo.CartItems', N'U') IS NOT NULL DROP TABLE dbo.CartItems;
 -- Bảng của 007_build_pc.sql
+-- Bảng của 012_service_requests.sql
+IF OBJECT_ID(N'dbo.ServiceRequestEvents', N'U') IS NOT NULL DROP TABLE dbo.ServiceRequestEvents;
+IF OBJECT_ID(N'dbo.ServiceRequests', N'U') IS NOT NULL DROP TABLE dbo.ServiceRequests;
 -- Bảng của 011_promotions.sql
 IF OBJECT_ID(N'dbo.PromotionItems', N'U') IS NOT NULL DROP TABLE dbo.PromotionItems;
 IF OBJECT_ID(N'dbo.Promotions', N'U') IS NOT NULL DROP TABLE dbo.Promotions;

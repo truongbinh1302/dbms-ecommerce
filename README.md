@@ -31,6 +31,11 @@ features and DBMS demonstrations.
   creating an order, locks the deal row so two buyers cannot take the last
   unit, gives the unit back when an order is cancelled, and refuses an order
   (409) when the total changed after the customer saw it.
+- After-sales services: book a technician at home (time slots with a per-slot
+  capacity, locked so two bookings cannot overbook a slot), a trade-in
+  estimate and request, and warranty claims for the customer's own serial
+  numbers, each with a status timeline the customer can follow and the admin
+  updates.
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -109,7 +114,8 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, warranty serials |
 | `#/build-pc` | Build PC: pick parts, compatibility check, suggested builds, upgrade advice, save a quote |
 | `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |
-| `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties |
+| `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties, warranty claims and repair history |
+| `#/dich-vu/:tab` | After-sales services: technician at home (`tai-nha`), trade-in (`thu-cu`), my requests (`cua-toi`) |
 | `#/tai-khoan` | Account: change password, download personal data, delete account |
 | `#/chinh-sach/:slug` | Purchase terms, shipping, payment, returns, warranty, complaints, seller information |
 | `#/chinh-sach-bao-mat` | Privacy policy |
@@ -336,6 +342,7 @@ The API is mounted under `/api/v1` and includes:
 - `/analytics` — admin dashboard numbers and the daily report (`/analytics/daily`)
 - `/inventory` — stock receipts, stock ledger, low-stock list (admin)
 - `/promotions` — running and upcoming Hot Deals (public), create/list/stop (admin)
+- `/services` — home service slots, trade-in estimate, customer service requests, admin processing
 
 Detailed request and response examples are documented in
 [`backend-app/API_SPEC.md`](backend-app/API_SPEC.md).
