@@ -210,7 +210,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="absolute inset-x-0 top-0 h-[360px] bg-[radial-gradient(circle_at_top,_rgba(96,165,250,0.28),_transparent_45%)]" />
       <div className="relative mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
-        <header className="sticky top-4 z-30 rounded-[32px] border border-white/10 bg-white/5 px-5 py-4 backdrop-blur-xl">
+        <header className="z-30 rounded-[32px] lg:sticky lg:top-4 border border-white/10 bg-white/5 px-5 py-4 backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-orange-400 text-xl font-black text-white shadow-lg shadow-red-500/30">
@@ -267,7 +267,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           <div className="mt-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">{overview.error}</div>
         ) : null}
 
-        <section id="admin-overview" className="mt-8 grid scroll-mt-32 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <section id="admin-overview" className="mt-8 grid scroll-mt-4 lg:scroll-mt-44 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <div className="overflow-hidden rounded-[36px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
             <div className="grid gap-8 lg:grid-cols-[1fr_280px] lg:items-center">
               <div>
@@ -524,31 +524,31 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           </div>
         </section>
 
-        <div id="admin-report" className="mt-6 scroll-mt-32">
+        <div id="admin-report" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <DailyReport token={token} refreshKey={refreshKey} />
         </div>
 
-        <div id="admin-stock" className="mt-6 scroll-mt-32">
+        <div id="admin-stock" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <InventoryPanel token={token} onChanged={() => setRefreshKey((key) => key + 1)} />
         </div>
 
-        <div id="admin-promotions" className="mt-6 scroll-mt-32">
+        <div id="admin-promotions" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <PromotionsPanel token={token} />
         </div>
 
-        <div id="admin-vouchers" className="mt-6 scroll-mt-32">
+        <div id="admin-vouchers" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <VouchersPanel token={token} />
         </div>
 
-        <div id="admin-services" className="mt-6 scroll-mt-32">
+        <div id="admin-services" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <ServiceRequestsPanel token={token} />
         </div>
 
-        <div id="admin-returns" className="mt-6 scroll-mt-32">
+        <div id="admin-returns" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <ReturnsPanel token={token} />
         </div>
 
-        <div id="admin-questions" className="mt-6 scroll-mt-32">
+        <div id="admin-questions" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <QuestionsPanel token={token} />
         </div>
       </div>
