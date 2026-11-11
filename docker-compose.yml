@@ -19,6 +19,9 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${SQL_PASSWORD:?Đặt SQL_PASSWORD trong .env}
+      # Bản Express miễn phí cho cả chạy thật (giới hạn 10 GB/database), đủ cho cửa hàng nhỏ.
+      # Bản Developer (mặc định của image) chỉ được dùng để phát triển, thử nghiệm.
+      MSSQL_PID: ${MSSQL_PID:-Express}
       MSSQL_MEMORY_LIMIT_MB: 1536
     volumes:
       - sqlserver_data:/var/opt/mssql

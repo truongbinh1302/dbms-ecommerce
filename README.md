@@ -250,6 +250,36 @@ Open `http://localhost:8080`. The API refuses to start in production mode
 without `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`. Uploaded product images
 are kept in the `uploads` volume.
 
+### Backups and monitoring
+
+`scripts/backup.sh` backs up the running Docker stack into
+`backups/<date-time>/`: a SQL Server `.bak` (checked with `RESTORE
+VERIFYONLY`), a MongoDB archive, the uploaded images and a `SHA256SUMS`
+file. It keeps the newest 14 backups (`KEEP=...` to change). Run it daily
+from cron, for example:
+
+```bash
+0 2 * * * cd /path/to/dbms-ecommerce && ./scripts/backup.sh >> backups/backup.log 2>&1
+```
+
+Copy `backups/` to another machine or drive as well; a backup on the same
+disk does not survive a disk failure. To restore (overwrites all current
+data, asks for confirmation, checks the checksums first):
+
+```bash
+./scripts/restore.sh backups/20261111-020000
+```
+
+`/health` answers while the API process is up; `/health/ready` also checks
+SQL Server and MongoDB and returns 503 when one is down. Point an uptime
+monitor at `https://<your domain>/health/ready`. Server errors are logged
+as one JSON line with an `errorId`; in production the customer only sees
+a generic message and that id.
+
+SQL Server runs as Express edition in `docker-compose.yml` (free for
+production use, 10 GB per database). The image's default Developer
+edition is licensed for development and testing only.
+
 ### Continuous integration
 
 `.github/workflows/ci.yml` runs on every push and pull request: backend unit

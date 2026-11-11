@@ -43,10 +43,37 @@ app.use(generalLimiter);
 // Serve uploaded files as static
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Liveness: tiến trình còn chạy (Docker healthcheck dùng cái này).
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
     service: 'BinhTinhStore DBMS API',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Readiness: kiểm tra thật SQL Server và MongoDB, để dịch vụ theo dõi uptime báo khi database lỗi.
+app.get('/health/ready', async (req, res) => {
+  const checks = {};
+  const started = Date.now();
+  try {
+    const { getPool } = require('./config/db.sql');
+    await getPool().request().query('SELECT 1 AS ok');
+    checks.sqlServer = 'ok';
+  } catch (err) {
+    checks.sqlServer = 'down';
+  }
+  try {
+    const mongoose = require('mongoose');
+    checks.mongodb = mongoose.connection.readyState === 1 ? 'ok' : 'down';
+  } catch (err) {
+    checks.mongodb = 'down';
+  }
+  const ready = Object.values(checks).every((value) => value === 'ok');
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'OK' : 'DEGRADED',
+    checks,
+    tookMs: Date.now() - started,
     timestamp: new Date().toISOString(),
   });
 });
@@ -139,6 +166,10 @@ const startServer = async () => {
 };
 
 if (require.main === module) {
+  // Lỗi không được bắt: ghi log rõ ràng thay vì để tiến trình chết im lặng.
+  process.on('unhandledRejection', (reason) => {
+    console.error(JSON.stringify({ level: 'error', type: 'unhandledRejection', time: new Date().toISOString(), message: String(reason && reason.stack ? reason.stack : reason) }));
+  });
   startServer();
 }
 
