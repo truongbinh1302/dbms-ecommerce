@@ -101,7 +101,7 @@ const exportMyData = async (userId) => {
 
   let reviews = [];
   try {
-    reviews = await Review.find({ userId: id }).select('productId rating title content createdAt').lean();
+    reviews = await Review.find({ userId: id }).select('productId rating title content createdAt hidden hiddenReason storeReply').lean();
   } catch {
     reviews = null; // MongoDB không sẵn sàng: báo rõ trong file thay vì bỏ trống im lặng
   }

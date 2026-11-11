@@ -58,6 +58,7 @@ test.after(async () => {
   await Review.deleteMany({ productId: ctx.productId });
   const ids = ctx.userIds.join(',') || '0';
   await query(`
+    DELETE FROM Notifications WHERE UserID IN (${ids});
     DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID IN (${ids});
     DELETE FROM Orders WHERE UserID IN (${ids});
     DELETE FROM Users WHERE UserID IN (${ids});
@@ -109,4 +110,52 @@ test('chỉ người đã nhận hàng mới đánh giá được; điểm cập
 
   await reviewService.deleteReview(String(review._id), first);
   assert.deepEqual(await productRating(), { rating: 4, count: 1 });
+});
+
+test('kiểm duyệt: ẩn đánh giá thì không hiện, không tính điểm, khách được báo lý do; hiện lại và phản hồi công khai', async () => {
+  const third = await createBuyer('third', 'delivered');
+  const created = await reviewService.addReview(ctx.productId, third, { rating: 1, title: 'Tệ', content: 'Nội dung có lời lẽ không phù hợp' });
+  const id = String(created._id);
+  assert.deepEqual(await productRating(), { rating: 2.5, count: 2 });
+
+  const needs = await reviewService.listForAdmin({ filter: 'needs_reply' });
+  const listed = needs.items.find((item) => item.id === id);
+  assert.ok(listed && needs.needsReply >= 1, 'đánh giá 1 sao chưa phản hồi nằm trong danh sách cần trả lời');
+  assert.equal(listed.productName, 'Review test product');
+  assert.equal(listed.author.email, `${tag}-third@btstore.test`);
+
+  const hidden = await reviewService.moderateReview(id, { hidden: true, reason: 'offensive' });
+  assert.deepEqual([hidden.hidden, hidden.hiddenReason], [true, 'offensive']);
+  assert.deepEqual(await productRating(), { rating: 4, count: 1 }, 'điểm sao không tính đánh giá bị ẩn');
+  const publicList = await reviewService.getProductReviews(ctx.productId, 1, 10);
+  assert.equal(publicList.total, 1);
+  assert.ok(!publicList.reviews.some((item) => String(item._id) === id));
+  assert.equal((await reviewService.getReviewStatistics(ctx.productId)).total_reviews, 1);
+  assert.equal(await reviewService.syncAllProductRatings() >= 0, true);
+  assert.deepEqual(await productRating(), { rating: 4, count: 1 }, 'đồng bộ toàn bộ cũng bỏ qua đánh giá bị ẩn');
+  const eligibility = await reviewService.getReviewEligibility(ctx.productId, third);
+  assert.deepEqual([eligibility.reason, eligibility.hidden, eligibility.hiddenReason], ['already_reviewed', true, 'offensive']);
+  assert.ok((await reviewService.listForAdmin({ filter: 'hidden' })).items.some((item) => item.id === id));
+  assert.ok(!(await reviewService.listForAdmin({ filter: 'needs_reply' })).items.some((item) => item.id === id), 'đánh giá đã ẩn không cần trả lời');
+
+  const shown = await reviewService.moderateReview(id, { hidden: false, reply: 'Cửa hàng xin lỗi, đã liên hệ để đổi máy cho bạn.' });
+  assert.equal(shown.hidden, false);
+  assert.equal(shown.storeReply.content, 'Cửa hàng xin lỗi, đã liên hệ để đổi máy cho bạn.');
+  assert.deepEqual(await productRating(), { rating: 2.5, count: 2 });
+  const withReply = (await reviewService.getProductReviews(ctx.productId, 1, 10)).reviews.find((item) => String(item._id) === id);
+  assert.equal(withReply.storeReply.content, 'Cửa hàng xin lỗi, đã liên hệ để đổi máy cho bạn.');
+  assert.equal(withReply.hiddenReason, undefined, 'trang công khai không trả thông tin kiểm duyệt');
+
+  await reviewService.moderateReview(id, { reply: 'Cửa hàng xin lỗi, đã đổi máy mới cho bạn.' });
+  const notes = await query("SELECT Title, Body FROM Notifications WHERE UserID = @id AND Type = N'review' ORDER BY NotificationID", { id: [sql.Int, third] });
+  assert.equal(notes.length, 2, 'một thông báo khi bị ẩn, một khi được phản hồi lần đầu; sửa phản hồi không báo lại');
+  assert.match(notes[0].Title, /đã bị ẩn/);
+  assert.match(notes[0].Body, /ngôn từ xúc phạm/);
+  assert.match(notes[1].Title, /phản hồi/);
+  assert.ok(!(await reviewService.listForAdmin({ filter: 'needs_reply' })).items.some((item) => item.id === id), 'đã phản hồi thì không còn trong danh sách cần trả lời');
+
+  const cleared = await reviewService.moderateReview(id, { reply: '' });
+  assert.equal(cleared.storeReply, null);
+  await assert.rejects(reviewService.moderateReview(new mongoose.Types.ObjectId().toString(), { hidden: false }), (err) => err.status === 404);
+  await assert.rejects(reviewService.listForAdmin({ filter: 'lost' }), (err) => err.status === 400);
 });

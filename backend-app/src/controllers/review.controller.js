@@ -71,7 +71,27 @@ const getMyReviews = async (req, res) => {
   }
 };
 
+// Kiểm duyệt của admin: lỗi có status (400/404) trả đúng mã.
+const listForAdmin = async (req, res) => {
+  try {
+    const { filter, page, limit } = req.query;
+    return success(res, await reviewService.listForAdmin({ filter, page, limit }), 'Reviews retrieved');
+  } catch (err) {
+    return error(res, err.message, err.status || 500, err.data);
+  }
+};
+
+const moderate = async (req, res) => {
+  try {
+    return success(res, await reviewService.moderateReview(req.params.reviewId, req.body || {}), 'Review updated');
+  } catch (err) {
+    return error(res, err.message, err.status || 500, err.data);
+  }
+};
+
 module.exports = {
+  listForAdmin,
+  moderate,
   getEligibility,
   getProductReviews,
   createReview,

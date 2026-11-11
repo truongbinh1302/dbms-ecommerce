@@ -54,6 +54,26 @@ const reviewSchema = new mongoose.Schema(
       default: [],
       select: false,
     },
+    // Kiểm duyệt: cửa hàng ẩn đánh giá vi phạm quy định (không xoá, khách vẫn thấy trong tài khoản).
+    // Đánh giá bị ẩn không hiện công khai và không tính vào điểm sao.
+    hidden: {
+      type: Boolean,
+      default: false,
+    },
+    hiddenReason: {
+      type: String,
+      enum: ['spam', 'offensive', 'personal_info', 'off_topic', null],
+      default: null,
+    },
+    hiddenAt: {
+      type: Date,
+      default: null,
+    },
+    // Phản hồi công khai của cửa hàng, hiện ngay dưới đánh giá.
+    storeReply: {
+      content: { type: String, trim: true, maxlength: 1000 },
+      repliedAt: { type: Date },
+    },
   },
   {
     timestamps: true,
@@ -71,6 +91,7 @@ reviewSchema.index({ productId: 1, userId: 1 }, { unique: true });
  */
 reviewSchema.index({ createdAt: -1 }); // Sort by newest first
 reviewSchema.index({ rating: 1, createdAt: -1 }); // Filter by rating then sort
+reviewSchema.index({ hidden: 1, createdAt: -1 }); // Trang kiểm duyệt của admin
 
 /**
  * Instance method to convert to safe object (exclude internal MongoDB fields if needed)
