@@ -44,24 +44,36 @@ const updateProfile = async (req, res) => {
 };
 
 const changePassword = async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
+  const { oldPassword, newPassword } = req.body || {};
+
+  if (typeof oldPassword !== 'string' || !oldPassword) {
+    return error(res, 'Vui lòng nhập mật khẩu hiện tại', 400);
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return error(res, 'Mật khẩu mới cần ít nhất 8 ký tự', 400);
+  }
+  if (newPassword === oldPassword) {
+    return error(res, 'Mật khẩu mới phải khác mật khẩu hiện tại', 400);
+  }
 
   try {
     const result = await getPool().request()
       .input('userId', req.user.id)
-      .query(`SELECT Password FROM Users WHERE UserID = @userId`);
+      .query(`SELECT Password FROM Users WHERE UserID = @userId AND IsActive = 1`);
 
     const user = result.recordset[0];
+    if (!user) return error(res, 'Không tìm thấy tài khoản', 404);
 
     const isMatch = await comparePassword(oldPassword, user.Password);
-    if (!isMatch) return error(res, 'Wrong password', 400);
+    if (!isMatch) return error(res, 'Mật khẩu hiện tại không đúng', 400);
 
     const hashed = await hashPassword(newPassword);
 
+    // Thu hồi refresh token: các máy khác đang đăng nhập phải đăng nhập lại bằng mật khẩu mới.
     await getPool().request()
       .input('userId', req.user.id)
       .input('password', hashed)
-      .query(`UPDATE Users SET Password = @password WHERE UserID = @userId`);
+      .query(`UPDATE Users SET Password = @password, RefreshToken = NULL, UpdatedAt = SYSDATETIME() WHERE UserID = @userId`);
 
     return success(res, null, 'Password changed');
   } catch (err) {

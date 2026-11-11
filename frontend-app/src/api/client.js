@@ -310,6 +310,18 @@ export function registerWarranty(payload, token) {
   });
 }
 
+// Đổi mật khẩu rồi đăng nhập lại ngay bằng mật khẩu mới:
+// server thu hồi refresh token cũ nên phiên hiện tại cần token mới.
+export async function changePassword(email, oldPassword, newPassword) {
+  await request('/users/me/password', {
+    method: 'PATCH',
+    auth: true,
+    retryOnAuth: false,
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+  return login(email, newPassword);
+}
+
 // --- Quyền dữ liệu cá nhân ---
 export function exportMyData() {
   return request('/users/me/export', { auth: true });

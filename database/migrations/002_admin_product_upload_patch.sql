@@ -77,19 +77,11 @@ BEGIN
 END
 GO
 
--- Ensure demo admin remains usable for local testing.
+-- Tạo admin demo (mật khẩu "password") khi database chưa có.
+-- Không ghi đè mật khẩu của admin đã có: trước đây mỗi lần migrate đều đặt lại thành "password".
 DECLARE @DemoAdminPasswordHash NVARCHAR(255) = N'$2a$10$LMLgKTcM2wnRcg4gUMhsv./SbIGmL.n5IXoSfCRYSsH5y.rRDuEZ6';
 
-IF EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'admin@btstore.local')
-BEGIN
-  UPDATE dbo.Users
-  SET Password = @DemoAdminPasswordHash,
-      Role = N'admin',
-      IsActive = 1,
-      UpdatedAt = SYSDATETIME()
-  WHERE Email = N'admin@btstore.local';
-END
-ELSE
+IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Email = N'admin@btstore.local')
 BEGIN
   INSERT INTO dbo.Users (FullName, Email, Password, Phone, Role, Address, IsActive)
   VALUES (N'Admin BinhTinhStore', N'admin@btstore.local', @DemoAdminPasswordHash, N'0900000001', N'admin', N'Ho Chi Minh City', 1);

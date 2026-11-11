@@ -101,6 +101,25 @@ const backfillSearchIndex = async () => {
   }
 };
 
+// Admin còn mật khẩu demo "password" (do migration tạo) là lỗ hổng khi chạy thật: báo to trong log.
+const warnDemoAdminPassword = async () => {
+  try {
+    const { getPool } = require('./config/db.sql');
+    const { comparePassword } = require('./utils/hash');
+    const admins = await getPool().request()
+      .query("SELECT Email, Password FROM Users WHERE Role = N'admin' AND IsActive = 1");
+    for (const admin of admins.recordset) {
+      if (await comparePassword('password', admin.Password)) {
+        const message = `Admin ${admin.Email} vẫn dùng mật khẩu demo "password". Đổi ngay ở trang Tài khoản của tôi.`;
+        if (config.nodeEnv === 'production') console.error(`[security] ${message}`);
+        else console.warn(`[security] ${message} (bỏ qua được khi chạy demo trên máy)`);
+      }
+    }
+  } catch (err) {
+    console.warn('[security] Could not check admin passwords:', err.message);
+  }
+};
+
 const startServer = async () => {
   try {
     await connectSQL();
@@ -108,6 +127,7 @@ const startServer = async () => {
 
     startPaymentExpirySweeper();
     backfillSearchIndex();
+    warnDemoAdminPassword();
 
     app.listen(config.port, () => {
       console.log(`Server running on port ${config.port}`);

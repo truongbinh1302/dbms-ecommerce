@@ -63,6 +63,7 @@ test.after(async () => {
     DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID IN (${ids});
     DELETE FROM Orders WHERE UserID IN (${ids});
     DELETE FROM Users WHERE UserID IN (${ids});
+    DELETE FROM PriceHistory WHERE ProductID = @productId;
     DELETE FROM Products WHERE ProductID = @productId;
   `, { productId: [sql.Int, ctx.productId] });
   await Review.deleteMany({ userId: { $in: ctx.userIds } });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import PageMessage from '../components/PageMessage'
-import { deleteMyAccount, exportMyData, fetchMe } from '../api/client'
+import { changePassword, deleteMyAccount, exportMyData, fetchMe } from '../api/client'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatAddress } from '../utils/orderLabels'
 import { LoginRequired } from './OrdersPage'
@@ -13,6 +13,7 @@ export default function AccountPage({ currentUser, onRequireLogin, onAccountDele
   const [state, setState] = useState({ userId: null, me: null, error: '' })
   const [exporting, setExporting] = useState({ busy: false, error: '' })
   const [deletion, setDeletion] = useState({ password: '', confirmed: false, busy: false, error: '' })
+  const [passwordForm, setPasswordForm] = useState({ current: '', next: '', repeat: '', busy: false, error: '', done: false })
 
   useEffect(() => {
     if (!userId) return undefined
@@ -53,6 +54,21 @@ export default function AccountPage({ currentUser, onRequireLogin, onAccountDele
     }
   }
 
+  async function handleChangePassword(event) {
+    event.preventDefault()
+    if (passwordForm.next !== passwordForm.repeat) {
+      setPasswordForm((current) => ({ ...current, error: 'Hai lần nhập mật khẩu mới không khớp', done: false }))
+      return
+    }
+    setPasswordForm((current) => ({ ...current, busy: true, error: '', done: false }))
+    try {
+      await changePassword(me.Email, passwordForm.current, passwordForm.next)
+      setPasswordForm({ current: '', next: '', repeat: '', busy: false, error: '', done: true })
+    } catch (err) {
+      setPasswordForm((current) => ({ ...current, busy: false, error: err.message || 'Không đổi được mật khẩu' }))
+    }
+  }
+
   async function handleDelete(event) {
     event.preventDefault()
     setDeletion((current) => ({ ...current, busy: true, error: '' }))
@@ -83,6 +99,38 @@ export default function AccountPage({ currentUser, onRequireLogin, onAccountDele
           <a href={hrefFor('/chinh-sach-bao-mat')} className="rounded-full bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-200">Chính sách bảo mật</a>
         </div>
       </section>
+
+      <form onSubmit={handleChangePassword} className={CARD}>
+        <h2 className="text-xl font-black text-slate-900">Đổi mật khẩu</h2>
+        <p className="mt-2 text-sm text-slate-600">Sau khi đổi, các thiết bị khác đang đăng nhập sẽ phải đăng nhập lại.</p>
+        <div className="mt-4 grid max-w-md gap-3">
+          {[
+            ['current', 'Mật khẩu hiện tại', 'current-password'],
+            ['next', 'Mật khẩu mới (ít nhất 8 ký tự)', 'new-password'],
+            ['repeat', 'Nhập lại mật khẩu mới', 'new-password'],
+          ].map(([field, label, autoComplete]) => (
+            <label key={field} className="block text-sm">
+              <span className="font-semibold text-slate-700">{label}</span>
+              <input
+                type="password"
+                autoComplete={autoComplete}
+                value={passwordForm[field]}
+                onChange={(event) => setPasswordForm((current) => ({ ...current, [field]: event.target.value, done: false }))}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+              />
+            </label>
+          ))}
+          <button
+            type="submit"
+            disabled={passwordForm.busy || !passwordForm.current || passwordForm.next.length < 8 || !passwordForm.repeat}
+            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {passwordForm.busy ? 'Đang đổi...' : 'Đổi mật khẩu'}
+          </button>
+          {passwordForm.error ? <p className="text-sm text-red-600" role="alert">{passwordForm.error}</p> : null}
+          {passwordForm.done ? <p className="text-sm text-emerald-700" role="status">Đã đổi mật khẩu.</p> : null}
+        </div>
+      </form>
 
       <section className={CARD}>
         <h2 className="text-xl font-black text-slate-900">Dữ liệu của tôi</h2>

@@ -122,8 +122,10 @@ dữ liệu được giữ nguyên.
 Muốn tạo lại từ đầu (**xoá hết dữ liệu**): `node run-migration.js --reset`, rồi chạy lại `node run-seed.js`.
 Chỉ chạy `run-seed.js` một lần trên database mới; chạy lại sẽ thêm trùng đơn hàng mẫu.
 
-Lưu ý: `003_fix_admin_login.sql` đặt lại mật khẩu admin demo thành `password` mỗi lần chạy migration.
-Khi triển khai thật phải bỏ file này hoặc đổi mật khẩu ngay sau khi migrate.
+Migration tạo admin demo `admin@btstore.local` / `password` khi database chưa có admin này,
+và không ghi đè mật khẩu nếu admin đã có. Khi triển khai thật, đổi mật khẩu ngay ở trang
+Tài khoản của tôi (`#/tai-khoan`); API ghi cảnh báo `[security]` vào log khi khởi động nếu
+admin còn dùng mật khẩu demo.
 
 ---
 
