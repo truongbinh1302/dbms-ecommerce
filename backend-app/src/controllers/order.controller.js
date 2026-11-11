@@ -1,5 +1,6 @@
 const config = require('../config/env');
 const orderService = require('../services/order.service');
+const returnService = require('../services/return.service');
 const { success, error } = require('../utils/response');
 
 const createOrder = async (req, res) => {
@@ -88,14 +89,30 @@ const getOrderPaymentStatus = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, note } = req.body;
-    const result = await orderService.updateOrderStatus(id, status, note);
+    const { status, note, carrier, trackingCode } = req.body || {};
+    const result = await orderService.updateOrderStatus(id, status, note, { carrier, trackingCode });
     return success(res, result, 'Order status updated successfully');
   } catch (err) {
-    if (err.status) return error(res, err.message, err.status);
+    if (err.status) return error(res, err.message, err.status, err.data);
     return error(res, err.message);
   }
 };
+
+// ---------- Đổi trả ----------
+
+const handle = (fn, message, status = 200) => async (req, res) => {
+  try {
+    return success(res, await fn(req), message, status);
+  } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
+    return error(res, err.message);
+  }
+};
+
+const createReturn = handle((req) => returnService.createReturn(req.user.id, req.params.id, req.body || {}), 'Return request created', 201);
+const cancelMyReturn = handle((req) => returnService.cancelMyReturn(req.user.id, req.params.returnId), 'Return request cancelled');
+const listReturns = handle((req) => returnService.listReturns(req.query), 'Return requests retrieved');
+const updateReturn = handle((req) => returnService.updateReturn(req.user.id, req.params.returnId, req.body || {}), 'Return request updated');
 
 module.exports = {
   createOrder,
@@ -105,4 +122,8 @@ module.exports = {
   getOrderPaymentStatus,
   cancelOrder,
   updateOrderStatus,
+  createReturn,
+  cancelMyReturn,
+  listReturns,
+  updateReturn,
 };

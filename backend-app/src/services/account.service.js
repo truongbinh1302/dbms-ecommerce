@@ -73,9 +73,22 @@ const exportMyData = async (userId) => {
       FROM PriceWatches w JOIN Products p ON p.ProductID = w.ProductID WHERE w.UserID = @userId;
 
       SELECT Type, Title, Body, Link, IsRead, CreatedAt FROM Notifications WHERE UserID = @userId ORDER BY NotificationID;
+
+      SELECT r.ReturnID, r.ReturnCode, r.OrderID, r.Kind, r.Reason, r.Description, r.Status, r.RefundAmount, r.AdminNote,
+             r.CreatedAt, r.UpdatedAt, r.ResolvedAt
+      FROM ReturnRequests r WHERE r.UserID = @userId ORDER BY r.ReturnID;
+
+      SELECT ri.ReturnID, ri.ProductID, p.Name AS ProductName, ri.Quantity, ri.UnitPrice
+      FROM ReturnRequestItems ri
+      JOIN ReturnRequests r ON r.ReturnID = ri.ReturnID
+      JOIN Products p ON p.ProductID = ri.ProductID
+      WHERE r.UserID = @userId;
     `);
 
-  const [users, orders, orderItems, cart, quotes, warranties, vouchers, serviceRequests = [], priceWatches = [], notifications = []] = result.recordsets;
+  const [
+    users, orders, orderItems, cart, quotes, warranties, vouchers,
+    serviceRequests = [], priceWatches = [], notifications = [], returns = [], returnItems = [],
+  ] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
 
@@ -114,6 +127,12 @@ const exportMyData = async (userId) => {
     })),
     priceWatches,
     notifications,
+    returnRequests: returns.map(({ ReturnID, ...request }) => ({
+      ...request,
+      items: returnItems.filter((item) => item.ReturnID === ReturnID).map((item) => ({
+        ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, UnitPrice: item.UnitPrice,
+      })),
+    })),
     reviews: reviews === null ? 'Không đọc được đánh giá lúc xuất dữ liệu, vui lòng thử lại sau' : reviews,
   };
 };
@@ -157,6 +176,8 @@ const deleteAccount = async (userId, password) => {
           SUM(CASE WHEN Status IN (${OPEN_ORDER_STATUSES.map((status) => `'${status}'`).join(', ')}) THEN 1 ELSE 0 END) AS OpenOrders,
           COUNT(*) AS AllOrders
         FROM Orders WHERE UserID = @userId;
+        SELECT COUNT(*) AS OpenReturns FROM ReturnRequests
+        WHERE UserID = @userId AND Status IN (N'pending', N'approved', N'received');
       `);
     if (!locked.recordsets[0][0]) throw createHttpError(404, 'Không tìm thấy tài khoản');
     const counts = locked.recordsets[1][0];
@@ -165,6 +186,14 @@ const deleteAccount = async (userId, password) => {
         409,
         `Bạn còn ${counts.OpenOrders} đơn hàng chưa hoàn tất. Hãy chờ giao xong hoặc huỷ đơn trước khi xoá tài khoản.`,
         { code: 'open_orders', openOrders: Number(counts.OpenOrders) },
+      );
+    }
+    const openReturns = Number(locked.recordsets[2][0].OpenReturns);
+    if (openReturns > 0) {
+      throw createHttpError(
+        409,
+        `Bạn còn ${openReturns} yêu cầu đổi trả đang xử lý. Hãy chờ cửa hàng xử lý xong (để hoàn tiền hoặc gửi hàng đổi) rồi xoá tài khoản.`,
+        { code: 'open_returns', openReturns },
       );
     }
     retainedOrders = Number(counts.AllOrders);

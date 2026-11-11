@@ -294,6 +294,7 @@ const SERVICES_USING_DB = [
   'inventory.service',
   'promotion.service',
   'notification.service',
+  'return.service',
 ];
 
 /**

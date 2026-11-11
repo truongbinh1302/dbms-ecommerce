@@ -8,6 +8,7 @@ const priceQuoteService = require('./priceQuote.service');
 const inventoryService = require('./inventory.service');
 const promotionService = require('./promotion.service');
 const notificationService = require('./notification.service');
+const returnService = require('./return.service');
 const { assertShippingAddress } = require('./address.service');
 
 const allowedStatuses = ['pending', 'pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -443,6 +444,8 @@ const getOrderById = async (orderId, userId = null) => {
            o.VNPayTxnRef AS txnRef, o.CancelReason,
            o.Subtotal, o.Discount, o.ShippingFee, o.Total, o.Note, o.QuoteCode AS quoteCode, o.TermsVersion AS termsVersion,
            o.ShippingAddress, o.CreatedAt, o.UpdatedAt,
+           o.ShippingCarrier AS shippingCarrier, o.TrackingCode AS trackingCode,
+           o.ShippedAt AS shippedAt, o.DeliveredAt AS deliveredAt,
            u.FullName AS customerName, u.Email, u.Phone
     FROM Orders o
     JOIN Users u ON o.UserID = u.UserID
@@ -476,6 +479,8 @@ const getOrderById = async (orderId, userId = null) => {
       ORDER BY ProductID, SerialNumber
     `);
   order.warranties = warrantiesResult.recordset;
+  order.returns = await returnService.listForOrder(orderId);
+  order.returnWindow = await returnService.getReturnWindow(orderId);
 
   try {
     order.shippingAddress = JSON.parse(order.ShippingAddress || '{}');
@@ -594,10 +599,32 @@ const cancelOrder = async (orderId, userId, reason) => {
   }
 };
 
-const updateOrderStatus = async (orderId, status, note) => {
+const SHIPPING_CARRIER_MAX = 50;
+const TRACKING_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,59}$/;
+
+/** Đơn vị vận chuyển và mã vận đơn admin nhập khi giao đơn cho bên vận chuyển. */
+const normalizeShipment = ({ carrier, trackingCode } = {}) => {
+  const cleanCarrier = String(carrier ?? '').trim().replace(/\s+/g, ' ');
+  const cleanCode = String(trackingCode ?? '').trim();
+  if (cleanCarrier.length > SHIPPING_CARRIER_MAX) throw createHttpError(400, `Tên đơn vị vận chuyển tối đa ${SHIPPING_CARRIER_MAX} ký tự`);
+  if (cleanCode && !TRACKING_CODE_PATTERN.test(cleanCode)) {
+    throw createHttpError(400, 'Mã vận đơn chỉ gồm chữ, số, dấu chấm, gạch ngang (3–60 ký tự)');
+  }
+  if (cleanCode && !cleanCarrier) throw createHttpError(400, 'Hãy nhập đơn vị vận chuyển cho mã vận đơn');
+  return { carrier: cleanCarrier || null, trackingCode: cleanCode || null };
+};
+
+const shippedMessage = ({ carrier, trackingCode }) => {
+  if (carrier && trackingCode) return `Đơn đang được ${carrier} giao tới bạn, mã vận đơn ${trackingCode}.`;
+  if (carrier) return `Đơn đang được ${carrier} giao tới bạn.`;
+  return 'Đơn đang trên đường giao tới bạn.';
+};
+
+const updateOrderStatus = async (orderId, status, note, shipment = {}) => {
   if (!allowedStatuses.includes(status)) {
     throw createHttpError(400, `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`);
   }
+  const { carrier, trackingCode } = status === 'shipped' ? normalizeShipment(shipment) : { carrier: null, trackingCode: null };
 
   // Admin huỷ đơn cũng phải hoàn kho và trả lượt voucher như khách huỷ.
   if (status === 'cancelled') {
@@ -627,14 +654,35 @@ const updateOrderStatus = async (orderId, status, note) => {
     }
   }
 
+  // Đơn đã có yêu cầu đổi trả thì giữ trạng thái "đã giao" (mốc tính hạn đổi trả).
+  if (status !== 'delivered') {
+    const returns = await new sql.Request(getPool())
+      .input('orderId', sql.Int, Number(orderId))
+      .query(`
+        SELECT COUNT(*) AS Total FROM ReturnRequests
+        WHERE OrderID = @orderId AND Status NOT IN (N'rejected', N'cancelled')
+      `);
+    if (Number(returns.recordset[0].Total) > 0) {
+      throw createHttpError(422, 'Đơn đã có yêu cầu đổi trả, không đổi trạng thái được nữa', { code: 'has_returns' });
+    }
+  }
+
   // Đơn đã huỷ thì kho đã được hoàn, không cho chuyển sang trạng thái khác nữa.
   // Cột Note là ghi chú của KHÁCH lúc đặt hàng: không ghi đè bằng ghi chú của admin.
+  // ShippedAt/DeliveredAt ghi lần đầu đơn sang trạng thái đó; DeliveredAt là mốc tính hạn đổi trả,
+  // nên bị xoá nếu admin chuyển đơn ra khỏi "đã giao" (vd. bấm nhầm).
   const result = await new sql.Request(getPool())
     .input('orderId', sql.Int, Number(orderId))
     .input('status', sql.NVarChar, status)
+    .input('carrier', sql.NVarChar(50), carrier)
+    .input('trackingCode', sql.NVarChar(60), trackingCode)
     .query(`
       UPDATE Orders
       SET Status = @status,
+          ShippingCarrier = CASE WHEN @status = N'shipped' AND @carrier IS NOT NULL THEN @carrier ELSE ShippingCarrier END,
+          TrackingCode = CASE WHEN @status = N'shipped' AND @carrier IS NOT NULL THEN @trackingCode ELSE TrackingCode END,
+          ShippedAt = CASE WHEN @status IN (N'shipped', N'delivered') THEN COALESCE(ShippedAt, SYSDATETIME()) ELSE ShippedAt END,
+          DeliveredAt = CASE WHEN @status = N'delivered' THEN COALESCE(DeliveredAt, SYSDATETIME()) ELSE NULL END,
           UpdatedAt = GETDATE()
       OUTPUT
         INSERTED.OrderID AS id,
@@ -642,7 +690,11 @@ const updateOrderStatus = async (orderId, status, note) => {
         INSERTED.UpdatedAt AS updatedAt,
         INSERTED.UserID AS userId,
         INSERTED.OrderCode AS orderCode,
-        DELETED.Status AS previousStatus
+        INSERTED.ShippingCarrier AS carrier,
+        INSERTED.TrackingCode AS trackingCode,
+        DELETED.Status AS previousStatus,
+        DELETED.ShippingCarrier AS previousCarrier,
+        DELETED.TrackingCode AS previousTrackingCode
       WHERE OrderID = @orderId AND Status <> 'cancelled'
     `);
 
@@ -657,13 +709,17 @@ const updateOrderStatus = async (orderId, status, note) => {
     throw createHttpError(404, 'Order not found');
   }
 
-  if (updatedOrder.previousStatus !== updatedOrder.status) {
+  const shipmentChanged = status === 'shipped'
+    && (updatedOrder.carrier !== updatedOrder.previousCarrier || updatedOrder.trackingCode !== updatedOrder.previousTrackingCode);
+  if (updatedOrder.previousStatus !== updatedOrder.status || shipmentChanged) {
     try {
       await notificationService.notify(null, {
         userId: updatedOrder.userId,
         type: 'order_status',
         title: `Đơn ${updatedOrder.orderCode || `#${updatedOrder.id}`}: ${notificationService.ORDER_STATUS_LABELS[status] || status}`,
-        body: status === 'shipped' ? 'Đơn đang trên đường giao tới bạn.' : status === 'delivered' ? 'Đơn đã giao. Cảm ơn bạn đã mua hàng!' : null,
+        body: status === 'shipped'
+          ? shippedMessage(updatedOrder)
+          : status === 'delivered' ? 'Đơn đã giao. Cảm ơn bạn đã mua hàng!' : null,
         link: `/don-hang/${updatedOrder.id}`,
       });
     } catch (err) {
@@ -671,7 +727,13 @@ const updateOrderStatus = async (orderId, status, note) => {
     }
   }
 
-  return { id: updatedOrder.id, status: updatedOrder.status, updatedAt: updatedOrder.updatedAt };
+  return {
+    id: updatedOrder.id,
+    status: updatedOrder.status,
+    updatedAt: updatedOrder.updatedAt,
+    shippingCarrier: updatedOrder.carrier,
+    trackingCode: updatedOrder.trackingCode,
+  };
 };
 
 /**
@@ -1001,5 +1063,6 @@ module.exports = {
   expireStalePayments,
   // Xuất thêm để viết unit test
   normalizeItems,
+  normalizeShipment,
   parseOrderIdFromTxnRef,
 };

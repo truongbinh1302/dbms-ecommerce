@@ -3,12 +3,12 @@ const { getPool, sql } = require('../config/db.sql');
 /*
   Sổ kho.
   - Mọi thay đổi tồn kho đi qua changeStock / setStock để luôn có một dòng StockMovements
-    ghi lý do (nhập, bán, huỷ đơn trả kho, điều chỉnh tay) và tồn sau thay đổi.
+    ghi lý do (nhập, bán, huỷ đơn trả kho, điều chỉnh tay, hàng trả về, xuất đổi hàng) và tồn sau thay đổi.
   - Phiếu nhập kho: khoá các sản phẩm theo thứ tự ProductID (tránh deadlock với đơn hàng
     đang trừ kho), ghi phiếu + từng dòng + cộng tồn trong một transaction.
 */
 
-const MOVEMENT_REASONS = ['opening', 'receipt', 'sale', 'cancel', 'adjust'];
+const MOVEMENT_REASONS = ['opening', 'receipt', 'sale', 'cancel', 'adjust', 'return', 'exchange'];
 const MAX_RECEIPT_LINES = 100;
 const MAX_LINE_QUANTITY = 100000;
 const MAX_UNIT_COST = 1e12;
