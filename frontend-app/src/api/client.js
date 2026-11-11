@@ -405,6 +405,19 @@ export function fetchAdminPromotion(promotionId, token) {
   return adminGet(`/promotions/admin/${encodeURIComponent(promotionId)}`, {}, token);
 }
 
+// --- Mã giảm giá (admin) ---
+export function fetchAdminVouchers(params, token) {
+  return adminGet('/vouchers/admin', params, token);
+}
+
+export function createVoucher(payload, token) {
+  return request('/vouchers', { method: 'POST', auth: true, token, body: JSON.stringify(payload) });
+}
+
+export function setVoucherActive(voucherId, isActive, token) {
+  return request(`/vouchers/admin/${encodeURIComponent(voucherId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify({ isActive }) });
+}
+
 export function createPromotion(payload, token) {
   return request('/promotions/admin', { method: 'POST', auth: true, token, body: JSON.stringify(payload) });
 }

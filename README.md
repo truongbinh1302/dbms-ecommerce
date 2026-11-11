@@ -353,7 +353,7 @@ The API is mounted under `/api/v1` and includes:
 - `/orders` — checkout, order history, status (with carrier and tracking code), cancellation, return requests (`/orders/:id/returns`, admin `/orders/admin/returns`)
 - `/payments` — VNPay sandbox flow
 - `/reviews` — product reviews
-- `/vouchers` — voucher validation and management
+- `/vouchers` — voucher validation; admin create (validated, time-zone aware), list with state and usage, switch off/on
 - `/analytics` — admin dashboard numbers and the daily report (`/analytics/daily`)
 - `/inventory` — stock receipts, stock ledger, low-stock list (admin)
 - `/promotions` — running and upcoming Hot Deals (public), create/list/stop (admin)

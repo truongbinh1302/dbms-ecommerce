@@ -1336,35 +1336,24 @@ Kiểm tra mã giảm giá — gọi khi user nhập voucher ở checkout.
 
 ---
 
-### GET `/admin/vouchers`
+### GET `/vouchers/admin?state=`
 
-**Auth:** admin
+**Auth:** admin. `state` (tuỳ chọn): `active`, `scheduled`, `expired`, `used_up`, `disabled`.
 
-**Response 200:**
+**Response 200:** mảng mã, mới nhất trước:
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "code": "SALE10",
-      "discountType": "percent",
-      "discountValue": 10,
-      "minOrderAmount": 1000000,
-      "maxDiscount": 5000000,
-      "usageLimit": 100,
-      "usedCount": 23,
-      "startDate": "2026-04-01T00:00:00Z",
-      "endDate": "2026-04-30T23:59:59Z",
-      "isActive": true
-    }
-  ]
+  "id": 1, "code": "DBMS10", "discountType": "percent", "discountValue": 10,
+  "minOrderAmount": 1000000, "maxDiscount": 500000, "usageLimit": 100, "usedCount": 23,
+  "isActive": true, "startsAt": "2026-11-01T00:00:00.000Z", "endsAt": "2026-12-31T00:00:00.000Z",
+  "state": "active", "orders": 23, "revenue": 104000000
 }
 ```
+`orders`/`revenue`: số đơn chưa huỷ có dùng mã và tổng tiền các đơn đó.
 
 ---
 
-### POST `/admin/vouchers`
+### POST `/vouchers`
 
 **Auth:** admin
 
@@ -1375,20 +1364,24 @@ Kiểm tra mã giảm giá — gọi khi user nhập voucher ở checkout.
   "discountType": "percent",
   "discountValue": 10,
   "minOrderAmount": 1000000,
-  "maxDiscount": 5000000,
+  "maxDiscount": 500000,
   "usageLimit": 100,
-  "startDate": "2026-04-01T00:00:00Z",
-  "endDate": "2026-04-30T23:59:59Z"
+  "startDate": "2026-11-20T08:00:00+07:00",
+  "endDate": "2026-11-30T23:59:00+07:00"
 }
 ```
+- `code`: 3–30 ký tự chữ không dấu, số, `-`, `_` (lưu chữ hoa). Trùng mã → `409 voucher_exists`.
+- `discountType`: `amount` (từ 1.000đ, không lớn hơn `minOrderAmount` nếu có) hoặc `percent` (1–90, `maxDiscount` tuỳ chọn).
+- `usageLimit` trống = không giới hạn. `startDate`/`endDate` là thời điểm có múi giờ; server đổi sang giờ máy chủ SQL (giờ mà lúc đặt hàng dùng để so).
+- Vẫn nhận tên trường cũ `discount`, `quantity`.
+
+**Response 201:** mã vừa tạo, cùng dạng với danh sách.
 
 ---
 
-### PATCH `/admin/vouchers/:id`
+### PATCH `/vouchers/admin/:id`
 
----
-
-### DELETE `/admin/vouchers/:id`
+**Auth:** admin. Body `{ "isActive": false }` để tắt (khách nhập sẽ nhận `voucher_inactive`), `true` để bật lại. Đơn đã đặt bằng mã không bị ảnh hưởng.
 
 ---
 
