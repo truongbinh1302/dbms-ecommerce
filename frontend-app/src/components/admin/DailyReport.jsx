@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchDailyReport } from '../../api/client'
 import { formatCurrency } from '../../utils/format'
+import { downloadCsv } from '../../utils/csv'
 
 const PANEL = 'rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl'
 const FIELD = 'rounded-2xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-white/40'
@@ -42,25 +43,11 @@ const COLUMNS = [
   { key: 'refunds', label: 'Tiền hoàn', money: true },
 ]
 
-function csvCell(value) {
-  const text = String(value ?? '')
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-}
-
-function downloadCsv(report) {
+function exportReport(report) {
   const header = COLUMNS.map((column) => column.label)
   const rows = report.days.map((row) => COLUMNS.map((column) => (column.csv ? column.csv(row) : row[column.key])))
   rows.push(COLUMNS.map((column) => (column.key === 'date' ? 'Tổng' : report.totals[column.key])))
-  // BOM để Excel đọc đúng tiếng Việt.
-  const text = `${String.fromCharCode(0xfeff)}${[header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')}`
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `bao-cao-ngay_${report.from}_${report.to}.csv`
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
+  downloadCsv(`bao-cao-ngay_${report.from}_${report.to}.csv`, header, rows)
 }
 
 function Tile({ label, value, hint }) {
@@ -189,7 +176,7 @@ export default function DailyReport({ token, refreshKey = 0 }) {
           <button
             type="button"
             disabled={!report}
-            onClick={() => downloadCsv(report)}
+            onClick={() => exportReport(report)}
             className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
           >
             Tải CSV

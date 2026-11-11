@@ -994,7 +994,20 @@ const expireStalePayments = async (expireMinutes = config.payment.expireMinutes)
  */
 const ADMIN_PAYMENT_FILTERS = ['unpaid', 'pending', 'paid', 'failed', 'expired', 'refund_required', 'refunded'];
 
-const getAdminOrders = async (status = null, page = 1, limit = 20, q = '', payment = '') => {
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Ngày dạng YYYY-MM-DD (theo lịch Việt Nam); trống thì null, sai định dạng thì 400. */
+const parseFilterDay = (value, label) => {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const date = new Date(`${text}T00:00:00Z`);
+  if (!DAY_PATTERN.test(text) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text) {
+    throw createHttpError(400, `${label} không hợp lệ (YYYY-MM-DD)`);
+  }
+  return text;
+};
+
+const getAdminOrders = async (status = null, page = 1, limit = 20, q = '', payment = '', from = '', to = '') => {
   const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
   const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 100);
   const offset = (pageNum - 1) * pageSize;
@@ -1010,10 +1023,23 @@ const getAdminOrders = async (status = null, page = 1, limit = 20, q = '', payme
   if (paymentStatus && !ADMIN_PAYMENT_FILTERS.includes(paymentStatus)) {
     throw createHttpError(400, 'Trạng thái thanh toán không hợp lệ');
   }
+  const fromDay = parseFilterDay(from, 'Từ ngày');
+  const toDay = parseFilterDay(to, 'Đến ngày');
+  if (fromDay && toDay && fromDay > toDay) throw createHttpError(400, 'Từ ngày phải trước hoặc bằng đến ngày');
+
+  // Khoảng ngày theo giờ Việt Nam, đổi sang giờ của máy chủ SQL (giống báo cáo ngày) để so với CreatedAt.
+  const dayBounds = `
+    DECLARE @tz INT = DATEPART(TZOFFSET, SYSDATETIMEOFFSET());
+    DECLARE @start DATETIME2 = CASE WHEN @from IS NULL THEN NULL
+      ELSE CAST(SWITCHOFFSET(TODATETIMEOFFSET(CAST(@from AS DATETIME2), 420), @tz) AS DATETIME2) END;
+    DECLARE @end DATETIME2 = CASE WHEN @to IS NULL THEN NULL
+      ELSE CAST(SWITCHOFFSET(TODATETIMEOFFSET(DATEADD(DAY, 1, CAST(@to AS DATETIME2)), 420), @tz) AS DATETIME2) END;`;
 
   const where = `
     WHERE (@statuses IS NULL OR o.Status IN (SELECT value FROM OPENJSON(@statuses)))
       AND (@payment IS NULL OR o.PaymentStatus = @payment)
+      AND (@start IS NULL OR o.CreatedAt >= @start)
+      AND (@end IS NULL OR o.CreatedAt < @end)
       AND (@q IS NULL
         OR o.OrderCode LIKE N'%' + @q + N'%'
         OR CAST(o.OrderID AS NVARCHAR(12)) = @q
@@ -1024,12 +1050,15 @@ const getAdminOrders = async (status = null, page = 1, limit = 20, q = '', payme
   const bind = (request) => request
     .input('statuses', sql.NVarChar(sql.MAX), statuses.length ? JSON.stringify(statuses) : null)
     .input('q', sql.NVarChar(100), keyword || null)
-    .input('payment', sql.NVarChar(30), paymentStatus || null);
+    .input('payment', sql.NVarChar(30), paymentStatus || null)
+    .input('from', sql.NVarChar(10), fromDay)
+    .input('to', sql.NVarChar(10), toDay);
 
   const result = await bind(new sql.Request(getPool()))
     .input('offset', sql.Int, offset)
     .input('limit', sql.Int, pageSize)
     .query(`
+      ${dayBounds}
       SELECT
         o.OrderID AS id,
         o.OrderCode AS orderCode,
@@ -1059,6 +1088,7 @@ const getAdminOrders = async (status = null, page = 1, limit = 20, q = '', payme
     `);
 
   const countResult = await bind(new sql.Request(getPool())).query(`
+    ${dayBounds}
     SELECT COUNT(*) AS total
     FROM Orders o
     JOIN Users u ON o.UserID = u.UserID

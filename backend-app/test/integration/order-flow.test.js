@@ -218,6 +218,27 @@ test('lịch sử trạng thái: đủ các bước theo thứ tự, ai đổi; 
   assert.equal((await orderService.getOrderById(other.orderId)).history.length, 2, 'đổi trạng thái bị từ chối thì không ghi lịch sử');
 });
 
+test('admin lọc đơn theo khoảng ngày (giờ Việt Nam)', async () => {
+  const productId = await createProduct({ stock: 5, price: 500000 });
+  const recent = await orderService.createOrder(ctx.userId, { shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
+  const old = await orderService.createOrder(ctx.userId, { shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
+  await new sql.Request(getPool()).input('id', sql.Int, old.orderId)
+    .query('UPDATE Orders SET CreatedAt = DATEADD(DAY, -3, CreatedAt) WHERE OrderID = @id');
+  const vnDay = (offsetDays = 0) => new Date(Date.now() + 7 * 3600e3 + offsetDays * 864e5).toISOString().slice(0, 10);
+  const email = `${tag}@btstore.test`;
+
+  const today = await orderService.getAdminOrders('', 1, 100, email, '', vnDay(), vnDay());
+  const ids = today.items.map((item) => item.id);
+  assert.ok(ids.includes(recent.orderId) && !ids.includes(old.orderId), 'chỉ đơn hôm nay');
+  assert.equal(today.pagination.totalItems, today.items.length);
+  const span = await orderService.getAdminOrders('', 1, 100, email, '', vnDay(-3), vnDay());
+  assert.ok(span.items.some((item) => item.id === old.orderId) && span.items.some((item) => item.id === recent.orderId));
+  const before = await orderService.getAdminOrders('', 1, 100, email, '', '', vnDay(-1));
+  assert.ok(before.items.some((item) => item.id === old.orderId) && !before.items.some((item) => item.id === recent.orderId), 'chỉ có "đến ngày"');
+  await assert.rejects(orderService.getAdminOrders('', 1, 20, '', '', '2026-02-30', ''), (err) => err.status === 400);
+  await assert.rejects(orderService.getAdminOrders('', 1, 20, '', '', vnDay(), vnDay(-1)), (err) => err.status === 400);
+});
+
 test('VNPay: sai số tiền → 04; đúng → 00; gọi lại → 02', async () => {
   const productId = await createProduct({ stock: 2, price: 750000 });
   const created = await orderService.createOrder(ctx.userId, {

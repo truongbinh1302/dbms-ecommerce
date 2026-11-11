@@ -13,6 +13,8 @@ import useDocumentTitle from '../hooks/useDocumentTitle'
 import OrderDetailDrawer from '../components/admin/OrderDetailDrawer'
 import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
 import { formatCurrency, formatCompactNumber } from '../utils/format'
+import { downloadCsv } from '../utils/csv'
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDateTime } from '../utils/orderLabels'
 
 const toneClasses = {
   emerald: 'from-emerald-500 to-teal-500 text-emerald-50',
@@ -88,7 +90,8 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState('')
   const [updatingOrderId, setUpdatingOrderId] = useState(null)
-  const [orderFilter, setOrderFilter] = useState({ status: '', q: '', page: 1, payment: '' })
+  const [orderFilter, setOrderFilter] = useState({ status: '', q: '', page: 1, payment: '', from: '', to: '' })
+  const [exportState, setExportState] = useState({ busy: false, error: '' })
   const [refundRequired, setRefundRequired] = useState(0)
   const [orderSearch, setOrderSearch] = useState('')
   const [ordersTotal, setOrdersTotal] = useState({ items: 0, pages: 0 })
@@ -149,6 +152,8 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           status: orderFilter.status,
           q: orderFilter.q,
           payment: orderFilter.payment,
+          from: orderFilter.from,
+          to: orderFilter.to,
         },
         token,
       )
@@ -161,6 +166,41 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
       setOrdersLoading(false)
     }
   }, [token, orderFilter])
+
+  // Tải CSV đúng bộ lọc đang chọn: lấy lần lượt từng trang 100 đơn (tối đa 5.000 đơn).
+  async function exportOrders() {
+    setExportState({ busy: true, error: '' })
+    try {
+      const params = { limit: 100, status: orderFilter.status, q: orderFilter.q, payment: orderFilter.payment, from: orderFilter.from, to: orderFilter.to }
+      const rows = []
+      for (let page = 1; page <= 50; page += 1) {
+        const result = await fetchAdminOrders({ ...params, page }, token)
+        rows.push(...(result.items || []))
+        if (page >= Number(result.pagination?.totalPages || 0)) break
+      }
+      const header = ['Mã đơn', 'Đặt lúc', 'Khách', 'Email', 'Người nhận', 'SĐT nhận', 'Tỉnh/thành', 'Sản phẩm', 'Số dòng', 'Tổng tiền', 'Thanh toán', 'Trạng thái thanh toán', 'Trạng thái đơn']
+      const body = rows.map((order) => [
+        order.orderCode || `#${order.id}`,
+        formatDateTime(order.createdAt),
+        order.customerName || '',
+        order.customerEmail || '',
+        order.recipientName || '',
+        order.recipientPhone || '',
+        order.province || '',
+        order.itemsText || '',
+        Number(order.itemCount || 0),
+        Number(order.total || 0),
+        PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod || '',
+        PAYMENT_STATUS_LABELS[order.paymentStatus] || order.paymentStatus || '',
+        orderStatusLabels[order.status] || order.status || '',
+      ])
+      const range = orderFilter.from || orderFilter.to ? `_${orderFilter.from || 'dau'}_${orderFilter.to || 'nay'}` : ''
+      downloadCsv(`don-hang${range}.csv`, header, body)
+      setExportState({ busy: false, error: '' })
+    } catch (err) {
+      setExportState({ busy: false, error: err.message || 'Không tải được CSV' })
+    }
+  }
 
   // Gõ tìm kiếm: chờ 350ms sau lần gõ cuối rồi mới lọc lại (về trang 1).
   useEffect(() => {
@@ -391,6 +431,44 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                   {orderFilter.payment ? 'Bỏ lọc chờ hoàn tiền' : `${refundRequired} đơn chờ hoàn tiền`}
                 </button>
               ) : null}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-slate-300">
+                Từ ngày
+                <input
+                  type="date"
+                  aria-label="Đơn đặt từ ngày"
+                  value={orderFilter.from}
+                  max={orderFilter.to || undefined}
+                  onChange={(event) => setOrderFilter((current) => ({ ...current, from: event.target.value, page: 1 }))}
+                  className="rounded-full border border-white/10 bg-slate-900 px-3 py-1.5 text-white [color-scheme:dark]"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-slate-300">
+                đến
+                <input
+                  type="date"
+                  aria-label="Đơn đặt đến ngày"
+                  value={orderFilter.to}
+                  min={orderFilter.from || undefined}
+                  onChange={(event) => setOrderFilter((current) => ({ ...current, to: event.target.value, page: 1 }))}
+                  className="rounded-full border border-white/10 bg-slate-900 px-3 py-1.5 text-white [color-scheme:dark]"
+                />
+              </label>
+              {orderFilter.from || orderFilter.to ? (
+                <button type="button" onClick={() => setOrderFilter((current) => ({ ...current, from: '', to: '', page: 1 }))} className="rounded-full bg-white/10 px-3 py-1.5 font-semibold text-white hover:bg-white/20">
+                  Mọi ngày
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={exportOrders}
+                disabled={exportState.busy || ordersTotal.items === 0}
+                className="ml-auto rounded-full border border-white/20 px-4 py-1.5 font-bold text-white hover:bg-white/10 disabled:opacity-40"
+              >
+                {exportState.busy ? 'Đang tạo CSV...' : `Tải CSV (${Math.min(ordersTotal.items, 5000).toLocaleString('vi-VN')} đơn)`}
+              </button>
+              {exportState.error ? <span className="w-full text-sm font-semibold text-red-300" role="alert">{exportState.error}</span> : null}
             </div>
 
             {ordersError ? (
