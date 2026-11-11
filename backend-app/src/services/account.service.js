@@ -40,7 +40,8 @@ const exportMyData = async (userId) => {
       FROM Users WHERE UserID = @userId AND IsActive = 1;
 
       SELECT o.OrderID, o.OrderCode, o.Status, o.PaymentMethod, o.PaymentStatus, o.Subtotal, o.Discount,
-             o.ShippingFee, o.Total, o.ShippingAddress, o.Note, o.QuoteCode, o.CreatedAt
+             o.ShippingFee, o.Total, o.ShippingAddress, o.Note, o.QuoteCode, o.CreatedAt,
+             o.ShippingCarrier, o.TrackingCode, o.DeliveredAt, o.RefundAmount, o.RefundedAt
       FROM Orders o WHERE o.UserID = @userId ORDER BY o.CreatedAt;
 
       SELECT oi.OrderID, oi.ProductID, p.Name AS ProductName, oi.Quantity, oi.UnitPrice

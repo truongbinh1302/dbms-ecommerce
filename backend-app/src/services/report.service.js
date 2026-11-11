@@ -100,7 +100,7 @@ const getDailyReport = async (query = {}, now = new Date()) => {
       WHERE r.CreatedAt >= @start AND r.CreatedAt < @end
       GROUP BY CAST(SWITCHOFFSET(TODATETIMEOFFSET(r.CreatedAt, @tz), @vn) AS DATE);
 
-      -- Đổi trả: số yêu cầu gửi trong ngày; tiền hoàn tính vào ngày hoàn tất (ResolvedAt).
+      -- Đổi trả và hoàn tiền: số yêu cầu đổi trả gửi trong ngày; tiền hoàn (đổi trả, đơn huỷ sau khi đã trả) tính vào ngày hoàn.
       SELECT Day, SUM(Requests) AS Requests, SUM(Refunds) AS Refunds
       FROM (
         SELECT CAST(SWITCHOFFSET(TODATETIMEOFFSET(rr.CreatedAt, @tz), @vn) AS DATE) AS Day, 1 AS Requests, 0 AS Refunds
@@ -110,6 +110,11 @@ const getDailyReport = async (query = {}, now = new Date()) => {
         SELECT CAST(SWITCHOFFSET(TODATETIMEOFFSET(rr.ResolvedAt, @tz), @vn) AS DATE), 0, rr.RefundAmount
         FROM ReturnRequests rr
         WHERE rr.Status = N'completed' AND rr.RefundAmount > 0 AND rr.ResolvedAt >= @start AND rr.ResolvedAt < @end
+        UNION ALL
+        -- Hoàn tiền đơn đã thanh toán rồi bị huỷ.
+        SELECT CAST(SWITCHOFFSET(TODATETIMEOFFSET(o.RefundedAt, @tz), @vn) AS DATE), 0, o.RefundAmount
+        FROM Orders o
+        WHERE o.PaymentStatus = N'refunded' AND o.RefundAmount > 0 AND o.RefundedAt >= @start AND o.RefundedAt < @end
       ) x
       GROUP BY Day;
     `);

@@ -31,8 +31,8 @@ const getUserOrders = async (req, res) => {
 
 const getAdminOrders = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20, q = '' } = req.query;
-    const result = await orderService.getAdminOrders(status, page, limit, q);
+    const { status, page = 1, limit = 20, q = '', payment = '' } = req.query;
+    const result = await orderService.getAdminOrders(status, page, limit, q, payment);
     return success(res, result, 'Admin orders retrieved successfully');
   } catch (err) {
     if (err.status) return error(res, err.message, err.status, err.data);
@@ -112,6 +112,7 @@ const handle = (fn, message, status = 200) => async (req, res) => {
 const createReturn = handle((req) => returnService.createReturn(req.user.id, req.params.id, req.body || {}), 'Return request created', 201);
 const cancelMyReturn = handle((req) => returnService.cancelMyReturn(req.user.id, req.params.returnId), 'Return request cancelled');
 const listReturns = handle((req) => returnService.listReturns(req.query), 'Return requests retrieved');
+const recordRefund = handle((req) => orderService.recordRefund(req.params.id, req.body || {}), 'Refund recorded');
 const updateReturn = handle((req) => returnService.updateReturn(req.user.id, req.params.returnId, req.body || {}), 'Return request updated');
 
 module.exports = {
@@ -122,6 +123,7 @@ module.exports = {
   getOrderPaymentStatus,
   cancelOrder,
   updateOrderStatus,
+  recordRefund,
   createReturn,
   cancelMyReturn,
   listReturns,

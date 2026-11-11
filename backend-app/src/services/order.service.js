@@ -446,6 +446,7 @@ const getOrderById = async (orderId, userId = null) => {
            o.ShippingAddress, o.CreatedAt, o.UpdatedAt,
            o.ShippingCarrier AS shippingCarrier, o.TrackingCode AS trackingCode,
            o.ShippedAt AS shippedAt, o.DeliveredAt AS deliveredAt,
+           o.RefundAmount AS refundAmount, o.RefundReference AS refundReference, o.RefundedAt AS refundedAt,
            u.FullName AS customerName, u.Email, u.Phone
     FROM Orders o
     JOIN Users u ON o.UserID = u.UserID
@@ -739,6 +740,53 @@ const updateOrderStatus = async (orderId, status, note, shipment = {}) => {
 };
 
 /**
+ * Admin ghi nhận đã hoàn tiền cho đơn đã thanh toán rồi bị huỷ (PaymentStatus = refund_required).
+ * Tiền được hoàn ở cổng thanh toán/ngân hàng; ở đây lưu số tiền, mã giao dịch hoàn và báo cho khách.
+ */
+const recordRefund = async (orderId, { amount, reference, note } = {}) => {
+  const cleanReference = String(reference ?? '').trim().slice(0, 100);
+  if (!cleanReference) throw createHttpError(400, 'Hãy nhập mã giao dịch hoàn tiền (từ VNPay hoặc ngân hàng)');
+  const transaction = new sql.Transaction(getPool());
+  await transaction.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
+  try {
+    const order = await lockOrderById(transaction, orderId);
+    if (!order) throw createHttpError(404, 'Order not found');
+    if (order.PaymentStatus !== 'refund_required') {
+      throw createHttpError(422, 'Đơn này không ở trạng thái chờ hoàn tiền', { code: 'not_refund_required' });
+    }
+    const total = Number(order.Total);
+    const refund = amount === undefined || amount === null || amount === '' ? total : Math.round(Number(amount));
+    if (!Number.isFinite(refund) || refund <= 0 || refund > total) {
+      throw createHttpError(400, `Số tiền hoàn phải từ 1đ đến ${total.toLocaleString('vi-VN')}đ`);
+    }
+    const updated = await new sql.Request(transaction)
+      .input('orderId', sql.Int, Number(order.OrderID))
+      .input('amount', sql.Decimal(18, 2), refund)
+      .input('reference', sql.NVarChar(100), cleanReference)
+      .query(`
+        UPDATE Orders
+        SET PaymentStatus = N'refunded', RefundAmount = @amount, RefundReference = @reference,
+            RefundedAt = SYSDATETIME(), UpdatedAt = GETDATE()
+        OUTPUT INSERTED.OrderID, INSERTED.OrderCode, INSERTED.UserID, INSERTED.RefundedAt
+        WHERE OrderID = @orderId
+      `);
+    const row = updated.recordset[0];
+    await notificationService.notify(transaction, {
+      userId: row.UserID,
+      type: 'order_status',
+      title: `Đơn ${row.OrderCode || `#${row.OrderID}`}: đã hoàn tiền`,
+      body: `Cửa hàng đã hoàn ${refund.toLocaleString('vi-VN')}đ (mã giao dịch ${cleanReference}).${note ? ` ${String(note).trim().slice(0, 200)}` : ''} Thời gian tiền về tài khoản tuỳ ngân hàng.`,
+      link: `/don-hang/${row.OrderID}`,
+    });
+    await transaction.commit();
+    return { id: row.OrderID, paymentStatus: 'refunded', refundAmount: refund, refundReference: cleanReference, refundedAt: row.RefundedAt };
+  } catch (err) {
+    await safeRollback(transaction);
+    throw err;
+  }
+};
+
+/**
  * Lấy OrderID từ vnp_TxnRef. Mã giao dịch do createPaymentUrl tạo có dạng "<orderId>_<timestamp>".
  */
 const parseOrderIdFromTxnRef = (txnRef) => {
@@ -900,7 +948,9 @@ const expireStalePayments = async (expireMinutes = config.payment.expireMinutes)
  * Danh sách đơn cho admin: lọc theo một hoặc nhiều trạng thái ("confirmed,shipped"),
  * tìm theo mã đơn, số đơn, tên/email khách, tên/số điện thoại người nhận.
  */
-const getAdminOrders = async (status = null, page = 1, limit = 20, q = '') => {
+const ADMIN_PAYMENT_FILTERS = ['unpaid', 'pending', 'paid', 'failed', 'expired', 'refund_required', 'refunded'];
+
+const getAdminOrders = async (status = null, page = 1, limit = 20, q = '', payment = '') => {
   const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
   const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 100);
   const offset = (pageNum - 1) * pageSize;
@@ -912,9 +962,14 @@ const getAdminOrders = async (status = null, page = 1, limit = 20, q = '') => {
     throw createHttpError(400, `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`);
   }
   const keyword = String(q || '').trim().slice(0, 100);
+  const paymentStatus = String(payment || '').trim();
+  if (paymentStatus && !ADMIN_PAYMENT_FILTERS.includes(paymentStatus)) {
+    throw createHttpError(400, 'Trạng thái thanh toán không hợp lệ');
+  }
 
   const where = `
     WHERE (@statuses IS NULL OR o.Status IN (SELECT value FROM OPENJSON(@statuses)))
+      AND (@payment IS NULL OR o.PaymentStatus = @payment)
       AND (@q IS NULL
         OR o.OrderCode LIKE N'%' + @q + N'%'
         OR CAST(o.OrderID AS NVARCHAR(12)) = @q
@@ -924,7 +979,8 @@ const getAdminOrders = async (status = null, page = 1, limit = 20, q = '') => {
         OR JSON_VALUE(o.ShippingAddress, '$.phone') LIKE N'%' + @q + N'%')`;
   const bind = (request) => request
     .input('statuses', sql.NVarChar(sql.MAX), statuses.length ? JSON.stringify(statuses) : null)
-    .input('q', sql.NVarChar(100), keyword || null);
+    .input('q', sql.NVarChar(100), keyword || null)
+    .input('payment', sql.NVarChar(30), paymentStatus || null);
 
   const result = await bind(new sql.Request(getPool()))
     .input('offset', sql.Int, offset)
@@ -966,9 +1022,13 @@ const getAdminOrders = async (status = null, page = 1, limit = 20, q = '') => {
   `);
 
   const totalItems = Number(countResult.recordset[0]?.total || 0);
+  // Số đơn đang chờ hoàn tiền (khách đã trả rồi đơn bị huỷ): hiện cảnh báo trên trang quản trị.
+  const refundCount = await new sql.Request(getPool())
+    .query("SELECT COUNT(*) AS total FROM Orders WHERE PaymentStatus = N'refund_required'");
 
   return {
     items: result.recordset,
+    refundRequired: Number(refundCount.recordset[0]?.total || 0),
     pagination: {
       page: pageNum,
       limit: pageSize,
@@ -1056,6 +1116,7 @@ module.exports = {
   getOrderById,
   cancelOrder,
   updateOrderStatus,
+  recordRefund,
   getAdminOrders,
   updateOrderPayment,
   getOrderByVNPayTxnRef,

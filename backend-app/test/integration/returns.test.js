@@ -300,3 +300,31 @@ test('xoá tài khoản chờ yêu cầu đổi trả đang xử lý; dữ liệ
     (err) => err.status === 409 && err.data.code === 'open_returns' && err.data.openReturns === 1,
   );
 });
+
+test('đơn đã thanh toán rồi bị huỷ: admin lọc đơn chờ hoàn tiền, ghi nhận hoàn, khách được báo', async () => {
+  const [order] = await query(`
+    INSERT INTO Orders (UserID, PaymentMethod, PaymentStatus, Status, Subtotal, Discount, ShippingFee, Total, CancelReason)
+    OUTPUT INSERTED.OrderID
+    VALUES (@userId, N'vnpay', N'refund_required', N'cancelled', 1500000, 0, 0, 1500000, N'Khách huỷ sau khi đã thanh toán')
+  `, { userId: [sql.Int, ctx.customer] });
+
+  const waiting = await orderService.getAdminOrders('', 1, 50, '', 'refund_required');
+  assert.ok(waiting.items.some((item) => item.id === order.OrderID));
+  assert.ok(waiting.refundRequired >= 1);
+  await assert.rejects(orderService.getAdminOrders('', 1, 20, '', 'lost'), (err) => err.status === 400);
+
+  await assert.rejects(orderService.recordRefund(order.OrderID, { reference: ' ' }), (err) => err.status === 400);
+  await assert.rejects(orderService.recordRefund(order.OrderID, { reference: 'VNP123', amount: 1500001 }), (err) => err.status === 400);
+  const refunded = await orderService.recordRefund(order.OrderID, { reference: 'VNP-REFUND-123' });
+  assert.deepEqual([refunded.paymentStatus, refunded.refundAmount, refunded.refundReference], ['refunded', 1500000, 'VNP-REFUND-123']);
+  await assert.rejects(orderService.recordRefund(order.OrderID, { reference: 'VNP-REFUND-123' }), (err) => err.status === 422);
+  assert.match((await lastNotification(ctx.customer)).Body, /1\.500\.000đ.*VNP-REFUND-123/);
+
+  const detail = await orderService.getOrderById(order.OrderID, ctx.customer);
+  assert.deepEqual([detail.PaymentStatus, Number(detail.refundAmount)], ['refunded', 1500000]);
+  assert.ok(!(await orderService.getAdminOrders('', 1, 50, '', 'refund_required')).items.some((item) => item.id === order.OrderID));
+
+  const today = reportService.vietnamToday();
+  const report = await reportService.getDailyReport({ from: today, to: today });
+  assert.ok(report.days[0].refunds >= 1500000, 'tiền hoàn đơn huỷ có trong báo cáo ngày');
+});

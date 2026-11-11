@@ -9,6 +9,7 @@ router.get('/admin', authenticate, authorize('admin'), orderController.getAdminO
 router.get('/admin/returns', authenticate, authorize('admin'), orderController.listReturns);
 router.patch('/admin/returns/:returnId', authenticate, authorize('admin'), orderController.updateReturn);
 router.patch('/admin/:id/status', authenticate, authorize('admin'), orderController.updateOrderStatus);
+router.post('/admin/:id/refund', authenticate, authorize('admin'), orderController.recordRefund);
 
 // Customer routes
 router.post('/', authenticate, orderController.createOrder);
