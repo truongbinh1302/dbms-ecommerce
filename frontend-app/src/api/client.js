@@ -464,6 +464,10 @@ export function fetchAdminDashboard(token) {
   return adminGet('/analytics/dashboard', {}, token);
 }
 
+export function fetchIntegrityReport(token) {
+  return adminGet('/analytics/integrity', {}, token);
+}
+
 export function fetchDailyReport(params, token) {
   return adminGet('/analytics/daily', params, token);
 }
