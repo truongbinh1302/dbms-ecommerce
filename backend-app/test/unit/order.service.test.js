@@ -64,6 +64,11 @@ test('createOrder bỏ qua discount/shippingFee/total do client gửi lên', asy
   assert.equal(order.Discount, 0);
   assert.equal(order.Total, 2030000);
   assert.equal(db.store.products[0].Stock, 3);
+  // Sổ kho ghi một dòng bán hàng gắn với đơn, kèm tồn sau khi trừ.
+  assert.deepEqual(
+    db.store.stockMovements.map((m) => [m.ProductID, m.Change, m.StockAfter, m.Reason, m.OrderID]),
+    [[10, -2, 3, 'sale', result.orderId]],
+  );
 });
 
 test('createOrder áp voucher, tăng UsedCount và ghi VoucherUsages trong cùng transaction', async () => {
@@ -94,6 +99,7 @@ test('voucher hết lượt thì rollback: không tạo đơn, không trừ kho'
 
   assert.equal(db.store.orders.length, 0);
   assert.equal(db.store.products[0].Stock, 5);
+  assert.equal(db.store.stockMovements.length, 0, 'rollback cũng bỏ dòng sổ kho');
 });
 
 test('hết hàng trả 409 và không ghi gì', async () => {
@@ -129,6 +135,10 @@ test('huỷ đơn hoàn kho và trả lại lượt voucher', async () => {
   assert.equal(db.store.products[1].Stock, 1);
   assert.equal(db.store.vouchers[0].UsedCount, 0);
   assert.equal(db.store.voucherUsages.length, 0);
+  assert.deepEqual(
+    db.store.stockMovements.map((m) => [m.ProductID, m.Change, m.StockAfter, m.Reason, m.Note]),
+    [[20, -1, 0, 'sale', null], [20, 1, 1, 'cancel', 'đổi ý']],
+  );
 });
 
 test('admin chuyển đơn sang cancelled cũng hoàn kho', async () => {

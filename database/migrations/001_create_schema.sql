@@ -17,6 +17,10 @@ IF OBJECT_ID(N'dbo.Customers', N'V') IS NOT NULL DROP VIEW dbo.Customers;
 -- Bảng thêm ở 006_cart_and_search.sql tham chiếu Users/Products nên phải xoá trước.
 IF OBJECT_ID(N'dbo.CartItems', N'U') IS NOT NULL DROP TABLE dbo.CartItems;
 -- Bảng của 007_build_pc.sql
+-- Bảng của 010_inventory.sql
+IF OBJECT_ID(N'dbo.StockMovements', N'U') IS NOT NULL DROP TABLE dbo.StockMovements;
+IF OBJECT_ID(N'dbo.StockReceiptItems', N'U') IS NOT NULL DROP TABLE dbo.StockReceiptItems;
+IF OBJECT_ID(N'dbo.StockReceipts', N'U') IS NOT NULL DROP TABLE dbo.StockReceipts;
 IF OBJECT_ID(N'dbo.Warranties', N'U') IS NOT NULL DROP TABLE dbo.Warranties;
 IF OBJECT_ID(N'dbo.BuildQuotes', N'U') IS NOT NULL DROP TABLE dbo.BuildQuotes;
 IF OBJECT_ID(N'dbo.PriceHistory', N'U') IS NOT NULL DROP TABLE dbo.PriceHistory;

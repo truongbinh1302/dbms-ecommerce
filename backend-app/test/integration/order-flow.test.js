@@ -117,6 +117,7 @@ test.after(async () => {
       DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID = @userId;
       DELETE FROM Orders WHERE UserID = @userId;
       DELETE ph FROM PriceHistory ph JOIN Products p ON p.ProductID = ph.ProductID WHERE p.Slug LIKE @slugLike;
+      DELETE sm FROM StockMovements sm JOIN Products p ON p.ProductID = sm.ProductID WHERE p.Slug LIKE @slugLike;
       DELETE FROM Products WHERE Slug LIKE @slugLike;
       DELETE FROM Vouchers WHERE Code LIKE @codeLike;
       DELETE FROM Users WHERE UserID = @userId;

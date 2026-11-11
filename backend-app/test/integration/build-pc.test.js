@@ -86,6 +86,7 @@ test.after(async () => {
     DELETE FROM ComponentSpecs WHERE ProductID IN (${ids});
     DELETE FROM PriceHistory WHERE ProductID IN (${ids});
     DELETE FROM CartItems WHERE ProductID IN (${ids});
+    DELETE FROM StockMovements WHERE ProductID IN (${ids});
     DELETE FROM Products WHERE ProductID IN (${ids});
     DELETE FROM Users WHERE UserID = @userId;
   `, { userId: [sql.Int, ctx.userId], codes: [sql.NVarChar, ctx.quoteCodes.join(',')] });

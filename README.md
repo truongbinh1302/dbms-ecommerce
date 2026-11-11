@@ -23,6 +23,9 @@ features and DBMS demonstrations.
   48-hour price-locked quotes with a shareable link.
 - Price history on every product page and warranty lookup by serial number.
 - Admin workflows for product, image, order, warranty, user, and analytics management.
+- Stock receipts from suppliers and a stock ledger: every stock change (receipt,
+  sale, cancellation, manual adjustment) is recorded with the resulting stock,
+  plus a daily report split by Vietnam time with CSV export.
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -325,7 +328,8 @@ The API is mounted under `/api/v1` and includes:
 - `/payments` — VNPay sandbox flow
 - `/reviews` — product reviews
 - `/vouchers` — voucher validation and management
-- `/analytics` — admin analytics
+- `/analytics` — admin dashboard numbers and the daily report (`/analytics/daily`)
+- `/inventory` — stock receipts, stock ledger, low-stock list (admin)
 
 Detailed request and response examples are documented in
 [`backend-app/API_SPEC.md`](backend-app/API_SPEC.md).

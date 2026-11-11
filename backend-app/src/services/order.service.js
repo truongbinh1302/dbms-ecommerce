@@ -5,6 +5,7 @@ const pricing = require('./pricing.service');
 const voucherService = require('./voucher.service');
 const cartService = require('./cart.service');
 const priceQuoteService = require('./priceQuote.service');
+const inventoryService = require('./inventory.service');
 const { assertShippingAddress } = require('./address.service');
 
 const allowedStatuses = ['pending', 'pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -218,16 +219,12 @@ const createOrder = async (userId, orderData = {}) => {
           VALUES (@orderId, @productId, @quantity, @unitPrice)
         `);
 
-      await new sql.Request(transaction)
-        .input('productId', sql.Int, item.ProductID)
-        .input('quantity', sql.Int, item.quantity)
-        .query(`
-          UPDATE Products
-          SET Stock = Stock - @quantity,
-              Version = Version + 1,
-              UpdatedAt = GETDATE()
-          WHERE ProductID = @productId
-        `);
+      await inventoryService.changeStock(transaction, {
+        productId: item.ProductID,
+        change: -item.quantity,
+        reason: 'sale',
+        orderId,
+      });
     }
 
     if (voucher) {
@@ -486,16 +483,13 @@ const cancelLockedOrder = async (transaction, order, { reason = null, paymentSta
     .query('SELECT ProductID, Quantity FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID');
 
   for (const item of itemsResult.recordset) {
-    await new sql.Request(transaction)
-      .input('productId', sql.Int, item.ProductID)
-      .input('quantity', sql.Int, item.Quantity)
-      .query(`
-        UPDATE Products
-        SET Stock = Stock + @quantity,
-            Version = Version + 1,
-            UpdatedAt = GETDATE()
-        WHERE ProductID = @productId
-      `);
+    await inventoryService.changeStock(transaction, {
+      productId: item.ProductID,
+      change: Number(item.Quantity),
+      reason: 'cancel',
+      orderId,
+      note: reason ? String(reason).slice(0, 300) : null,
+    });
   }
 
   const usageResult = await new sql.Request(transaction)

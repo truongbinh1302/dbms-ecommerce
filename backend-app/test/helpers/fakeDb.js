@@ -19,6 +19,7 @@ const createStore = () => ({
   voucherUsages: [],
   cartItems: [],
   buildQuotes: [],
+  stockMovements: [],
   nextOrderId: 1,
 });
 
@@ -80,16 +81,17 @@ const createFakeDb = () => {
       return [];
     }],
 
-    [/^UPDATE Products SET Stock = Stock - @quantity/, ({ productId, quantity }, s) => {
-      const p = s.products.find((x) => x.ProductID === productId);
-      if (p.Stock - quantity < 0) throw new Error('CHECK constraint CK_Products_Stock');
-      p.Stock -= quantity;
-      return [];
-    }],
-
-    [/^UPDATE Products SET Stock = Stock \+ @quantity/, ({ productId, quantity }, s) => {
-      s.products.find((x) => x.ProductID === productId).Stock += quantity;
-      return [];
+    // inventory.service.changeStock: đổi tồn + ghi StockMovements trong một câu lệnh.
+    [/^DECLARE @after TABLE \(Stock INT\); UPDATE Products SET Stock = Stock \+ @change/, (i, s) => {
+      const p = s.products.find((x) => x.ProductID === i.productId);
+      if (!p) return [];
+      if (p.Stock + i.change < 0) throw new Error('CHECK constraint CK_Products_Stock');
+      p.Stock += i.change;
+      s.stockMovements.push({
+        ProductID: i.productId, Change: i.change, StockAfter: p.Stock, Reason: i.reason,
+        OrderID: i.orderId, ReceiptID: i.receiptId, Note: i.note, CreatedBy: i.userId,
+      });
+      return [{ Stock: p.Stock }];
     }],
 
     [/^UPDATE Vouchers SET UsedCount = UsedCount \+ 1 WHERE VoucherID = @voucherId$/, ({ voucherId }, s) => {
@@ -256,6 +258,7 @@ const SERVICES_USING_DB = [
   'cart.service',
   'priceQuote.service',
   'builder.service',
+  'inventory.service',
 ];
 
 /**

@@ -253,5 +253,12 @@ SELECT p.ProductID, p.Price, p.OldPrice, p.CreatedAt
 FROM dbo.Products p
 WHERE NOT EXISTS (SELECT 1 FROM dbo.PriceHistory h WHERE h.ProductID = p.ProductID);
 
+-- Tồn đầu kỳ trong sổ kho (010_inventory.sql) cho sản phẩm vừa nạp.
+IF OBJECT_ID(N'dbo.StockMovements', N'U') IS NOT NULL
+INSERT INTO dbo.StockMovements (ProductID, Change, StockAfter, Reason, Note, CreatedAt)
+SELECT p.ProductID, p.Stock, p.Stock, N'opening', N'Tồn đầu kỳ khi nạp dữ liệu mẫu', p.CreatedAt
+FROM dbo.Products p
+WHERE NOT EXISTS (SELECT 1 FROM dbo.StockMovements m WHERE m.ProductID = p.ProductID);
+
 SELECT COUNT(*) AS ComponentSpecs FROM dbo.ComponentSpecs;
 GO

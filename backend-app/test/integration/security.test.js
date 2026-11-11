@@ -145,6 +145,7 @@ test('đặt hàng qua API: bắt buộc đồng ý điều khoản, đơn ghi p
         DELETE FROM Orders WHERE UserID = @userId;
         DELETE FROM CartItems WHERE UserID = @userId;
         DELETE FROM PriceHistory WHERE ProductID = @productId;
+        DELETE FROM StockMovements WHERE ProductID = @productId;
         DELETE FROM Products WHERE ProductID = @productId;
       `);
   }

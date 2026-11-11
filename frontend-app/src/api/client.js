@@ -315,6 +315,49 @@ export function registerWarranty(payload, token) {
   });
 }
 
+// --- Quản trị: số liệu, báo cáo theo ngày, sổ kho ---
+function adminGet(path, params = {}, token) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') search.set(key, value);
+  });
+  const query = search.toString();
+  return request(`${path}${query ? `?${query}` : ''}`, { method: 'GET', auth: true, token });
+}
+
+export function fetchAdminDashboard(token) {
+  return adminGet('/analytics/dashboard', {}, token);
+}
+
+export function fetchDailyReport(params, token) {
+  return adminGet('/analytics/daily', params, token);
+}
+
+export function fetchLowStock(params, token) {
+  return adminGet('/inventory/low-stock', params, token);
+}
+
+export function fetchStockReceipts(params, token) {
+  return adminGet('/inventory/receipts', params, token);
+}
+
+export function fetchStockReceipt(receiptId, token) {
+  return adminGet(`/inventory/receipts/${encodeURIComponent(receiptId)}`, {}, token);
+}
+
+export function fetchStockMovements(params, token) {
+  return adminGet('/inventory/movements', params, token);
+}
+
+export function createStockReceipt(payload, token) {
+  return request('/inventory/receipts', {
+    method: 'POST',
+    auth: true,
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
 // Đổi mật khẩu rồi đăng nhập lại ngay bằng mật khẩu mới:
 // server thu hồi refresh token cũ nên phiên hiện tại cần token mới.
 export async function changePassword(email, oldPassword, newPassword) {

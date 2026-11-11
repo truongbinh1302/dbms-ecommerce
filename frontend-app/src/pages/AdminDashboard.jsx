@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import heroAsset from '../assets/hero.png'
 import StoreGlyph from '../components/StoreGlyph'
-import { fetchAdminOrders, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
-import { adminCategoryPerformance, adminInventoryAlerts, adminSummary, allProducts } from '../data/storeData'
+import DailyReport from '../components/admin/DailyReport'
+import InventoryPanel from '../components/admin/InventoryPanel'
+import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
 import { formatCurrency, formatCompactNumber } from '../utils/format'
 
 const toneClasses = {
@@ -12,7 +13,25 @@ const toneClasses = {
   rose: 'from-rose-500 to-orange-500 text-rose-50',
 }
 
-const topProducts = allProducts.slice(0, 6)
+// Ngày theo giờ Việt Nam (UTC+7), dạng YYYY-MM-DD; offsetDays = -1 là hôm qua.
+function vietnamDate(offsetDays = 0) {
+  return new Date(Date.now() + 7 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
+}
+
+function formatClock(date) {
+  return date ? date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '--:--'
+}
+
+// Thẻ số liệu nhanh: số thật từ /analytics/dashboard và báo cáo ngày hôm nay / hôm qua.
+function buildSummaryCards(summary, today, yesterday) {
+  if (!summary || !today) return []
+  return [
+    { id: 'today-sales', label: 'Doanh số hôm nay', value: formatCurrency(today.netSales), delta: `Hôm qua ${formatCompactNumber(yesterday?.netSales || 0)}`, tone: 'emerald' },
+    { id: 'today-orders', label: 'Đơn hôm nay', value: today.orders.toLocaleString('vi-VN'), delta: `${today.cancelledOrders} huỷ`, tone: 'sky' },
+    { id: 'delivered', label: 'Doanh thu đã giao', value: formatCompactNumber(Number(summary.deliveredRevenue || 0)), delta: `${formatCompactNumber(Number(summary.totalOrders || 0))} đơn`, tone: 'violet' },
+    { id: 'low-stock', label: 'Sắp hết hàng', value: Number(summary.lowStockProducts || 0).toLocaleString('vi-VN'), delta: 'tồn ≤ 5', tone: 'rose' },
+  ]
+}
 
 const orderStatusOptions = [
   { value: 'pending', label: 'Chờ xử lý' },
@@ -57,6 +76,44 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState('')
   const [updatingOrderId, setUpdatingOrderId] = useState(null)
+  const [overview, setOverview] = useState({ dashboard: null, today: null, yesterday: null, error: '', updatedAt: null })
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const loadOverview = useCallback(async () => {
+    if (!token) return
+    try {
+      const [dashboard, report] = await Promise.all([
+        fetchAdminDashboard(token),
+        fetchDailyReport({ from: vietnamDate(-1), to: vietnamDate(0) }, token),
+      ])
+      const days = Array.isArray(report?.days) ? report.days : []
+      setOverview({ dashboard, yesterday: days[0] || null, today: days[1] || null, error: '', updatedAt: new Date() })
+    } catch (err) {
+      setOverview((current) => ({ ...current, error: err.message || 'Không tải được số liệu tổng quan.' }))
+    }
+  }, [token])
+
+  useEffect(() => {
+    loadOverview()
+  }, [loadOverview, refreshKey])
+
+  const summaryCards = useMemo(
+    () => buildSummaryCards(overview.dashboard?.summary, overview.today, overview.yesterday),
+    [overview],
+  )
+  const categories = useMemo(() => {
+    const rows = Array.isArray(overview.dashboard?.revenueByCategory) ? overview.dashboard.revenueByCategory : []
+    const max = Math.max(...rows.map((row) => Number(row.totalRevenue || 0)), 0)
+    const total = rows.reduce((sum, row) => sum + Number(row.totalRevenue || 0), 0)
+    return rows.map((row) => ({
+      label: row.categoryName,
+      revenue: Number(row.totalRevenue || 0),
+      quantity: Number(row.totalQuantity || 0),
+      width: max > 0 ? (Number(row.totalRevenue || 0) / max) * 100 : 0,
+      share: total > 0 ? Math.round((Number(row.totalRevenue || 0) / total) * 100) : 0,
+    }))
+  }, [overview.dashboard])
+  const topProducts = Array.isArray(overview.dashboard?.topProducts) ? overview.dashboard.topProducts.slice(0, 6) : []
 
   const loadOrders = useCallback(async () => {
     if (!token) {
@@ -139,9 +196,19 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300">
-                Cập nhật lần cuối: 08:45 • Hệ thống ổn định
-              </div>
+              <nav aria-label="Mục quản trị" className="flex gap-1 rounded-full border border-white/10 bg-white/5 p-1 text-sm font-semibold">
+                <a href="#admin-overview" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Tổng quan</a>
+                <a href="#admin-report" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Báo cáo</a>
+                <a href="#admin-stock" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Kho hàng</a>
+              </nav>
+              <button
+                type="button"
+                onClick={() => setRefreshKey((key) => key + 1)}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 hover:bg-white/10"
+                title="Tải lại số liệu"
+              >
+                Cập nhật lúc {formatClock(overview.updatedAt)}
+              </button>
               {onGoToProductManagement && (
                 <button
                   type="button"
@@ -164,7 +231,11 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           </div>
         </header>
 
-        <section className="mt-8 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        {overview.error ? (
+          <div className="mt-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">{overview.error}</div>
+        ) : null}
+
+        <section id="admin-overview" className="mt-8 grid scroll-mt-32 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <div className="overflow-hidden rounded-[36px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
             <div className="grid gap-8 lg:grid-cols-[1fr_280px] lg:items-center">
               <div>
@@ -193,65 +264,58 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-            {adminSummary.map((item) => (
+            {summaryCards.length === 0 ? (
+              <div className="rounded-[32px] border border-white/10 bg-white/5 p-5 text-sm text-slate-300 sm:col-span-2">Đang tải số liệu...</div>
+            ) : null}
+            {summaryCards.map((item) => (
               <div
                 key={item.id}
                 className={`rounded-[32px] bg-gradient-to-br p-5 shadow-[0_22px_60px_rgba(0,0,0,0.3)] ${toneClasses[item.tone]}`}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold opacity-90">{item.label}</p>
-                    <div className="mt-2 text-3xl font-black">{item.value}</div>
-                  </div>
-                  <div className="rounded-2xl bg-white/15 px-3 py-2 text-sm font-bold">{item.delta}</div>
-                </div>
+                <p className="text-sm font-semibold opacity-90">{item.label}</p>
+                <div className="mt-2 break-words text-3xl font-black">{item.value}</div>
+                <div className="mt-3 inline-block rounded-2xl bg-white/15 px-3 py-1.5 text-sm font-bold">{item.delta}</div>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="mt-6 grid gap-6 2xl:grid-cols-[0.95fr_1.05fr_0.85fr]">
+        <section className="mt-6 grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,0.85fr)]">
           <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
             <div className="flex items-center gap-3">
               <div className="flex size-12 items-center justify-center rounded-2xl bg-white/10 text-sky-300">
                 <StoreGlyph name="chart" className="size-6" />
               </div>
               <div>
-                <h3 className="text-2xl font-black">Hiệu suất danh mục</h3>
-                <p className="text-sm text-slate-400">Điểm hiệu suất nội bộ theo doanh số và chuyển đổi</p>
+                <h3 className="text-2xl font-black">Doanh thu theo danh mục</h3>
+                <p className="text-sm text-slate-400">Đơn đã giao hoặc hoàn tất, cộng dồn từ trước đến nay</p>
               </div>
             </div>
 
             <div className="mt-6 space-y-4">
-              {adminCategoryPerformance.map((item) => (
+              {categories.length === 0 ? <p className="text-sm text-slate-400">Chưa có đơn đã giao.</p> : null}
+              {categories.map((item) => (
                 <div key={item.label}>
-                  <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
-                    <span>{item.label}</span>
-                    <strong className="text-white">{item.value}%</strong>
+                  <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-300">
+                    <span className="min-w-0 truncate">{item.label}</span>
+                    <strong className="shrink-0 text-white">{formatCompactNumber(item.revenue)} · {item.share}%</strong>
                   </div>
-                  <div className="h-3 rounded-full bg-white/10">
-                    <div
-                      className="h-3 rounded-full bg-gradient-to-r from-sky-400 via-cyan-400 to-emerald-400"
-                      style={{ width: `${item.value}%` }}
-                    />
+                  <div className="h-2 rounded-full bg-white/10" title={`${item.label}: ${formatCurrency(item.revenue)}, ${item.quantity} sản phẩm`}>
+                    <div className="h-2 rounded-full" style={{ width: `${item.width}%`, backgroundColor: '#3987e5' }} />
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="mt-8 rounded-[28px] border border-white/10 bg-slate-900/70 p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Insight nhanh</p>
-                  <h4 className="mt-2 text-xl font-black">Laptop gaming vẫn đang dẫn tốt</h4>
-                </div>
-                <div className="rounded-2xl bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-300">+12.4%</div>
+            {categories[0] ? (
+              <div className="mt-8 rounded-[28px] border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Dẫn đầu</p>
+                <h4 className="mt-2 text-xl font-black">{categories[0].label}</h4>
+                <p className="mt-3 text-sm leading-7 text-slate-300">
+                  Chiếm {categories[0].share}% doanh thu đã giao ({formatCurrency(categories[0].revenue)}, {categories[0].quantity.toLocaleString('vi-VN')} sản phẩm).
+                </p>
               </div>
-              <p className="mt-3 text-sm leading-7 text-slate-300">
-                Nhóm laptop gaming và PC đang kéo doanh thu chính. Nhóm màn hình tăng tốt sau khi gắn kèm combo bàn
-                phím + chuột trên trang chủ.
-              </p>
-            </div>
+            ) : null}
           </div>
 
           <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
@@ -348,36 +412,11 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
             <WarrantyRegistration token={token} orders={displayOrders} />
 
             <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-              <div className="flex items-center gap-3">
-                <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-300">
-                  <StoreGlyph name="alert" className="size-6" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black">Cảnh báo tồn kho</h3>
-                  <p className="text-sm text-slate-400">Các SKU cần theo dõi hoặc nhập thêm</p>
-                </div>
-              </div>
+              <h3 className="text-2xl font-black">Bán chạy nhất</h3>
+              <p className="mt-1 text-sm text-slate-400">Theo số lượng trong đơn đã giao hoặc hoàn tất</p>
 
               <div className="mt-5 space-y-4">
-                {adminInventoryAlerts.map((item) => (
-                  <div key={item.id} className="rounded-[28px] border border-white/10 bg-slate-900/70 p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <h4 className="text-base font-black text-white">{item.name}</h4>
-                      <span className="rounded-full bg-rose-500/10 px-3 py-1.5 text-sm font-bold text-rose-300">
-                        Còn {item.remaining}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm leading-7 text-slate-300">{item.recommendation}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-              <h3 className="text-2xl font-black">Top sản phẩm nổi bật</h3>
-              <p className="mt-1 text-sm text-slate-400">Tham chiếu nhanh cho block đề xuất và upsell</p>
-
-              <div className="mt-5 space-y-4">
+                {topProducts.length === 0 ? <p className="text-sm text-slate-400">Chưa có đơn đã giao.</p> : null}
                 {topProducts.map((product, index) => (
                   <div key={product.id} className="flex items-center gap-4 rounded-[28px] border border-white/10 bg-slate-900/70 p-4">
                     <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-orange-400 text-lg font-black text-white">
@@ -385,11 +424,11 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                     </div>
                     <div className="min-w-0 flex-1">
                       <h4 className="truncate text-base font-bold text-white">{product.name}</h4>
-                      <p className="text-sm text-slate-400">{product.brand}</p>
+                      <p className="text-sm text-slate-400">{product.brand || 'Không rõ hãng'}</p>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-emerald-300">{formatCurrency(product.price)}</div>
-                      <div className="text-xs text-slate-500">{product.reviews} đánh giá</div>
+                      <div className="text-sm font-bold text-white">{Number(product.totalQuantity || 0).toLocaleString('vi-VN')} sp</div>
+                      <div className="text-xs text-slate-400">{formatCompactNumber(Number(product.totalRevenue || 0))}</div>
                     </div>
                   </div>
                 ))}
@@ -397,6 +436,14 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
             </div>
           </div>
         </section>
+
+        <div id="admin-report" className="mt-6 scroll-mt-32">
+          <DailyReport token={token} refreshKey={refreshKey} />
+        </div>
+
+        <div id="admin-stock" className="mt-6 scroll-mt-32">
+          <InventoryPanel token={token} onChanged={() => setRefreshKey((key) => key + 1)} />
+        </div>
       </div>
     </div>
   )

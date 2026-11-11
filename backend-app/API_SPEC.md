@@ -23,7 +23,7 @@
 13. [Voucher APIs](#13-voucher-apis)
 14. [Admin Dashboard APIs](#14-admin-dashboard-apis)
 15. [Inventory APIs](#15-inventory-apis)
-16. [Analytics APIs](#16-analytics-apis)
+16. [Analytics & Inventory APIs](#16-analytics--inventory-apis-admin)
 17. [Race Condition — Xử lý tồn kho đồng thời](#17-race-condition--xử-lý-tồn-kho-đồng-thời)
 18. [Order Status Flow](#18-order-status-flow)
 19. [Data Model](#19-data-model)
@@ -1498,38 +1498,61 @@ await ProductLog.create({
 
 ---
 
-## 16. Analytics APIs
+## 16. Analytics & Inventory APIs (admin)
 
-### GET `/admin/analytics/revenue`
+Tất cả cần `Authorization: Bearer <admin token>`.
 
-```http
-/admin/analytics/revenue?from=2026-01-01&to=2026-12-31&groupBy=month|week|day
-```
+### GET `/analytics/dashboard`
 
-**Response 200:**
+Số liệu tổng quan: `summary` (tổng khách, sản phẩm, đơn, doanh thu đơn đã giao, số sản phẩm tồn ≤ 5),
+`revenueByCategory`, `topProducts` (theo đơn `delivered`/`completed`).
+
+### GET `/analytics/daily?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+Báo cáo theo ngày, **chia ngày theo giờ Việt Nam (UTC+7)** bất kể máy chủ SQL đặt múi giờ nào.
+Mặc định 30 ngày gần nhất, tối đa 92 ngày một lần.
+
 ```json
 {
-  "success": true,
-  "data": [
-    { "period": "2026-01", "revenue": 250000000, "orders": 48 },
-    { "period": "2026-02", "revenue": 310000000, "orders": 61 }
-  ]
+  "from": "2026-11-06", "to": "2026-11-12", "timezone": "Asia/Ho_Chi_Minh",
+  "days": [
+    { "date": "2026-11-12", "orders": 3, "cancelledOrders": 0, "netSales": 2760000, "paidAmount": 0,
+      "unitsSold": 3, "newCustomers": 3, "receipts": 1, "unitsReceived": 9, "receiptCost": 18900000 }
+  ],
+  "totals": { "orders": 8, "netSales": 22460000, "...": "..." }
 }
 ```
 
----
+`netSales` không tính đơn đã huỷ; `paidAmount` là phần đã thanh toán (`PaymentStatus = paid`).
 
-### GET `/admin/analytics/top-products`
+### POST `/inventory/receipts`
 
-```http
-/admin/analytics/top-products?from=2026-01-01&to=2026-12-31&limit=10
+Tạo phiếu nhập kho; cộng tồn và ghi sổ kho trong một transaction (khoá sản phẩm theo thứ tự `ProductID`).
+
+```json
+{
+  "supplier": "Công ty Phân phối ABC",
+  "note": "HĐ 0012345",
+  "items": [{ "productId": 50002, "quantity": 10, "unitCost": 2100000 }]
+}
 ```
 
----
+**Response 201:** phiếu kèm `code` dạng `NK000001`, `totalQuantity`, `totalCost`, `items`.
+Lỗi 400: thiếu nhà cung cấp, dòng lặp sản phẩm, số lượng ngoài 1–100.000, sản phẩm không tồn tại hoặc đã ẩn
+(`errors.productIds`).
 
-### GET `/admin/analytics/order-status`
+### GET `/inventory/receipts?page=&limit=` · GET `/inventory/receipts/:id`
 
-Phân bổ đơn hàng theo trạng thái.
+Danh sách phiếu nhập gần nhất; chi tiết một phiếu.
+
+### GET `/inventory/movements?productId=&reason=&limit=`
+
+Sổ kho: mỗi lần tồn thay đổi có một dòng (`opening`, `receipt`, `sale`, `cancel`, `adjust`) với `change`,
+`stockAfter`, mã đơn hoặc mã phiếu. Tổng `change` của một sản phẩm luôn bằng tồn hiện tại.
+
+### GET `/inventory/low-stock?threshold=5&limit=20`
+
+Sản phẩm sắp hết kèm số đã bán 30 ngày qua và giá nhập gần nhất.
 
 ---
 

@@ -62,6 +62,7 @@ test.after(async () => {
     DELETE FROM Orders WHERE UserID IN (${ids});
     DELETE FROM Users WHERE UserID IN (${ids});
     DELETE FROM PriceHistory WHERE ProductID = @id;
+    DELETE FROM StockMovements WHERE ProductID = @id;
     DELETE FROM Products WHERE ProductID = @id;
   `, { id: [sql.Int, ctx.productId] });
   await mongoose.disconnect();

@@ -209,16 +209,20 @@ const createProduct = async (productData, adminId) => {
     .input('specs', sql.NVarChar, JSON.stringify(specs || []))
     .input('images', sql.NVarChar, JSON.stringify(images || []))
     .input('isFeatured', sql.Bit, isFeatured ? 1 : 0)
+    .input('adminId', sql.Int, adminId ? Number(adminId) : null)
     .query(`
       SET XACT_ABORT ON;
       BEGIN TRANSACTION;
-      DECLARE @created TABLE (ProductID INT, Price DECIMAL(18,2), OldPrice DECIMAL(18,2));
+      DECLARE @created TABLE (ProductID INT, Price DECIMAL(18,2), OldPrice DECIMAL(18,2), Stock INT);
       INSERT INTO Products (Name, Slug, Brand, Description, Price, OldPrice, Stock, CategoryID, Specs, Images, IsFeatured)
-      OUTPUT INSERTED.ProductID, INSERTED.Price, INSERTED.OldPrice INTO @created
+      OUTPUT INSERTED.ProductID, INSERTED.Price, INSERTED.OldPrice, INSERTED.Stock INTO @created
       VALUES (@name, @slug, @brand, @description, @price, @oldPrice, @stock, @categoryId, @specs, @images, @isFeatured);
       -- Mốc giá đầu tiên cho lịch sử giá.
       INSERT INTO PriceHistory (ProductID, Price, OldPrice)
       SELECT ProductID, Price, OldPrice FROM @created;
+      -- Tồn đầu kỳ trong sổ kho.
+      INSERT INTO StockMovements (ProductID, Change, StockAfter, Reason, Note, CreatedBy)
+      SELECT ProductID, Stock, Stock, N'opening', N'Tồn khi tạo sản phẩm', @adminId FROM @created;
       COMMIT TRANSACTION;
       SELECT ProductID FROM @created;
     `);
@@ -257,10 +261,11 @@ const updateProduct = async (id, productData, adminId = null) => {
     .input('specs', sql.NVarChar, specs === undefined ? null : JSON.stringify(specs || []))
     .input('images', sql.NVarChar, images === undefined ? null : JSON.stringify(images || []))
     .input('isFeatured', sql.Bit, isFeatured === undefined ? null : (isFeatured ? 1 : 0))
+    .input('adminId', sql.Int, adminId ? Number(adminId) : null)
     .query(`
       SET XACT_ABORT ON;
       BEGIN TRANSACTION;
-      DECLARE @changed TABLE (ProductID INT, PriceBefore DECIMAL(18,2), Price DECIMAL(18,2), OldPrice DECIMAL(18,2));
+      DECLARE @changed TABLE (ProductID INT, PriceBefore DECIMAL(18,2), Price DECIMAL(18,2), OldPrice DECIMAL(18,2), StockBefore INT, Stock INT);
       UPDATE Products
       SET Name = COALESCE(@name, Name),
           Slug = COALESCE(@slug, Slug),
@@ -275,11 +280,15 @@ const updateProduct = async (id, productData, adminId = null) => {
           IsFeatured = COALESCE(@isFeatured, IsFeatured),
           Version = Version + 1,
           UpdatedAt = GETDATE()
-      OUTPUT INSERTED.ProductID, DELETED.Price, INSERTED.Price, INSERTED.OldPrice INTO @changed
+      OUTPUT INSERTED.ProductID, DELETED.Price, INSERTED.Price, INSERTED.OldPrice, DELETED.Stock, INSERTED.Stock INTO @changed
       WHERE ProductID = @id AND IsDeleted = 0;
       -- Chỉ ghi lịch sử khi giá bán thật sự đổi.
       INSERT INTO PriceHistory (ProductID, Price, OldPrice)
       SELECT ProductID, Price, OldPrice FROM @changed WHERE Price <> PriceBefore;
+      -- Sửa tồn trong form sản phẩm cũng ghi sổ kho.
+      INSERT INTO StockMovements (ProductID, Change, StockAfter, Reason, Note, CreatedBy)
+      SELECT ProductID, Stock - StockBefore, Stock, N'adjust', N'Sửa trong form sản phẩm', @adminId
+      FROM @changed WHERE Stock <> StockBefore;
       COMMIT TRANSACTION;
     `);
 
@@ -317,28 +326,52 @@ const deleteProduct = async (id, adminId = null) => {
 };
 
 const updateStock = async (id, stock, reason, adminId) => {
-  const oldStockResult = await new sql.Request(getPool())
-    .input('id', sql.Int, Number(id))
-    .query('SELECT Stock FROM Products WHERE ProductID = @id AND IsDeleted = 0');
+  const nextStock = Number(stock);
+  if (!Number.isInteger(nextStock) || nextStock < 0 || nextStock > 1000000) {
+    const err = new Error('Tồn kho phải là số nguyên từ 0 trở lên');
+    err.status = 400;
+    throw err;
+  }
+  const note = String(reason || '').trim().slice(0, 300) || 'Điều chỉnh tồn kho';
 
-  const oldStock = oldStockResult.recordset[0]?.Stock;
-  if (oldStock === undefined) throw new Error('Product not found');
-
-  await new sql.Request(getPool())
+  // Đặt tồn và ghi sổ kho (chênh lệch so với tồn cũ) trong cùng một transaction.
+  const result = await new sql.Request(getPool())
     .input('id', sql.Int, Number(id))
-    .input('stock', sql.Int, Number(stock))
-    .query('UPDATE Products SET Stock = @stock, Version = Version + 1, UpdatedAt = GETDATE() WHERE ProductID = @id');
+    .input('stock', sql.Int, nextStock)
+    .input('note', sql.NVarChar(300), note)
+    .input('adminId', sql.Int, adminId ? Number(adminId) : null)
+    .query(`
+      SET XACT_ABORT ON;
+      BEGIN TRANSACTION;
+      DECLARE @after TABLE (StockBefore INT, Stock INT);
+      UPDATE Products
+      SET Stock = @stock, Version = Version + 1, UpdatedAt = GETDATE()
+      OUTPUT DELETED.Stock, INSERTED.Stock INTO @after
+      WHERE ProductID = @id AND IsDeleted = 0;
+      INSERT INTO StockMovements (ProductID, Change, StockAfter, Reason, Note, CreatedBy)
+      SELECT @id, Stock - StockBefore, Stock, N'adjust', @note, @adminId FROM @after WHERE Stock <> StockBefore;
+      COMMIT TRANSACTION;
+      SELECT StockBefore, Stock FROM @after;
+    `);
+
+  const row = result.recordset[0];
+  if (!row) {
+    const err = new Error('Product not found');
+    err.status = 404;
+    throw err;
+  }
+  const oldStock = Number(row.StockBefore);
 
   await writeProductLog({
     productId: Number(id),
     action: 'stock_adjusted',
     previousValues: { stock: oldStock },
-    newValues: { stock: Number(stock) },
+    newValues: { stock: nextStock },
     changedBy: adminId || 0,
-    notes: reason || 'Stock adjusted through admin API',
+    notes: note,
   });
 
-  return { productId: Number(id), oldStock, newStock: Number(stock) };
+  return { productId: Number(id), oldStock, newStock: nextStock };
 };
 
 /**

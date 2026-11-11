@@ -83,7 +83,7 @@ const updateStock = async (req, res) => {
         const result = await productService.updateStock(id, stock, reason, req.user.id);
         return success(res, result, 'Stock updated successfully');
     } catch (err) {
-        return error(res, err.message);
+        return error(res, err.message, err.status || 500);
     }
 };
 
