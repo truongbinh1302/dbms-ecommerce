@@ -27,6 +27,7 @@ import { classNames, formatCurrency } from '../utils/format'
 import useStoreInfo from '../hooks/useStoreInfo'
 import useDocumentTitle from '../hooks/useDocumentTitle'
 import CompareBar from '../components/CompareBar'
+import ErrorBoundary from '../components/ErrorBoundary'
 import { mapApiProductToStoreProduct, normalizeText } from '../utils/productMapping'
 
 const CART_STORAGE_KEY = 'binhtinhstore-cart'
@@ -1104,7 +1105,9 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
 
       {routeContent ? (
         <main className="mx-auto min-h-[60vh] max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
-          <Suspense fallback={<p className="py-10 text-center text-sm text-slate-500">Đang tải...</p>}>{routeContent}</Suspense>
+          <ErrorBoundary resetKey={route.path} homeHref={hrefFor('/')}>
+            <Suspense fallback={<p className="py-10 text-center text-sm text-slate-500">Đang tải...</p>}>{routeContent}</Suspense>
+          </ErrorBoundary>
         </main>
       ) : (
       <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">

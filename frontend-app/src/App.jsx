@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import './App.css'
 import CustomerSite from './pages/CustomerSite'
+import ErrorBoundary from './components/ErrorBoundary'
 import { getStoredToken, normalizeUser } from './api/client'
 
 // Trang quản trị chỉ admin dùng: tải riêng khi mở, để khách không phải tải phần mã này.
@@ -67,12 +68,14 @@ export default function App() {
 
   return view === 'products' ? (
     isAdmin ? (
-      <Suspense fallback={<AdminLoading />}>
-        <ProductManagement
-          token={token}
-          onBackToAdmin={() => setView('admin')}
-        />
-      </Suspense>
+      <ErrorBoundary fullPage resetKey={view}>
+        <Suspense fallback={<AdminLoading />}>
+          <ProductManagement
+            token={token}
+            onBackToAdmin={() => setView('admin')}
+          />
+        </Suspense>
+      </ErrorBoundary>
     ) : (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
         <div className="rounded-lg bg-white p-8 shadow-lg text-center">
@@ -88,13 +91,15 @@ export default function App() {
       </div>
     )
   ) : view === 'admin' ? (
-    <Suspense fallback={<AdminLoading />}>
-      <AdminDashboard
-        onBackToStore={() => setView('store')}
-        onGoToProductManagement={() => setView('products')}
-        token={token}
-      />
-    </Suspense>
+    <ErrorBoundary fullPage resetKey={view}>
+      <Suspense fallback={<AdminLoading />}>
+        <AdminDashboard
+          onBackToStore={() => setView('store')}
+          onGoToProductManagement={() => setView('products')}
+          token={token}
+        />
+      </Suspense>
+    </ErrorBoundary>
   ) : (
     <CustomerSite 
       onOpenAdmin={() => setView('admin')}
