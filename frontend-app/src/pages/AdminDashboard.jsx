@@ -5,6 +5,7 @@ import DailyReport from '../components/admin/DailyReport'
 import InventoryPanel from '../components/admin/InventoryPanel'
 import PromotionsPanel from '../components/admin/PromotionsPanel'
 import ServiceRequestsPanel from '../components/admin/ServiceRequestsPanel'
+import useDocumentTitle from '../hooks/useDocumentTitle'
 import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
 import { formatCurrency, formatCompactNumber } from '../utils/format'
 
@@ -74,6 +75,7 @@ function normalizeAdminOrder(order) {
 }
 
 export default function AdminDashboard({ onBackToStore, onGoToProductManagement, token }) {
+  useDocumentTitle('Quản trị')
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState('')

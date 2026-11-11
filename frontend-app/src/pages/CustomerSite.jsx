@@ -35,6 +35,7 @@ import {
 } from '../data/storeData'
 import { classNames, formatCurrency } from '../utils/format'
 import useStoreInfo from '../hooks/useStoreInfo'
+import useDocumentTitle from '../hooks/useDocumentTitle'
 import { mapApiProductToStoreProduct, normalizeText } from '../utils/productMapping'
 
 const CART_STORAGE_KEY = 'binhtinhstore-cart'
@@ -716,6 +717,21 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   const routePage = Math.max(1, Number.parseInt(route.query.get('trang') || '1', 10) || 1)
   const requireLogin = () => setAuthModalOpen(true)
   let routeContent = null
+
+  // Trang sản phẩm tự đặt tiêu đề theo tên sản phẩm (ProductDetailPage); các trang còn lại đặt ở đây.
+  const SECTION_TITLES = {
+    'tim-kiem': route.query.get('q') ? `Tìm "${route.query.get('q')}"` : 'Tìm kiếm',
+    'thanh-toan': 'Thanh toán',
+    'don-hang': routeId > 0 ? `Đơn hàng #${routeId}` : 'Đơn hàng của tôi',
+    'build-pc': 'Build PC',
+    'bao-gia': 'Báo giá cấu hình',
+    'bao-hanh': 'Tra cứu bảo hành',
+    'dich-vu': 'Dịch vụ sau bán',
+    'tai-khoan': 'Tài khoản của tôi',
+    'chinh-sach-bao-mat': 'Chính sách bảo mật',
+    'chinh-sach': 'Chính sách',
+  }
+  useDocumentTitle(routeSection === 'san-pham' ? null : SECTION_TITLES[routeSection] || '')
 
   if (routeSection === 'san-pham' && routeId > 0) {
     routeContent = (

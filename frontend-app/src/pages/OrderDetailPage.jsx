@@ -150,6 +150,7 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
             <li key={item.ProductID} className="flex justify-between gap-3 py-3 text-sm">
               <span>
                 <a href={hrefFor(`/san-pham/${item.ProductID}`)} className="font-semibold text-slate-900 hover:text-red-600">{item.productName}</a>
+                {item.promotionName ? <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">Giá Hot Deal: {item.promotionName}</span> : null}
                 <span className="text-slate-400"> × {item.Quantity}</span>
                 {(order.warranties || []).filter((warranty) => warranty.productId === item.ProductID).map((warranty) => (
                   <span key={warranty.serialNumber} className="block text-xs text-slate-500">

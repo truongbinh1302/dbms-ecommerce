@@ -457,9 +457,10 @@ const getOrderById = async (orderId, userId = null) => {
     .query(`
       SELECT oi.ProductID, p.Name AS productName,
              JSON_VALUE(p.Images, '$[0]') AS thumbnail,
-             oi.Quantity, oi.UnitPrice
+             oi.Quantity, oi.UnitPrice, oi.PromotionID AS promotionId, pr.Name AS promotionName
       FROM OrderItems oi
       JOIN Products p ON oi.ProductID = p.ProductID
+      LEFT JOIN Promotions pr ON pr.PromotionID = oi.PromotionID
       WHERE oi.OrderID = @orderId
     `);
 

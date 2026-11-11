@@ -10,6 +10,7 @@ import PriceWatchButton from '../components/PriceWatchButton'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatDateTime } from '../utils/orderLabels'
 import useCountdown, { formatClockTime, formatCountdown } from '../hooks/useCountdown'
+import useDocumentTitle from '../hooks/useDocumentTitle'
 
 // Hot Deal đang chạy: đếm ngược tới giờ kết thúc, số suất còn lại, giới hạn mỗi đơn.
 function PromotionNotice({ promotion }) {
@@ -73,6 +74,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
 
   const loading = state.id !== productId
   const product = loading ? null : state.product
+  useDocumentTitle(product ? product.name : 'Sản phẩm')
   const reviews = reviewState.id === productId && reviewState.data ? reviewState.data.reviews || [] : []
   const averageRating = reviews.length
     ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length

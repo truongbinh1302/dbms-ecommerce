@@ -20,6 +20,8 @@ const ORDER_STATUS_LABELS = {
   cancelled: 'Đã huỷ',
 };
 
+const MAX_WATCHES = 50;
+
 const createHttpError = (status, message, data = null) => {
   const err = new Error(message);
   err.status = status;
@@ -107,6 +109,14 @@ const watchProduct = async (userId, { productId, targetPrice = null } = {}) => {
     if (target >= effective) {
       throw createHttpError(400, `Giá mong muốn phải thấp hơn giá hiện tại ${effective.toLocaleString('vi-VN')}đ`);
     }
+  }
+
+  const existing = await new sql.Request(getPool())
+    .input('userId', sql.Int, Number(userId))
+    .input('productId', sql.Int, id)
+    .query('SELECT COUNT(*) AS Total FROM PriceWatches WHERE UserID = @userId AND ProductID <> @productId');
+  if (Number(existing.recordset[0].Total) >= MAX_WATCHES) {
+    throw createHttpError(409, `Bạn đang theo dõi ${MAX_WATCHES} sản phẩm, hãy bỏ bớt trước khi thêm`, { code: 'too_many_watches' });
   }
 
   await new sql.Request(getPool())
