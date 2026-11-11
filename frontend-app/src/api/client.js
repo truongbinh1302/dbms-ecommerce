@@ -549,8 +549,14 @@ export function moderateReview(reviewId, payload, token) {
   return request(`/reviews/admin/${encodeURIComponent(reviewId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
 }
 
-export function fetchReviews(productId) {
-  return request(`/reviews/products/${productId}`);
+export function fetchReviews(productId, { page = 1, rating = null, limit = 5 } = {}) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (rating) params.set('rating', String(rating));
+  return request(`/reviews/products/${productId}?${params}`);
+}
+
+export function markReviewHelpful(reviewId) {
+  return request(`/reviews/${encodeURIComponent(reviewId)}/helpful`, { method: 'PATCH', auth: true });
 }
 
 export function fetchReviewEligibility(productId) {

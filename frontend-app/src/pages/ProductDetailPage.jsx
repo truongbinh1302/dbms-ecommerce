@@ -1,18 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import StoreGlyph from '../components/StoreGlyph'
-import { fetchProduct, fetchReviews } from '../api/client'
+import { fetchProduct } from '../api/client'
 import { formatCurrency } from '../utils/format'
 import { mapApiProductToStoreProduct } from '../utils/productMapping'
 import PageMessage from '../components/PageMessage'
 import PriceHistory from '../components/PriceHistory'
-import ReviewForm from '../components/ReviewForm'
+import ProductReviews from '../components/ProductReviews'
 import ProductQuestions from '../components/ProductQuestions'
 import SimilarProducts from '../components/SimilarProducts'
 import PriceWatchButton from '../components/PriceWatchButton'
 import StockWatchButton from '../components/StockWatchButton'
 import { toggleCompare, useCompareItems } from '../hooks/useCompare'
 import { hrefFor } from '../hooks/useHashRoute'
-import { formatDateTime } from '../utils/orderLabels'
 import useCountdown, { formatClockTime, formatCountdown } from '../hooks/useCountdown'
 import useDocumentTitle from '../hooks/useDocumentTitle'
 
@@ -58,9 +57,9 @@ function CompareToggle({ product, items }) {
 
 export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, onProductLoaded, currentUser, onRequireLogin }) {
   const [state, setState] = useState({ id: null, product: null, error: '' })
-  const [reviewState, setReviewState] = useState({ id: null, data: null })
+  const [reviewStats, setReviewStats] = useState({ id: null, stats: null })
   const [quantity, setQuantity] = useState(1)
-  const [reviewsVersion, setReviewsVersion] = useState(0)
+  const handleReviewStats = useCallback((stats) => setReviewStats({ id: productId, stats }), [productId])
 
   useEffect(() => {
     let cancelled = false
@@ -81,28 +80,13 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
     }
   }, [productId, onProductLoaded])
 
-  useEffect(() => {
-    let cancelled = false
-    fetchReviews(productId)
-      .then((data) => {
-        if (!cancelled) setReviewState({ id: productId, data })
-      })
-      .catch(() => {
-        if (!cancelled) setReviewState({ id: productId, data: null })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [productId, reviewsVersion])
-
   const loading = state.id !== productId
   const product = loading ? null : state.product
   useDocumentTitle(product ? product.name : 'Sản phẩm')
-  const reviews = reviewState.id === productId && reviewState.data ? reviewState.data.reviews || [] : []
-  const averageRating = reviews.length
-    ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
-    : null
-  const totalReviews = reviewState.id === productId && reviewState.data ? Number(reviewState.data.total || reviews.length) : 0
+  // Điểm và số đánh giá: lấy từ khối đánh giá (tính trên mọi đánh giá đang hiện), chưa có thì dùng số trong bảng Products.
+  const stats = reviewStats.id === productId ? reviewStats.stats : null
+  const totalReviews = stats ? Number(stats.total_reviews || 0) : Number(product?.reviews || 0)
+  const averageRating = totalReviews > 0 ? Number(stats ? stats.overall_rating : product?.rating) : null
   const compareItems = useCompareItems()
   const maxQuantity = product ? Math.max(1, Math.min(product.stock, 99)) : 1
   const safeQuantity = Math.min(quantity, maxQuantity)
@@ -143,10 +127,16 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
           {product.brand ? <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-600">{product.brand}</p> : null}
           <h1 className="mt-2 text-3xl font-black leading-tight text-slate-900">{product.name}</h1>
 
-          <div className="mt-3 text-sm text-slate-500">
-            {averageRating !== null
-              ? `${averageRating.toFixed(1)}/5 từ ${totalReviews} đánh giá`
-              : 'Chưa có đánh giá'}
+          <div className="mt-3 text-sm text-slate-600">
+            {averageRating !== null ? (
+              <button
+                type="button"
+                onClick={() => document.getElementById('reviews-heading')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-red-700"
+              >
+                {averageRating.toFixed(1)}/5 từ {totalReviews} đánh giá
+              </button>
+            ) : 'Chưa có đánh giá'}
           </div>
 
           <div className="mt-5 rounded-[24px] bg-slate-50 p-5">
@@ -217,37 +207,12 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
         </section>
       ) : null}
 
-      <section className="rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-        <h2 className="text-xl font-black text-slate-900">Đánh giá từ người đã mua</h2>
-        {reviews.length === 0 ? (
-          <p className="mt-3 text-slate-500">Sản phẩm chưa có đánh giá nào.</p>
-        ) : (
-          <ul className="mt-4 space-y-4">
-            {reviews.map((review) => (
-              <li key={review._id} className="rounded-2xl border border-slate-200 p-4">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <strong className="text-slate-900">{review.title}</strong>
-                  <span className="font-semibold text-amber-700">{review.rating}/5</span>
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-700">{review.content}</p>
-                <p className="mt-2 text-xs text-slate-500">{formatDateTime(review.createdAt)}</p>
-                {review.storeReply?.content ? (
-                  <div className="mt-3 rounded-xl border-l-4 border-red-600 bg-slate-50 px-3 py-2 text-sm">
-                    <p className="text-xs font-bold text-slate-900">Phản hồi của BinhTinhStore · <span className="font-normal text-slate-600">{formatDateTime(review.storeReply.repliedAt)}</span></p>
-                    <p className="mt-1 whitespace-pre-line leading-6 text-slate-700">{review.storeReply.content}</p>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-        <ReviewForm
-          productId={productId}
-          currentUser={currentUser}
-          onRequireLogin={onRequireLogin}
-          onCreated={() => setReviewsVersion((version) => version + 1)}
-        />
-      </section>
+      <ProductReviews
+        productId={productId}
+        currentUser={currentUser}
+        onRequireLogin={onRequireLogin}
+        onStatistics={handleReviewStats}
+      />
 
       <ProductQuestions productId={productId} currentUser={currentUser} onRequireLogin={onRequireLogin} />
     </div>
