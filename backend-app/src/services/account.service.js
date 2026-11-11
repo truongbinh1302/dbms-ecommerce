@@ -75,6 +75,9 @@ const exportMyData = async (userId) => {
       SELECT w.ProductID, p.Name AS ProductName, w.CreatedAt
       FROM StockWatches w JOIN Products p ON p.ProductID = w.ProductID WHERE w.UserID = @userId;
 
+      SELECT q.ProductID, p.Name AS ProductName, q.Question, q.Answer, q.Status, q.CreatedAt, q.AnsweredAt
+      FROM ProductQuestions q JOIN Products p ON p.ProductID = q.ProductID WHERE q.UserID = @userId ORDER BY q.QuestionID;
+
       SELECT Type, Title, Body, Link, IsRead, CreatedAt FROM Notifications WHERE UserID = @userId ORDER BY NotificationID;
 
       SELECT r.ReturnID, r.ReturnCode, r.OrderID, r.Kind, r.Reason, r.Description, r.Status, r.RefundAmount, r.AdminNote,
@@ -90,7 +93,7 @@ const exportMyData = async (userId) => {
 
   const [
     users, orders, orderItems, cart, quotes, warranties, vouchers,
-    serviceRequests = [], priceWatches = [], stockWatches = [], notifications = [], returns = [], returnItems = [],
+    serviceRequests = [], priceWatches = [], stockWatches = [], questions = [], notifications = [], returns = [], returnItems = [],
   ] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
@@ -130,6 +133,7 @@ const exportMyData = async (userId) => {
     })),
     priceWatches,
     stockWatches,
+    productQuestions: questions,
     notifications,
     returnRequests: returns.map(({ ReturnID, ...request }) => ({
       ...request,
@@ -211,6 +215,9 @@ const deleteAccount = async (userId, password) => {
         DELETE FROM CartItems WHERE UserID = @userId;
         DELETE FROM PriceWatches WHERE UserID = @userId;
         DELETE FROM StockWatches WHERE UserID = @userId;
+        -- Hỏi đáp: câu chưa trả lời bị xoá; câu đã trả lời giữ lại cho người mua sau nhưng không còn gắn với tài khoản.
+        DELETE FROM ProductQuestions WHERE UserID = @userId AND Status <> N'answered';
+        UPDATE ProductQuestions SET UserID = NULL, AskerName = N'Khách hàng' WHERE UserID = @userId;
         DELETE FROM Notifications WHERE UserID = @userId;
         UPDATE BuildQuotes SET UserID = NULL WHERE UserID = @userId;
         -- Yêu cầu dịch vụ: huỷ yêu cầu đang mở, xoá địa chỉ, số điện thoại và mô tả (giữ mã và ngày để đối soát).

@@ -40,3 +40,12 @@ test('nhận ra khi khách nói về chơi game', () => {
   assert.equal(mentionsGaming('chơi game Valorant'), true);
   assert.equal(mentionsGaming('code Docker'), false);
 });
+
+const { displayName, validateQuestion } = require('../../src/services/question.service');
+
+test('hỏi đáp: chỉ hiện tên gọi của người hỏi, câu hỏi đủ dài', () => {
+  assert.equal(displayName('Trương Hữu Quốc Gia Bình'), 'Bình');
+  assert.equal(displayName('   '), 'Khách hàng');
+  assert.equal(validateQuestion('  Card này   lắp được case\n\n\n\nmini-ITX không?  '), 'Card này lắp được case\n\nmini-ITX không?');
+  assert.throws(() => validateQuestion('còn ko?'), /ít nhất 10 ký tự/);
+});
