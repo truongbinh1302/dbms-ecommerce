@@ -1,4 +1,4 @@
-const { getPool, sql } = require('../config/db.sql');
+const { getPool } = require('../config/db.sql');
 const pricing = require('../services/pricing.service');
 const voucherService = require('../services/voucher.service');
 const { success, error } = require('../utils/response');
@@ -27,48 +27,25 @@ const validateVoucher = async (req, res) => {
   }
 };
 
-const createVoucher = async (req, res) => {
-  const {
-    code,
-    discountType = 'amount',
-    discountValue,
-    discount,
-    quantity,
-    minOrderAmount = 0,
-    maxDiscount = null,
-    startDate = null,
-    endDate = null,
-  } = req.body;
-
-  if (!code) {
-    return error(res, 'Voucher code is required', 400);
-  }
-
-  const resolvedDiscountValue = Number(discountValue ?? discount ?? 0);
-  if (resolvedDiscountValue <= 0) {
-    return error(res, 'Discount value must be greater than 0', 400);
-  }
-
+const handle = (fn, message, statusCode = 200) => async (req, res) => {
   try {
-    const result = await getPool().request()
-      .input('code', sql.NVarChar, String(code).trim().toUpperCase())
-      .input('discountType', sql.NVarChar, discountType)
-      .input('discountValue', sql.Decimal(18, 2), resolvedDiscountValue)
-      .input('minOrderAmount', sql.Decimal(18, 2), Number(minOrderAmount) || 0)
-      .input('maxDiscount', sql.Decimal(18, 2), maxDiscount === null ? null : Number(maxDiscount))
-      .input('usageLimit', sql.Int, Number(quantity || req.body.usageLimit || 1))
-      .input('startDate', sql.DateTime2, startDate ? new Date(startDate) : null)
-      .input('endDate', sql.DateTime2, endDate ? new Date(endDate) : null)
-      .query(`
-        INSERT INTO Vouchers (Code, DiscountType, DiscountValue, MinOrderAmount, MaxDiscount, UsageLimit, StartDate, EndDate)
-        OUTPUT INSERTED.VoucherID AS id, INSERTED.Code AS code
-        VALUES (@code, @discountType, @discountValue, @minOrderAmount, @maxDiscount, @usageLimit, @startDate, @endDate)
-      `);
-
-    return success(res, result.recordset[0], 'Voucher created', 201);
+    return success(res, await fn(req), message, statusCode);
   } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
     return error(res, err.message);
   }
 };
 
-module.exports = { validateVoucher, createVoucher };
+// Nhận cả tên trường cũ (discount, quantity) của API trước đây.
+const createVoucher = handle((req) => {
+  const body = req.body || {};
+  return voucherService.createVoucher(getPool(), {
+    ...body,
+    discountValue: body.discountValue ?? body.discount,
+    usageLimit: body.usageLimit ?? body.quantity,
+  });
+}, 'Voucher created', 201);
+const listAdminVouchers = handle((req) => voucherService.listAdminVouchers(getPool(), req.query), 'Vouchers retrieved');
+const setVoucherActive = handle((req) => voucherService.setVoucherActive(getPool(), req.params.id, (req.body || {}).isActive), 'Voucher updated');
+
+module.exports = { validateVoucher, createVoucher, listAdminVouchers, setVoucherActive };
