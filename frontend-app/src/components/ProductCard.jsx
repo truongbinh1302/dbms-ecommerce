@@ -108,7 +108,8 @@ export default function ProductCard({
 
         <button
           type="button"
-          aria-label="Yêu thích"
+          aria-label={`Yêu thích ${product.name}`}
+          aria-pressed={Boolean(isFavorite)}
           onClick={(event) => {
             event.stopPropagation()
             onToggleFavorite(product.id)

@@ -42,6 +42,7 @@ const PolicyPage = lazy(() => import('./PolicyPage'))
 const QuotePage = lazy(() => import('./QuotePage'))
 const WarrantyPage = lazy(() => import('./WarrantyPage'))
 const ComparePage = lazy(() => import('./ComparePage'))
+const FavoritesPage = lazy(() => import('./FavoritesPage'))
 const CheckoutPage = lazy(() => import('./CheckoutPage'))
 const OrderDetailPage = lazy(() => import('./OrderDetailPage'))
 const OrdersPage = lazy(() => import('./OrdersPage'))
@@ -734,6 +735,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     'chinh-sach-bao-mat': 'Chính sách bảo mật',
     'chinh-sach': 'Chính sách',
     'so-sanh': 'So sánh sản phẩm',
+    'yeu-thich': 'Sản phẩm yêu thích',
   }
   useDocumentTitle(routeSection === 'san-pham' ? null : SECTION_TITLES[routeSection] || '')
 
@@ -821,6 +823,17 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     routeContent = <AccountPage currentUser={currentUser} onRequireLogin={requireLogin} onAccountDeleted={handleAccountDeleted} />
   } else if (routeSection === 'so-sanh') {
     routeContent = <ComparePage ids={route.query.get('ids') || ''} onAddToCart={addToCart} />
+  } else if (routeSection === 'yeu-thich') {
+    routeContent = (
+      <FavoritesPage
+        favoriteIds={favoriteIds}
+        onToggleFavorite={toggleFavorite}
+        onAddToCart={addToCart}
+        onQuickView={handleQuickView}
+        onView={handleProductCardClick}
+        onProductsLoaded={rememberProducts}
+      />
+    )
   } else if (routeSection === 'chinh-sach-bao-mat') {
     routeContent = <PrivacyPolicyPage />
   } else if (routeSection === 'chinh-sach') {
@@ -1391,6 +1404,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
           </div>
         </section>
 
+        {viewedProducts.length ? (
         <section className="mt-5 rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
@@ -1398,7 +1412,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
               <h2 className="mt-2 text-3xl font-black text-slate-900">Bạn đã tương tác với những món này</h2>
             </div>
             <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
-              {viewedProducts.length} sản phẩm gần đây • {favoriteIds.length} yêu thích
+              {viewedProducts.length} sản phẩm gần đây •{' '}
+              <a href={hrefFor('/yeu-thich')} className="font-semibold text-red-700 hover:underline">{favoriteIds.length} yêu thích</a>
             </div>
           </div>
 
@@ -1431,6 +1446,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
             ))}
           </div>
         </section>
+        ) : null}
 
         <HotDealSection fallbackProducts={runtimeProducts} onOpen={handleQuickView} onAddToCart={addToCart} />
 
@@ -1646,10 +1662,14 @@ function FloatingSupportButtons({ favoriteCount, onOpenSupport, zaloPhone }) {
         Bạn cần hỗ trợ?
       </button>
       <div className="flex items-center gap-3">
-        <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-[0_16px_40px_rgba(15,23,42,0.14)]">
+        <a
+          href={hrefFor('/yeu-thich')}
+          aria-label={`Sản phẩm yêu thích (${favoriteCount})`}
+          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-[0_16px_40px_rgba(15,23,42,0.14)] transition hover:text-red-600"
+        >
           <StoreGlyph name="heart" className="size-4 text-rose-500" />
           {favoriteCount} yêu thích
-        </div>
+        </a>
         {phone ? (
           <a
             href={`https://zalo.me/${phone}`}
