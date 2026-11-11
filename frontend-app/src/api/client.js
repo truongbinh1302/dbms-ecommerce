@@ -315,6 +315,31 @@ export function registerWarranty(payload, token) {
   });
 }
 
+// --- Thông báo và theo dõi giá ---
+export function fetchNotifications() {
+  return request('/notifications', { method: 'GET', auth: true });
+}
+
+export function markNotificationRead(notificationId) {
+  return request(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'PATCH', auth: true });
+}
+
+export function markAllNotificationsRead() {
+  return request('/notifications/read-all', { method: 'PATCH', auth: true });
+}
+
+export function fetchPriceWatches() {
+  return request('/notifications/price-watches', { method: 'GET', auth: true });
+}
+
+export function watchPrice(productId, targetPrice) {
+  return request('/notifications/price-watches', { method: 'POST', auth: true, body: JSON.stringify({ productId, targetPrice }) });
+}
+
+export function unwatchPrice(productId) {
+  return request(`/notifications/price-watches/${encodeURIComponent(productId)}`, { method: 'DELETE', auth: true });
+}
+
 // --- Dịch vụ sau bán ---
 export function fetchServiceOptions() {
   return request('/services/options');

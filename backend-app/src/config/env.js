@@ -83,6 +83,11 @@ module.exports = {
     bookingDays: toNumber(process.env.SERVICE_BOOKING_DAYS, 14),
   },
 
+  priceWatch: {
+    // Chu kỳ so giá với các lượt "theo dõi giá" (mili giây).
+    sweepIntervalMs: toNumber(process.env.PRICE_WATCH_SWEEP_MS, 5 * 60 * 1000),
+  },
+
   payment: {
     // Đơn VNPay chưa thanh toán sau ngần này phút sẽ tự huỷ và hoàn kho.
     expireMinutes: toNumber(process.env.PAYMENT_EXPIRE_MINUTES, 30),

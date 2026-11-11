@@ -68,9 +68,14 @@ const exportMyData = async (userId) => {
       SELECT Code, Type, Status, ServiceKind, OrderID, SerialNumber, ScheduledDate, TimeSlot, Address, ContactPhone,
              Description, DeviceInfo, EstimateLow, EstimateHigh, FinalPrice, CreatedAt, UpdatedAt
       FROM ServiceRequests WHERE UserID = @userId ORDER BY CreatedAt;
+
+      SELECT w.ProductID, p.Name AS ProductName, w.PriceAtWatch, w.TargetPrice, w.CreatedAt
+      FROM PriceWatches w JOIN Products p ON p.ProductID = w.ProductID WHERE w.UserID = @userId;
+
+      SELECT Type, Title, Body, Link, IsRead, CreatedAt FROM Notifications WHERE UserID = @userId ORDER BY NotificationID;
     `);
 
-  const [users, orders, orderItems, cart, quotes, warranties, vouchers, serviceRequests = []] = result.recordsets;
+  const [users, orders, orderItems, cart, quotes, warranties, vouchers, serviceRequests = [], priceWatches = [], notifications = []] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
 
@@ -107,6 +112,8 @@ const exportMyData = async (userId) => {
       Address: parseJson(request.Address),
       DeviceInfo: parseJson(request.DeviceInfo),
     })),
+    priceWatches,
+    notifications,
     reviews: reviews === null ? 'Không đọc được đánh giá lúc xuất dữ liệu, vui lòng thử lại sau' : reviews,
   };
 };
@@ -169,6 +176,8 @@ const deleteAccount = async (userId, password) => {
       .input('password', sql.NVarChar(255), unusableHash)
       .query(`
         DELETE FROM CartItems WHERE UserID = @userId;
+        DELETE FROM PriceWatches WHERE UserID = @userId;
+        DELETE FROM Notifications WHERE UserID = @userId;
         UPDATE BuildQuotes SET UserID = NULL WHERE UserID = @userId;
         -- Yêu cầu dịch vụ: huỷ yêu cầu đang mở, xoá địa chỉ, số điện thoại và mô tả (giữ mã và ngày để đối soát).
         INSERT INTO ServiceRequestEvents (RequestID, Status, Note, CreatedBy)

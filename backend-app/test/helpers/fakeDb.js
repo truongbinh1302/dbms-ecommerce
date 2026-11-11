@@ -23,6 +23,7 @@ const createStore = () => ({
   // Dòng PromotionItems kèm thông tin chương trình: { PromotionID, ProductID, SalePrice, QuantityLimit,
   // SoldCount, PerOrderLimit, Name, EndsAt, running } (running = đang trong khung giờ và IsActive).
   promotionItems: [],
+  notifications: [],
   nextOrderId: 1,
 });
 
@@ -105,6 +106,11 @@ const createFakeDb = () => {
     [/^UPDATE PromotionItems SET SoldCount = CASE WHEN SoldCount >= @quantity THEN SoldCount - @quantity ELSE 0 END WHERE PromotionID = @promotionId AND ProductID = @productId$/, (i, s) => {
       const item = s.promotionItems.find((x) => x.PromotionID === i.promotionId && x.ProductID === i.productId);
       if (item) item.SoldCount = Math.max(item.SoldCount - i.quantity, 0);
+      return [];
+    }],
+
+    [/^INSERT INTO Notifications \(UserID, Type, Title, Body, Link\) VALUES/, (i, s) => {
+      s.notifications.push({ UserID: i.userId, Type: i.type, Title: i.title, Body: i.body, Link: i.link });
       return [];
     }],
 
@@ -287,6 +293,7 @@ const SERVICES_USING_DB = [
   'builder.service',
   'inventory.service',
   'promotion.service',
+  'notification.service',
 ];
 
 /**

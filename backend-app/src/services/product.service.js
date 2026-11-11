@@ -4,6 +4,7 @@ const { formatProduct } = require('../utils/productFormat');
 const { promoApply, PROMO_COLUMNS } = require('./promotionSql');
 const { tokenizeQuery } = require('../utils/searchText');
 const { refreshSearchText } = require('./searchIndex.service');
+const notificationService = require('./notification.service');
 
 const slugify = (value) => String(value || '')
   .toLowerCase()
@@ -298,6 +299,8 @@ const updateProduct = async (id, productData, adminId = null) => {
     `);
 
   await syncSearchText(Number(id));
+  // Giá đổi: báo ngay cho khách đang theo dõi giá (không chờ lượt quét định kỳ).
+  if (price !== undefined) notificationService.sweepSoon();
   await writeProductLog({
     productId: Number(id),
     action: 'updated',

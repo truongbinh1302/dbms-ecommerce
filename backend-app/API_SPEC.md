@@ -1604,6 +1604,21 @@ khuyến mãi khi cả dòng nằm trong giới hạn mỗi đơn và số suấ
 
 ---
 
+### Thông báo và theo dõi giá — `/notifications` (đăng nhập)
+
+- `GET /notifications` → `{ unread, items: [{ id, type, title, body, link, read, createdAt }] }`;
+  `type` là `price_drop`, `order_status` hoặc `service_update`.
+- `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`.
+- `GET /notifications/price-watches`, `POST /notifications/price-watches` `{ productId, targetPrice? }`,
+  `DELETE /notifications/price-watches/:productId`.
+
+Giá so sánh là giá khách trả được lúc đó (giá Hot Deal đang chạy nếu thấp hơn giá niêm yết). Server quét định kỳ
+(`PRICE_WATCH_SWEEP_MS`, mặc định 5 phút) và quét ngay khi admin đổi giá hoặc tạo Hot Deal. Mỗi mức giá chỉ báo
+một lần; giá tăng lại rồi giảm thì báo lại. Admin đổi trạng thái đơn hàng không còn ghi đè ghi chú của khách
+(`Orders.Note`); khách nhận thông báo `order_status`.
+
+---
+
 ## 17. Race Condition — Xử lý tồn kho đồng thời
 
 > Đây là phần quan trọng nhất liên quan đến **Transaction & Concurrency Control** trong assignment.

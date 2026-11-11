@@ -156,10 +156,11 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
     try {
       setUpdatingOrderId(orderId)
       setOrdersError('')
+      // Ghi chú gửi kèm chỉ dùng khi huỷ (lý do huỷ, hiện cho khách); các trạng thái khác không cần.
       await updateAdminOrderStatus(
         orderId,
         nextStatus,
-        `Admin cập nhật trạng thái sang ${nextStatus}`,
+        nextStatus === 'cancelled' ? 'Cửa hàng huỷ đơn' : undefined,
         token,
       )
       setOrders((currentOrders) =>

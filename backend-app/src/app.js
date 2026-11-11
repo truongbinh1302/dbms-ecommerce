@@ -28,6 +28,7 @@ const storeRoutes = require('./routes/store.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
 const promotionRoutes = require('./routes/promotion.routes');
 const afterSalesRoutes = require('./routes/afterSales.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 const app = express();
 
@@ -99,6 +100,7 @@ app.use('/api/v1/store', storeRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/promotions', promotionRoutes);
 app.use('/api/v1/services', afterSalesRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
@@ -120,6 +122,22 @@ const startPaymentExpirySweeper = () => {
     }
   }, config.payment.sweepIntervalMs);
   timer.unref();
+};
+
+// Định kỳ so giá với các lượt theo dõi giá (bắt cả Hot Deal hẹn giờ bắt đầu).
+const startPriceWatchSweeper = () => {
+  const notificationService = require('./services/notification.service');
+  const run = async () => {
+    try {
+      const sent = await notificationService.sweepPriceWatches();
+      if (sent > 0) console.log(`[price-watch] Sent ${sent} price drop notification(s)`);
+    } catch (err) {
+      console.error('[price-watch] Sweep failed:', err.message);
+    }
+  };
+  const timer = setInterval(run, config.priceWatch.sweepIntervalMs);
+  timer.unref();
+  run();
 };
 
 // Điền SearchText cho sản phẩm chưa có (dữ liệu seed). Chạy nền, lỗi chỉ ghi log.
@@ -172,6 +190,7 @@ const startServer = async () => {
     await connectMongo();
 
     startPaymentExpirySweeper();
+    startPriceWatchSweeper();
     backfillSearchIndex();
     syncRatings();
     warnDemoAdminPassword();

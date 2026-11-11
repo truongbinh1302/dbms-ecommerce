@@ -68,6 +68,7 @@ test.after(async () => {
     DELETE w FROM Warranties w JOIN Orders o ON o.OrderID = w.OrderID WHERE o.UserID IN (${users});
     DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID IN (${users});
     DELETE FROM Orders WHERE UserID IN (${users});
+    DELETE FROM Notifications WHERE UserID IN (${users});
     DELETE FROM Users WHERE UserID IN (${users});
     DELETE FROM PriceHistory WHERE ProductID = @productId;
     DELETE FROM StockMovements WHERE ProductID = @productId;
@@ -140,6 +141,9 @@ test('thu cũ: lưu giá ước tính; admin chốt giá và chuyển trạng th
   const done = await afterSales.updateRequest(created.id, { status: 'completed', finalPrice: 7800000, note: 'Đã thu máy' }, null);
   assert.equal(done.finalPrice, 7800000);
   assert.equal(done.events.filter((event) => event.internal).length, 1);
+
+  const [{ Total: notified }] = await query("SELECT COUNT(*) AS Total FROM Notifications WHERE UserID = @userId AND Type = N'service_update'", { userId: [sql.Int, userId] });
+  assert.equal(notified, 3, 'xác nhận, đang xử lý, hoàn tất: 3 thông báo; ghi chú nội bộ không báo');
 
   const mine = await afterSales.getRequest(created.id, { userId });
   assert.deepEqual(mine.events.map((event) => event.status), ['new', 'confirmed', 'in_progress', 'completed']);

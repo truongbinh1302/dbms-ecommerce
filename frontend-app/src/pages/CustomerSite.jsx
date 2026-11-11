@@ -4,6 +4,7 @@ import CartDrawer from '../components/CartDrawer'
 import FooterSellerInfo from '../components/FooterSellerInfo'
 import ProductCard, { ProductVisual } from '../components/ProductCard'
 import HotDealSection from '../components/HotDealSection'
+import NotificationBell from '../components/NotificationBell'
 import ProductQuickView from '../components/ProductQuickView'
 import SectionHeader from '../components/SectionHeader'
 import StoreGlyph from '../components/StoreGlyph'
@@ -890,6 +891,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                   >
                     Đơn hàng
                   </a>
+                  <NotificationBell userId={currentUser.id} />
                   <button
                     type="button"
                     onClick={handleLogout}

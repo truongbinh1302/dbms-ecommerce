@@ -1,6 +1,7 @@
 const { getPool, sql } = require('../config/db.sql');
 const config = require('../config/env');
 const { assertShippingAddress, findProvince } = require('./address.service');
+const notificationService = require('./notification.service');
 
 /*
   Dịch vụ sau bán: kỹ thuật / lắp đặt tại nhà, thu cũ đổi mới, yêu cầu bảo hành.
@@ -48,6 +49,13 @@ const TRANSITIONS = {
   cancelled: [],
 };
 const MAX_OPEN_PER_USER = 5;
+const STATUS_LABELS = {
+  new: 'Mới gửi',
+  confirmed: 'Đã xác nhận',
+  in_progress: 'Đang xử lý',
+  completed: 'Hoàn tất',
+  cancelled: 'Đã huỷ',
+};
 
 const createHttpError = (status, message, data = null) => {
   const err = new Error(message);
@@ -444,7 +452,7 @@ const changeStatus = async ({ requestId, userId = null, nextStatus, note, finalP
     const request = new sql.Request(transaction).input('id', sql.Int, Number.isInteger(id) ? id : 0);
     if (userId) request.input('userId', sql.Int, Number(userId));
     const current = await request.query(`
-      SELECT RequestID, Status, Type, ScheduledDate FROM ServiceRequests WITH (UPDLOCK, ROWLOCK)
+      SELECT RequestID, Code, UserID, Status, Type, ScheduledDate FROM ServiceRequests WITH (UPDLOCK, ROWLOCK)
       WHERE RequestID = @id ${userId ? 'AND UserID = @userId' : ''}
     `);
     const row = current.recordset[0];
@@ -473,6 +481,16 @@ const changeStatus = async ({ requestId, userId = null, nextStatus, note, finalP
         INSERT INTO ServiceRequestEvents (RequestID, Status, Note, IsCustomerVisible, CreatedBy)
         VALUES (@id, @status, @note, @visible, @actorId);
       `);
+    // Cửa hàng cập nhật (không phải ghi chú nội bộ, không phải khách tự huỷ): báo cho khách.
+    if (!userId && !internal) {
+      await notificationService.notify(transaction, {
+        userId: row.UserID,
+        type: 'service_update',
+        title: `Yêu cầu ${row.Code}: ${STATUS_LABELS[changesStatus ? nextStatus : row.Status]}`,
+        body: note || (finalPrice !== undefined ? `${row.Type === 'trade_in' ? 'Giá chốt' : 'Chi phí'}: ${Number(finalPrice).toLocaleString('vi-VN')}đ` : null),
+        link: '/dich-vu/cua-toi',
+      });
+    }
     await transaction.commit();
   } catch (err) {
     await transaction.rollback().catch(() => {});

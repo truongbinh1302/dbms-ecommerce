@@ -1,6 +1,7 @@
 const { getPool, sql } = require('../config/db.sql');
 const { formatProduct } = require('../utils/productFormat');
 const { ACTIVE_CONDITION, promoApply, PROMO_COLUMNS } = require('./promotionSql');
+const notificationService = require('./notification.service');
 
 /*
   Khuyến mãi có thời hạn (Hot Deal).
@@ -267,6 +268,8 @@ const createPromotion = async (payload, adminId) => {
     await transaction.rollback().catch(() => {});
     throw err;
   }
+  // Hot Deal bắt đầu ngay: báo khách đang theo dõi giá; chương trình hẹn giờ do lượt quét định kỳ báo.
+  notificationService.sweepSoon();
   return getPromotion(promotionId);
 };
 

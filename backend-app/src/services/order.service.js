@@ -7,6 +7,7 @@ const cartService = require('./cart.service');
 const priceQuoteService = require('./priceQuote.service');
 const inventoryService = require('./inventory.service');
 const promotionService = require('./promotion.service');
+const notificationService = require('./notification.service');
 const { assertShippingAddress } = require('./address.service');
 
 const allowedStatuses = ['pending', 'pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -610,6 +611,13 @@ const updateOrderStatus = async (orderId, status, note) => {
         throw createHttpError(422, `Cannot cancel order in status "${order.Status}"`);
       }
       const result = await cancelLockedOrder(transaction, order, { reason: note || 'Admin huỷ đơn' });
+      await notificationService.notify(transaction, {
+        userId: order.UserID,
+        type: 'order_status',
+        title: `Đơn #${order.OrderID} đã bị huỷ`,
+        body: note || 'Cửa hàng đã huỷ đơn. Nếu bạn đã thanh toán, tiền sẽ được hoàn lại.',
+        link: `/don-hang/${order.OrderID}`,
+      });
       await transaction.commit();
       return { id: result.orderId, status: result.status, updatedAt: result.updatedAt };
     } catch (err) {
@@ -619,19 +627,21 @@ const updateOrderStatus = async (orderId, status, note) => {
   }
 
   // Đơn đã huỷ thì kho đã được hoàn, không cho chuyển sang trạng thái khác nữa.
+  // Cột Note là ghi chú của KHÁCH lúc đặt hàng: không ghi đè bằng ghi chú của admin.
   const result = await new sql.Request(getPool())
     .input('orderId', sql.Int, Number(orderId))
     .input('status', sql.NVarChar, status)
-    .input('note', sql.NVarChar, note || null)
     .query(`
       UPDATE Orders
       SET Status = @status,
-          Note = COALESCE(@note, Note),
           UpdatedAt = GETDATE()
       OUTPUT
         INSERTED.OrderID AS id,
         INSERTED.Status AS status,
-        INSERTED.UpdatedAt AS updatedAt
+        INSERTED.UpdatedAt AS updatedAt,
+        INSERTED.UserID AS userId,
+        INSERTED.OrderCode AS orderCode,
+        DELETED.Status AS previousStatus
       WHERE OrderID = @orderId AND Status <> 'cancelled'
     `);
 
@@ -646,7 +656,21 @@ const updateOrderStatus = async (orderId, status, note) => {
     throw createHttpError(404, 'Order not found');
   }
 
-  return updatedOrder;
+  if (updatedOrder.previousStatus !== updatedOrder.status) {
+    try {
+      await notificationService.notify(null, {
+        userId: updatedOrder.userId,
+        type: 'order_status',
+        title: `Đơn ${updatedOrder.orderCode || `#${updatedOrder.id}`}: ${notificationService.ORDER_STATUS_LABELS[status] || status}`,
+        body: status === 'shipped' ? 'Đơn đang trên đường giao tới bạn.' : status === 'delivered' ? 'Đơn đã giao. Cảm ơn bạn đã mua hàng!' : null,
+        link: `/don-hang/${updatedOrder.id}`,
+      });
+    } catch (err) {
+      console.warn('[notifications] order status notification failed:', err.message);
+    }
+  }
+
+  return { id: updatedOrder.id, status: updatedOrder.status, updatedAt: updatedOrder.updatedAt };
 };
 
 /**

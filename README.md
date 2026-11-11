@@ -36,6 +36,10 @@ features and DBMS demonstrations.
   estimate and request, and warranty claims for the customer's own serial
   numbers, each with a status timeline the customer can follow and the admin
   updates.
+- Price watch and in-account notifications: a customer can watch a product
+  (optionally with a target price) and gets a notification when the price, or
+  a running Hot Deal, drops below it; order status changes and service
+  request updates also notify the customer (bell in the header).
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -343,6 +347,7 @@ The API is mounted under `/api/v1` and includes:
 - `/inventory` — stock receipts, stock ledger, low-stock list (admin)
 - `/promotions` — running and upcoming Hot Deals (public), create/list/stop (admin)
 - `/services` — home service slots, trade-in estimate, customer service requests, admin processing
+- `/notifications` — the customer's notifications, mark as read, price watches
 
 Detailed request and response examples are documented in
 [`backend-app/API_SPEC.md`](backend-app/API_SPEC.md).
