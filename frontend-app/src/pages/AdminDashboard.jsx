@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import heroAsset from '../assets/hero.png'
 import StoreGlyph from '../components/StoreGlyph'
 import DailyReport from '../components/admin/DailyReport'
 import InventoryPanel from '../components/admin/InventoryPanel'
@@ -8,6 +7,7 @@ import ServiceRequestsPanel from '../components/admin/ServiceRequestsPanel'
 import ReturnsPanel from '../components/admin/ReturnsPanel'
 import VouchersPanel from '../components/admin/VouchersPanel'
 import QuestionsPanel from '../components/admin/QuestionsPanel'
+import TodoPanel from '../components/admin/TodoPanel'
 import useDocumentTitle from '../hooks/useDocumentTitle'
 import OrderDetailDrawer from '../components/admin/OrderDetailDrawer'
 import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
@@ -272,30 +272,11 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
 
         <section id="admin-overview" className="mt-8 grid scroll-mt-4 lg:scroll-mt-44 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <div className="overflow-hidden rounded-[36px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
-            <div className="grid gap-8 lg:grid-cols-[1fr_280px] lg:items-center">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-300">Tổng quan nhanh</p>
-                <h2 className="mt-3 max-w-2xl text-4xl font-black leading-tight">
-                  Theo dõi đơn hàng, sản phẩm và doanh thu cửa hàng.
-                </h2>
-                <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-                  Trang quản trị giúp admin theo dõi đơn hàng mới, cập nhật trạng thái giao hàng,
-                  quản lý sản phẩm, tồn kho và tình hình kinh doanh của cửa hàng.
-                </p>
-
-                <div className="mt-6 flex flex-wrap gap-3 text-sm">
-                  <span className="rounded-full bg-white/10 px-4 py-2 font-medium text-slate-100">Quản lý đơn hàng</span>
-                  <span className="rounded-full bg-white/10 px-4 py-2 font-medium text-slate-100">Theo dõi tồn kho</span>
-                  <span className="rounded-full bg-white/10 px-4 py-2 font-medium text-slate-100">Phân tích danh mục</span>
-                  <span className="rounded-full bg-white/10 px-4 py-2 font-medium text-slate-100">Giao diện responsive</span>
-                </div>
-              </div>
-
-              <div className="relative flex items-center justify-center">
-                <div className="absolute size-52 rounded-full bg-sky-500/20 blur-3xl" />
-                <img src={heroAsset} alt="Admin decoration" className="relative w-60 drop-shadow-[0_22px_32px_rgba(96,165,250,0.35)]" />
-              </div>
-            </div>
+            <TodoPanel
+              token={token}
+              version={refreshKey}
+              onOpenOrders={({ status, payment }) => setOrderFilter((current) => ({ ...current, status, payment, page: 1 }))}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
@@ -353,7 +334,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
             ) : null}
           </div>
 
-          <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+          <div id="admin-orders" className="scroll-mt-4 rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl lg:scroll-mt-44">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-2xl font-black">Đơn hàng</h3>
