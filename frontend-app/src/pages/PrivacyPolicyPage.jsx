@@ -44,6 +44,7 @@ export default function PrivacyPolicyPage() {
           <li><strong>Hỏi đáp:</strong> câu hỏi bạn gửi ở trang sản phẩm. Sau khi cửa hàng trả lời, câu hỏi hiện công khai kèm tên gọi của bạn (chữ cuối trong họ tên), không kèm họ tên đầy đủ hay email.</li>
           <li><strong>Đổi trả:</strong> sản phẩm, số lượng, lý do và mô tả tình trạng bạn nhập khi yêu cầu đổi hoặc trả hàng; số tiền cửa hàng đã hoàn.</li>
           <li><strong>Trên trình duyệt của bạn:</strong> một cookie đăng nhập (<code>bt_refresh</code>, chỉ gửi tới máy chủ khi gia hạn phiên, trang web không đọc được, hết hạn sau 7 ngày hoặc khi bạn đăng xuất); trong localStorage: phiên đăng nhập ngắn hạn, giỏ hàng, sản phẩm đã xem, yêu thích, đang so sánh, cấu hình Build PC đang chọn. Website không dùng cookie quảng cáo hay công cụ theo dõi của bên thứ ba.</li>
+          <li><strong>Trợ lý mua hàng:</strong> câu hỏi bạn gõ cho trợ lý và câu trả lời. Cửa hàng không lưu hội thoại trên máy chủ; trình duyệt giữ hội thoại trong tab đang mở (sessionStorage) cho tới khi bạn đóng tab hoặc bấm "Xoá hội thoại".</li>
           <li><strong>Kỹ thuật:</strong> địa chỉ IP và thời điểm truy cập, dùng để giới hạn số lần gọi và chống tấn công.</li>
         </ul>
       </Section>
@@ -64,6 +65,7 @@ export default function PrivacyPolicyPage() {
         <ul className="list-disc space-y-1 pl-5">
           <li><strong>Đơn vị vận chuyển:</strong> tên người nhận, số điện thoại và địa chỉ giao hàng.</li>
           <li><strong>VNPay:</strong> mã đơn và số tiền cần thanh toán khi bạn chọn VNPay.</li>
+          <li><strong>OpenAI (Hoa Kỳ):</strong> khi bạn dùng trợ lý mua hàng, nội dung hội thoại cùng dữ liệu sản phẩm và chính sách cửa hàng được gửi tới OpenAI để tạo câu trả lời, xử lý ở nước ngoài theo <a href="https://openai.com/policies" target="_blank" rel="noreferrer" className="font-semibold text-red-600 underline">chính sách của OpenAI</a>. Không gửi tên, email hay thông tin tài khoản của bạn; bạn đừng nhập thông tin cá nhân vào hội thoại. Không muốn chia sẻ thì không dùng trợ lý, các chức năng khác vẫn hoạt động bình thường.</li>
           <li><strong>Cơ quan nhà nước có thẩm quyền:</strong> khi pháp luật yêu cầu.</li>
         </ul>
       </Section>

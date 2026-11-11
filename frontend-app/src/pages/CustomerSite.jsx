@@ -9,7 +9,7 @@ import ProductQuickView from '../components/ProductQuickView'
 import SectionHeader from '../components/SectionHeader'
 import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
-import { clearAuthSession, fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
+import { clearAuthSession, fetchAssistantStatus, fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
 import useHashRoute, { hrefFor, navigate } from '../hooks/useHashRoute'
 import ProductDetailPage from './ProductDetailPage'
 import SearchPage from './SearchPage'
@@ -46,6 +46,7 @@ const FavoritesPage = lazy(() => import('./FavoritesPage'))
 const CheckoutPage = lazy(() => import('./CheckoutPage'))
 const OrderDetailPage = lazy(() => import('./OrderDetailPage'))
 const OrdersPage = lazy(() => import('./OrdersPage'))
+const AssistantPanel = lazy(() => import('../components/AssistantPanel'))
 const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
 // Nút nhanh dưới header có trang riêng.
 const QUICK_LINK_ROUTES = {
@@ -285,6 +286,18 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     Object.fromEntries(productSections.map((section) => [section.id, 'Tất cả'])),
   )
   const [isCartOpen, setCartOpen] = useState(false)
+  // Trợ lý mua hàng: chỉ hiện khi máy chủ bật (có OPENAI_API_KEY); không thì nút hỗ trợ mở trang khiếu nại như cũ.
+  const [assistantEnabled, setAssistantEnabled] = useState(false)
+  const [isAssistantOpen, setAssistantOpen] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    fetchAssistantStatus()
+      .then((status) => !cancelled && setAssistantEnabled(Boolean(status?.enabled)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [quickViewProduct, setQuickViewProduct] = useState(null)
   const [activeCategoryId, setActiveCategoryId] = useState('all')
   const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false)
@@ -1580,9 +1593,16 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
 
       <FloatingSupportButtons
         favoriteCount={favoriteIds.length}
-        onOpenSupport={() => navigate('/chinh-sach/khieu-nai')}
+        onOpenSupport={() => (assistantEnabled ? setAssistantOpen(true) : navigate('/chinh-sach/khieu-nai'))}
+        supportLabel={assistantEnabled ? 'Hỏi trợ lý mua hàng' : 'Bạn cần hỗ trợ?'}
         zaloPhone={storeInfo.seller?.phone || ''}
       />
+
+      {isAssistantOpen ? (
+        <Suspense fallback={null}>
+          <AssistantPanel open={isAssistantOpen} onClose={() => setAssistantOpen(false)} hotline={hotline} />
+        </Suspense>
+      ) : null}
 
       <CartDrawer
         open={isCartOpen}
@@ -1696,7 +1716,7 @@ function DesktopSideAd({ align, topTier, quoteHours }) {
 }
 
 // "Bạn cần hỗ trợ?" mở trang liên hệ; nút Zalo chỉ hiện khi cửa hàng đã khai báo số điện thoại (STORE_PHONE).
-function FloatingSupportButtons({ favoriteCount, onOpenSupport, zaloPhone }) {
+function FloatingSupportButtons({ favoriteCount, onOpenSupport, supportLabel = 'Bạn cần hỗ trợ?', zaloPhone }) {
   const phone = String(zaloPhone || '').replace(/[^0-9]/g, '')
   return (
     <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">
@@ -1706,7 +1726,7 @@ function FloatingSupportButtons({ favoriteCount, onOpenSupport, zaloPhone }) {
         className="inline-flex items-center gap-3 rounded-full bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-[0_18px_50px_rgba(220,38,38,0.3)] transition hover:bg-red-700"
       >
         <StoreGlyph name="message" className="size-4" />
-        Bạn cần hỗ trợ?
+        {supportLabel}
       </button>
       <div className="flex items-center gap-3">
         <a

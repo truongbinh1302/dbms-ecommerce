@@ -553,6 +553,15 @@ export function moderateReview(reviewId, payload, token) {
   return request(`/reviews/admin/${encodeURIComponent(reviewId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
 }
 
+// Trợ lý mua hàng: có bật không (cần OPENAI_API_KEY ở máy chủ) và gửi hội thoại.
+export function fetchAssistantStatus() {
+  return request('/assistant/status');
+}
+
+export function askAssistant(messages) {
+  return request('/assistant/chat', { method: 'POST', body: JSON.stringify({ messages }) });
+}
+
 export function fetchReviews(productId, { page = 1, rating = null, limit = 5 } = {}) {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (rating) params.set('rating', String(rating));

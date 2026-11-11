@@ -66,6 +66,11 @@ features and DBMS demonstrations.
   VNPay result, admin update, cancellation, payment expiry) is recorded with
   who made it, in the same transaction as the change; the order page shows
   the steps reached and the history, the admin drawer shows notes too.
+- Shopping assistant on OpenAI (on when `OPENAI_API_KEY` is set): it answers
+  through the site's own functions (product search with Hot Deal prices, product
+  detail, the Build PC advisor, store policies), so prices and stock on its
+  product cards come from the database, not from the model. Per-IP hourly and
+  store-wide daily limits cap the cost; conversations are not stored.
 - Data integrity checks for the admin (read-only): stock equals the stock
   ledger, order totals and subtotals add up, voucher use counts match their
   orders, and the last recorded status matches each order.
