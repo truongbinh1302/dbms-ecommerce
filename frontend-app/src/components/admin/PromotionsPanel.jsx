@@ -155,7 +155,7 @@ export default function PromotionsPanel({ token }) {
             Kết thúc
             <input type="datetime-local" value={form.endsAt} onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))} className={`${FIELD} mt-1`} />
           </label>
-          <p className="self-end text-xs text-slate-500 sm:col-span-3 md:col-span-1">Giờ theo máy bạn đang dùng. Tối đa 31 ngày.</p>
+          <p className="self-end text-xs text-slate-400 sm:col-span-3 md:col-span-1">Giờ theo máy bạn đang dùng. Tối đa 31 ngày.</p>
         </div>
 
         <div className="mt-5 space-y-3">
@@ -202,7 +202,7 @@ export default function PromotionsPanel({ token }) {
         </div>
 
         <div className="mt-5 flex justify-end border-t border-white/10 pt-4">
-          <button type="submit" disabled={submit.busy} className="rounded-full bg-red-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-400 disabled:opacity-60">
+          <button type="submit" disabled={submit.busy} className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60">
             {submit.busy ? 'Đang lưu...' : 'Tạo chương trình'}
           </button>
         </div>
@@ -232,7 +232,7 @@ export default function PromotionsPanel({ token }) {
                     {canStop ? (
                       confirmStop === promotion.id ? (
                         <>
-                          <button type="button" onClick={() => handleStop(promotion.id)} className="rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white">Xác nhận dừng</button>
+                          <button type="button" onClick={() => handleStop(promotion.id)} className="rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">Xác nhận dừng</button>
                           <button type="button" onClick={() => setConfirmStop(null)} className="rounded-full px-2 py-1 text-xs text-slate-300">Huỷ</button>
                         </>
                       ) : (

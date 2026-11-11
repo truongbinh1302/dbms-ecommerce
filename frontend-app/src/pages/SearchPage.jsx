@@ -74,7 +74,7 @@ export default function SearchPage({
     <section className="rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-500">Kết quả tìm kiếm</div>
+          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Kết quả tìm kiếm</div>
           <h1 className="mt-2 text-3xl font-black text-slate-900">
             {loading ? `Đang tìm “${query}”...` : `${state.total.toLocaleString('vi-VN')} sản phẩm cho “${query}”`}
           </h1>

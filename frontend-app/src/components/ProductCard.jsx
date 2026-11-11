@@ -95,10 +95,10 @@ export default function ProductCard({
       onClick={() => onView(product)}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">
+        <div className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
           <span>{product.badge}</span>
           {product.featured ? (
-            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-red-500">
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-red-600">
               Best seller
             </span>
           ) : null}
@@ -135,10 +135,10 @@ export default function ProductCard({
                 <>
                   <StoreGlyph name="star" className="size-4" />
                   <span className="font-bold">{product.rating.toFixed(1)}</span>
-                  <span className="text-slate-400">({product.reviews} đánh giá)</span>
+                  <span className="text-slate-500">({product.reviews} đánh giá)</span>
                 </>
               ) : (
-                <span className="text-slate-400">Chưa có đánh giá</span>
+                <span className="text-slate-500">Chưa có đánh giá</span>
               )}
             </div>
           </div>
@@ -158,7 +158,7 @@ export default function ProductCard({
             <div className="flex items-end justify-between gap-3">
               <div>
                 {product.oldPrice > product.price ? (
-                  <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
+                  <div className="text-sm text-slate-500 line-through">{formatCurrency(product.oldPrice)}</div>
                 ) : null}
                 <div className="text-2xl font-black text-red-600">{formatCurrency(product.price)}</div>
               </div>

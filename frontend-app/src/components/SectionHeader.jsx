@@ -37,7 +37,7 @@ export default function SectionHeader({
               className={classNames(
                 'rounded-full border px-4 py-2 font-medium transition',
                 activeTab === tab
-                  ? 'border-red-500 bg-red-500 text-white shadow-lg shadow-red-500/20'
+                  ? 'border-red-600 bg-red-600 text-white shadow-lg shadow-red-500/20'
                   : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-red-200 hover:text-red-600',
               )}
             >

@@ -74,7 +74,7 @@ export default function NotificationBell({ userId }) {
         aria-expanded={open}
         aria-label={current.unread ? `Thông báo, ${current.unread} chưa đọc` : 'Thông báo'}
         title="Thông báo"
-        className="relative flex size-8 items-center justify-center rounded-xl bg-white/10 text-red-100 transition hover:bg-red-500 hover:text-white"
+        className="relative flex size-8 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-red-500 hover:text-white"
       >
         <StoreGlyph name="bell" className="size-4" />
         {current.unread ? (

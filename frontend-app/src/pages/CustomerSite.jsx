@@ -847,6 +847,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
               <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-2xl bg-white/10 p-3 text-white transition hover:bg-white/15 xl:hidden"
+                aria-label="Danh mục sản phẩm"
+                aria-expanded={mobileCategoriesOpen}
                 onClick={() => setMobileCategoriesOpen((currentValue) => !currentValue)}
               >
                 <StoreGlyph name="menu" className="size-5" />
@@ -858,7 +860,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 </div>
                 <div>
                   <div className="text-xl font-black tracking-tight text-white">BinhTinhStore</div>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-red-100">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white">
                     Build • Laptop • Gear
                   </div>
                 </div>
@@ -891,6 +893,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 />
                 <button
                   type="submit"
+                  aria-label="Tìm kiếm"
                   className="absolute right-1.5 top-1.5 flex size-9 items-center justify-center rounded-lg bg-slate-950 text-white transition hover:bg-slate-800"
                 >
                   <StoreGlyph name="search" className="size-5" />
@@ -934,13 +937,13 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 <div className="flex min-h-14 items-center gap-2 rounded-2xl bg-white/10 px-3 text-white">
                   <StoreGlyph name="user" className="size-5 shrink-0" />
                   <a href="#/tai-khoan" title="Tài khoản của tôi" className="min-w-0 hover:underline">
-                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-red-100">Xin chào</div>
+                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-white">Xin chào</div>
                     <div className="text-sm font-bold truncate max-w-[100px]">{currentUser.fullName || currentUser.email}</div>
                   </a>
                   <a
                     href="#/don-hang"
                     title="Đơn hàng của tôi"
-                    className="ml-1 flex h-8 shrink-0 items-center justify-center rounded-xl bg-white/10 px-2 text-xs font-bold text-red-100 transition hover:bg-red-500 hover:text-white"
+                    className="ml-1 flex h-8 shrink-0 items-center justify-center rounded-xl bg-red-800/60 px-2 text-xs font-bold text-white transition hover:bg-red-800"
                   >
                     Đơn hàng
                   </a>
@@ -949,7 +952,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                     type="button"
                     onClick={handleLogout}
                     title="Đăng xuất"
-                    className="ml-1 flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-red-100 transition hover:bg-red-500 hover:text-white"
+                    className="ml-1 flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-red-500 hover:text-white"
                   >
                     <StoreGlyph name="logout" className="size-4" />
                   </button>
@@ -973,7 +976,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 <div className="flex items-center gap-3">
                   <StoreGlyph name="cart" className="size-5" />
                   <div>
-                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-red-100">Giỏ hàng</div>
+                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-white">Giỏ hàng</div>
                     <div className="text-sm font-bold">{cartCount} sản phẩm</div>
                   </div>
                 </div>
@@ -1080,7 +1083,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
           <aside className="hidden h-fit rounded-[32px] bg-white p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] xl:block">
             <div className="mb-3 flex items-center justify-between px-2">
               <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.22em] text-red-500">Danh mục</div>
+                <div className="text-sm font-semibold uppercase tracking-[0.22em] text-red-600">Danh mục</div>
                 <div className="text-lg font-black text-slate-900">Chọn nhanh theo nhu cầu</div>
               </div>
             </div>
@@ -1093,7 +1096,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                   className={classNames(
                     'flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-semibold transition',
                     activeCategoryId === category.id
-                      ? 'bg-red-50 text-red-600'
+                      ? 'bg-red-50 text-red-700'
                       : 'text-slate-700 hover:bg-slate-50 hover:text-red-600',
                   )}
                 >
@@ -1359,7 +1362,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         <section className="mt-5 rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-500">Sản phẩm đã xem</div>
+              <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Sản phẩm đã xem</div>
               <h2 className="mt-2 text-3xl font-black text-slate-900">Bạn đã tương tác với những món này</h2>
             </div>
             <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
@@ -1542,7 +1545,7 @@ function HeaderAction({ icon, label, value, className = '', onClick }) {
     <>
       <StoreGlyph name={icon} className="size-5 shrink-0" />
       <div className="leading-tight text-left">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-red-100">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white">
           {label}
         </div>
         <div className="text-sm font-bold text-white">

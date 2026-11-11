@@ -395,6 +395,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                     </div>
                     <div>
                       <select
+                        aria-label={`Trạng thái đơn #${order.id}`}
                         value={order.statusRaw}
                         disabled={updatingOrderId === order.id}
                         onChange={(event) => handleStatusChange(order.id, event.target.value)}

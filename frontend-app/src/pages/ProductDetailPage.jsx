@@ -99,7 +99,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
 
   return (
     <div className="space-y-5">
-      <nav className="text-sm text-slate-500">
+      <nav className="text-sm text-slate-600">
         <a href={hrefFor('/')} className="hover:text-red-600">Trang chủ</a>
         {product.categoryName ? <span> / {product.categoryName}</span> : null}
       </nav>
@@ -114,7 +114,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
         </div>
 
         <div>
-          {product.brand ? <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-500">{product.brand}</p> : null}
+          {product.brand ? <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-600">{product.brand}</p> : null}
           <h1 className="mt-2 text-3xl font-black leading-tight text-slate-900">{product.name}</h1>
 
           <div className="mt-3 text-sm text-slate-500">
@@ -125,7 +125,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
 
           <div className="mt-5 rounded-[24px] bg-slate-50 p-5">
             {product.oldPrice > product.price ? (
-              <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
+              <div className="text-sm text-slate-500 line-through">{formatCurrency(product.oldPrice)}</div>
             ) : null}
             <div className="text-3xl font-black text-red-600">{formatCurrency(product.price)}</div>
             {product.promotion?.active ? <PromotionNotice promotion={product.promotion} /> : null}
@@ -200,7 +200,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
                   <span className="text-amber-600">{review.rating}/5</span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{review.content}</p>
-                <p className="mt-2 text-xs text-slate-400">{formatDateTime(review.createdAt)}</p>
+                <p className="mt-2 text-xs text-slate-500">{formatDateTime(review.createdAt)}</p>
               </li>
             ))}
           </ul>

@@ -210,7 +210,7 @@ export default function DailyReport({ token, refreshKey = 0 }) {
 
           <SalesColumns days={days} />
 
-          <div className="mt-6 max-h-80 overflow-auto rounded-[24px] border border-white/10">
+          <div className="mt-6 max-h-80 overflow-auto rounded-[24px] border border-white/10" tabIndex={0} role="region" aria-label="Bảng số liệu theo ngày">
             <table className="w-full min-w-[760px] text-left text-sm">
               <caption className="sr-only">Số liệu từng ngày từ {fullDate(report.from)} đến {fullDate(report.to)}</caption>
               <thead className="sticky top-0 bg-slate-900 text-xs uppercase tracking-[0.12em] text-slate-400">
@@ -222,7 +222,7 @@ export default function DailyReport({ token, refreshKey = 0 }) {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {[...days].reverse().map((day) => (
-                  <tr key={day.date} className={day.orders === 0 && day.unitsReceived === 0 ? 'text-slate-500' : 'text-slate-200'}>
+                  <tr key={day.date} className={day.orders === 0 && day.unitsReceived === 0 ? 'text-slate-400' : 'text-slate-200'}>
                     {COLUMNS.map((column) => (
                       <td key={column.key} className={`px-3 py-2 ${column.key === 'date' ? 'font-semibold' : 'text-right tabular-nums'}`}>
                         {column.key === 'date' ? fullDate(day.date) : column.money ? formatCurrency(day[column.key]) : day[column.key].toLocaleString('vi-VN')}

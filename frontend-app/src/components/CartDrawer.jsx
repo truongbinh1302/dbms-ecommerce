@@ -34,7 +34,7 @@ export default function CartDrawer({
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-500">Giỏ hàng</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Giỏ hàng</p>
             <h3 className="mt-1 text-2xl font-black text-slate-900">{items.length} sản phẩm đang chọn</h3>
           </div>
           <button

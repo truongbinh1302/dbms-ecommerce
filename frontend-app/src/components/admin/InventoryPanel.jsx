@@ -284,7 +284,7 @@ export default function InventoryPanel({ token, onChanged }) {
             </p>
           ) : null}
           {ledger.error ? <p className={`${ERROR_BOX} mt-3`}>{ledger.error}</p> : null}
-          <div className={`mt-3 max-h-96 overflow-auto rounded-2xl border border-white/10 ${ledgerLoading ? 'opacity-60' : ''}`}>
+          <div className={`mt-3 max-h-96 overflow-auto rounded-2xl border border-white/10 ${ledgerLoading ? 'opacity-60' : ''}`} tabIndex={0} role="region" aria-label="Sổ kho">
             <table className="w-full min-w-[520px] text-left text-sm">
               <thead className="sticky top-0 bg-slate-900 text-xs uppercase tracking-[0.12em] text-slate-400">
                 <tr>
@@ -306,7 +306,7 @@ export default function InventoryPanel({ token, onChanged }) {
                     </td>
                     <td className="px-3 py-2">
                       {REASON_LABELS[row.reason] || row.reason}
-                      <span className="block text-xs text-slate-500">{row.receiptCode || row.orderCode || (row.reason === 'opening' ? '' : row.note) || ''}</span>
+                      <span className="block text-xs text-slate-400">{row.receiptCode || row.orderCode || (row.reason === 'opening' ? '' : row.note) || ''}</span>
                     </td>
                     <td className="px-3 py-2 text-right font-bold tabular-nums">{row.change > 0 ? `+${row.change}` : row.change}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{row.stockAfter}</td>
