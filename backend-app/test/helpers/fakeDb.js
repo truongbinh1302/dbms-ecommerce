@@ -24,6 +24,7 @@ const createStore = () => ({
   // SoldCount, PerOrderLimit, Name, EndsAt, running } (running = đang trong khung giờ và IsActive).
   promotionItems: [],
   notifications: [],
+  statusHistory: [],
   nextOrderId: 1,
 });
 
@@ -74,6 +75,11 @@ const createFakeDb = () => {
       ({ code }, s) => s.buildQuotes
         .filter((q) => q.Code === code)
         .map((q) => ({ ...q, IsExpired: q.expired ? 1 : 0 }))],
+
+    [/^INSERT INTO OrderStatusHistory \(OrderID, FromStatus, ToStatus, ChangedBy, Note\) VALUES \(@orderId, @from, @to, @by, @note\)$/, (i, s) => {
+      s.statusHistory.push({ OrderID: i.orderId, FromStatus: i.from, ToStatus: i.to, ChangedBy: i.by, Note: i.note });
+      return [];
+    }],
 
     [/^UPDATE Orders SET OrderCode = @orderCode/, ({ orderId, orderCode }, s) => {
       s.orders.find((o) => o.OrderID === orderId).OrderCode = orderCode;

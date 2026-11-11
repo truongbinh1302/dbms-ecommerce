@@ -139,6 +139,11 @@ test('huỷ đơn hoàn kho và trả lại lượt voucher', async () => {
     db.store.stockMovements.map((m) => [m.ProductID, m.Change, m.StockAfter, m.Reason, m.Note]),
     [[20, -1, 0, 'sale', null], [20, 1, 1, 'cancel', 'đổi ý']],
   );
+  assert.deepEqual(
+    db.store.statusHistory.map((h) => [h.FromStatus, h.ToStatus, h.ChangedBy, h.Note]),
+    [[null, 'pending', 'customer', null], ['pending', 'cancelled', 'customer', 'đổi ý']],
+    'lịch sử trạng thái ghi lúc đặt và lúc huỷ, cùng transaction',
+  );
 });
 
 test('admin chuyển đơn sang cancelled cũng hoàn kho', async () => {
@@ -147,6 +152,7 @@ test('admin chuyển đơn sang cancelled cũng hoàn kho', async () => {
     shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 4 }] });
   await orderService.updateOrderStatus(created.orderId, 'cancelled', 'hết hàng nhà cung cấp');
   assert.equal(db.store.products[0].Stock, 5);
+  assert.deepEqual(db.store.statusHistory.at(-1), { OrderID: created.orderId, FromStatus: 'pending', ToStatus: 'cancelled', ChangedBy: 'admin', Note: 'hết hàng nhà cung cấp' });
 });
 
 test('quoteCart dùng cùng quy tắc và báo lỗi voucher mà không ném lỗi', async () => {
@@ -188,6 +194,11 @@ test('VNPay: thành công xác nhận đơn, callback lặp lại trả 02', asy
 
   const again = await orderService.applyVNPayResult({ txnRef, responseCode: '00', transactionStatus: '00', amount });
   assert.equal(again.code, '02');
+  assert.deepEqual(
+    db.store.statusHistory.map((h) => [h.FromStatus, h.ToStatus, h.ChangedBy]),
+    [[null, 'pending_payment', 'customer'], ['pending_payment', 'confirmed', 'payment']],
+    'callback lặp lại không ghi thêm lịch sử',
+  );
 });
 
 test('VNPay: thất bại ở lần thanh toán mới nhất thì huỷ đơn và hoàn kho', async () => {
@@ -199,6 +210,7 @@ test('VNPay: thất bại ở lần thanh toán mới nhất thì huỷ đơn v�
   assert.equal(db.store.orders[0].Status, 'cancelled');
   assert.equal(db.store.orders[0].PaymentStatus, 'failed');
   assert.equal(db.store.products[0].Stock, 5);
+  assert.deepEqual(db.store.statusHistory.at(-1).ChangedBy, 'payment');
 });
 
 test('VNPay: thất bại từ link cũ thì bỏ qua, đơn vẫn chờ thanh toán', async () => {

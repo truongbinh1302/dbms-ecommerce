@@ -230,6 +230,7 @@ const createOrder = async (userId, orderData = {}) => {
             UpdatedAt = GETDATE()
         WHERE OrderID = @orderId
       `);
+    await recordStatusChange(transaction, { orderId, to: status, by: 'customer' });
 
     for (const [index, item] of products.entries()) {
       await new sql.Request(transaction)
@@ -432,6 +433,18 @@ const getUserOrders = async (userId, status = null, page = 1, limit = 10) => {
   };
 };
 
+/**
+ * Ghi một dòng lịch sử trạng thái đơn (migration 020). Gọi trong cùng transaction với lệnh đổi trạng thái.
+ * by: customer | admin | payment | system.
+ */
+const recordStatusChange = (runner, { orderId, from = null, to, by = 'system', note = null }) => new sql.Request(runner)
+  .input('orderId', sql.Int, Number(orderId))
+  .input('from', sql.NVarChar(50), from)
+  .input('to', sql.NVarChar(50), to)
+  .input('by', sql.NVarChar(20), by)
+  .input('note', sql.NVarChar(500), note ? String(note).slice(0, 500) : null)
+  .query('INSERT INTO OrderStatusHistory (OrderID, FromStatus, ToStatus, ChangedBy, Note) VALUES (@orderId, @from, @to, @by, @note)');
+
 const getOrderById = async (orderId, userId = null) => {
   const request = new sql.Request(getPool());
   request.input('orderId', sql.Int, Number(orderId));
@@ -483,6 +496,24 @@ const getOrderById = async (orderId, userId = null) => {
   order.returns = await returnService.listForOrder(orderId);
   order.returnWindow = await returnService.getReturnWindow(orderId);
 
+  // Lịch sử trạng thái: khách chỉ thấy ghi chú của lần huỷ (lý do huỷ vốn đã hiện cho khách);
+  // ghi chú nội bộ của admin ở các bước khác chỉ admin thấy.
+  const historyResult = await new sql.Request(getPool())
+    .input('orderId', sql.Int, Number(orderId))
+    .query(`
+      SELECT FromStatus, ToStatus, ChangedBy, Note, ChangedAt
+      FROM OrderStatusHistory
+      WHERE OrderID = @orderId
+      ORDER BY HistoryID
+    `);
+  order.history = historyResult.recordset.map((row) => ({
+    from: row.FromStatus,
+    status: row.ToStatus,
+    by: row.ChangedBy,
+    note: !userId || row.ToStatus === 'cancelled' ? row.Note : null,
+    at: row.ChangedAt,
+  }));
+
   try {
     order.shippingAddress = JSON.parse(order.ShippingAddress || '{}');
   } catch {
@@ -514,7 +545,7 @@ const lockOrderById = async (transaction, orderId, userId = null) => {
  * Chạy bên trong transaction của hàm gọi; hàm gọi chịu trách nhiệm commit/rollback.
  * Nếu đơn đã thanh toán thì chuyển PaymentStatus sang refund_required để admin hoàn tiền.
  */
-const cancelLockedOrder = async (transaction, order, { reason = null, paymentStatus = null } = {}) => {
+const cancelLockedOrder = async (transaction, order, { reason = null, paymentStatus = null, by = 'system' } = {}) => {
   const orderId = Number(order.OrderID);
 
   const itemsResult = await new sql.Request(transaction)
@@ -568,6 +599,7 @@ const cancelLockedOrder = async (transaction, order, { reason = null, paymentSta
       OUTPUT INSERTED.UpdatedAt
       WHERE OrderID = @orderId
     `);
+  await recordStatusChange(transaction, { orderId, from: order.Status, to: 'cancelled', by, note: reason });
 
   return {
     orderId,
@@ -591,7 +623,7 @@ const cancelOrder = async (orderId, userId, reason) => {
       throw createHttpError(422, 'Cannot cancel order in current status');
     }
 
-    const result = await cancelLockedOrder(transaction, order, { reason: reason || null });
+    const result = await cancelLockedOrder(transaction, order, { reason: reason || null, by: 'customer' });
     await transaction.commit();
     notificationService.sweepSoon(); // hàng trả về kho: báo khách đang chờ có hàng
     return { orderId: result.orderId, status: result.status, paymentStatus: result.paymentStatus };
@@ -640,7 +672,7 @@ const updateOrderStatus = async (orderId, status, note, shipment = {}) => {
       if (!adminCancellableStatuses.includes(order.Status)) {
         throw createHttpError(422, `Cannot cancel order in status "${order.Status}"`);
       }
-      const result = await cancelLockedOrder(transaction, order, { reason: note || 'Admin huỷ đơn' });
+      const result = await cancelLockedOrder(transaction, order, { reason: note || 'Admin huỷ đơn', by: 'admin' });
       await notificationService.notify(transaction, {
         userId: order.UserID,
         type: 'order_status',
@@ -674,12 +706,21 @@ const updateOrderStatus = async (orderId, status, note, shipment = {}) => {
   // Cột Note là ghi chú của KHÁCH lúc đặt hàng: không ghi đè bằng ghi chú của admin.
   // ShippedAt/DeliveredAt ghi lần đầu đơn sang trạng thái đó; DeliveredAt là mốc tính hạn đổi trả,
   // nên bị xoá nếu admin chuyển đơn ra khỏi "đã giao" (vd. bấm nhầm).
+  // Đổi trạng thái và ghi lịch sử trong một transaction (một batch): lịch sử luôn khớp với đơn.
   const result = await new sql.Request(getPool())
     .input('orderId', sql.Int, Number(orderId))
     .input('status', sql.NVarChar, status)
     .input('carrier', sql.NVarChar(50), carrier)
     .input('trackingCode', sql.NVarChar(60), trackingCode)
+    .input('note', sql.NVarChar(500), note ? String(note).slice(0, 500) : null)
     .query(`
+      SET XACT_ABORT ON;
+      BEGIN TRANSACTION;
+      DECLARE @changed TABLE (
+        id INT, status NVARCHAR(50), updatedAt DATETIME2, userId INT, orderCode NVARCHAR(30),
+        carrier NVARCHAR(50), trackingCode NVARCHAR(60),
+        previousStatus NVARCHAR(50), previousCarrier NVARCHAR(50), previousTrackingCode NVARCHAR(60)
+      );
       UPDATE Orders
       SET Status = @status,
           ShippingCarrier = CASE WHEN @status = N'shipped' AND @carrier IS NOT NULL THEN @carrier ELSE ShippingCarrier END,
@@ -688,17 +729,15 @@ const updateOrderStatus = async (orderId, status, note, shipment = {}) => {
           DeliveredAt = CASE WHEN @status = N'delivered' THEN COALESCE(DeliveredAt, SYSDATETIME()) ELSE NULL END,
           UpdatedAt = GETDATE()
       OUTPUT
-        INSERTED.OrderID AS id,
-        INSERTED.Status AS status,
-        INSERTED.UpdatedAt AS updatedAt,
-        INSERTED.UserID AS userId,
-        INSERTED.OrderCode AS orderCode,
-        INSERTED.ShippingCarrier AS carrier,
-        INSERTED.TrackingCode AS trackingCode,
-        DELETED.Status AS previousStatus,
-        DELETED.ShippingCarrier AS previousCarrier,
-        DELETED.TrackingCode AS previousTrackingCode
-      WHERE OrderID = @orderId AND Status <> 'cancelled'
+        INSERTED.OrderID, INSERTED.Status, INSERTED.UpdatedAt, INSERTED.UserID, INSERTED.OrderCode,
+        INSERTED.ShippingCarrier, INSERTED.TrackingCode,
+        DELETED.Status, DELETED.ShippingCarrier, DELETED.TrackingCode
+      INTO @changed
+      WHERE OrderID = @orderId AND Status <> 'cancelled';
+      INSERT INTO OrderStatusHistory (OrderID, FromStatus, ToStatus, ChangedBy, Note)
+      SELECT id, previousStatus, status, N'admin', @note FROM @changed WHERE previousStatus <> status;
+      COMMIT TRANSACTION;
+      SELECT * FROM @changed;
     `);
 
   const updatedOrder = result.recordset[0];
@@ -857,6 +896,9 @@ const applyVNPayResult = async ({ txnRef, responseCode, transactionStatus, amoun
               UpdatedAt = GETDATE()
           WHERE OrderID = @orderId
         `);
+      if (orderStatus !== order.Status) {
+        await recordStatusChange(transaction, { orderId: base.orderId, from: order.Status, to: orderStatus, by: 'payment', note: 'Thanh toán VNPay thành công' });
+      }
 
       await transaction.commit();
       if (paymentStatus === 'refund_required') {
@@ -871,6 +913,7 @@ const applyVNPayResult = async ({ txnRef, responseCode, transactionStatus, amoun
       const result = await cancelLockedOrder(transaction, order, {
         reason: `Thanh toán VNPay không thành công (mã ${responseCode})`,
         paymentStatus: 'failed',
+        by: 'payment',
       });
       await transaction.commit();
       return { ...base, code: '00', paymentStatus: result.paymentStatus, orderStatus: result.status };
@@ -932,6 +975,7 @@ const expireStalePayments = async (expireMinutes = config.payment.expireMinutes)
       await cancelLockedOrder(transaction, order, {
         reason: `Quá hạn thanh toán ${expireMinutes} phút`,
         paymentStatus: 'expired',
+        by: 'system',
       });
       await transaction.commit();
       expired += 1;

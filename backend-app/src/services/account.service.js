@@ -90,11 +90,16 @@ const exportMyData = async (userId) => {
       JOIN ReturnRequests r ON r.ReturnID = ri.ReturnID
       JOIN Products p ON p.ProductID = ri.ProductID
       WHERE r.UserID = @userId;
+
+      SELECT h.OrderID, h.FromStatus, h.ToStatus, h.ChangedBy, h.Note, h.ChangedAt
+      FROM OrderStatusHistory h JOIN Orders o ON o.OrderID = h.OrderID
+      WHERE o.UserID = @userId ORDER BY h.HistoryID;
     `);
 
   const [
     users, orders, orderItems, cart, quotes, warranties, vouchers,
     serviceRequests = [], priceWatches = [], stockWatches = [], questions = [], notifications = [], returns = [], returnItems = [],
+    statusHistory = [],
   ] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
@@ -122,6 +127,7 @@ const exportMyData = async (userId) => {
       ...order,
       ShippingAddress: parseJson(order.ShippingAddress),
       items: orderItems.filter((item) => item.OrderID === order.OrderID),
+      statusHistory: statusHistory.filter((item) => item.OrderID === order.OrderID).map(({ OrderID, ...item }) => item),
     })),
     cart,
     buildQuotes: quotes.map((quote) => ({ ...quote, ItemsJson: undefined, items: parseJson(quote.ItemsJson) })),

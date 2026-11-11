@@ -114,6 +114,7 @@ test.after(async () => {
       DELETE FROM CartItems WHERE UserID = @userId;
       DELETE ci FROM CartItems ci JOIN Products p ON p.ProductID = ci.ProductID WHERE p.Slug LIKE @slugLike;
       DELETE vu FROM VoucherUsages vu JOIN Orders o ON o.OrderID = vu.OrderID WHERE o.UserID = @userId;
+      DELETE FROM Notifications WHERE UserID = @userId;
       DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID = @userId;
       DELETE FROM Orders WHERE UserID = @userId;
       DELETE ph FROM PriceHistory ph JOIN Products p ON p.ProductID = ph.ProductID WHERE p.Slug LIKE @slugLike;
@@ -187,6 +188,34 @@ test('huỷ đơn hoàn kho và trả lượt voucher', async () => {
   assert.equal(await readStock(productId), 3);
   assert.deepEqual(await readVoucherUsage(voucherId), { UsedCount: 0, Usages: 0 });
   assert.equal((await readOrder(created.orderId)).Status, 'cancelled');
+});
+
+test('lịch sử trạng thái: đủ các bước theo thứ tự, ai đổi; ghi chú nội bộ chỉ admin thấy, lý do huỷ khách thấy', async () => {
+  const productId = await createProduct({ stock: 5, price: 1000000 });
+  const created = await orderService.createOrder(ctx.userId, { shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
+  await orderService.updateOrderStatus(created.orderId, 'confirmed', 'Đã gọi khách xác nhận');
+  await orderService.updateOrderStatus(created.orderId, 'confirmed', 'Bấm lại lần nữa');
+  await orderService.updateOrderStatus(created.orderId, 'shipped', null, { carrier: 'GHN', trackingCode: 'GHN123456' });
+  await orderService.updateOrderStatus(created.orderId, 'delivered');
+
+  const asAdmin = await orderService.getOrderById(created.orderId);
+  assert.deepEqual(
+    asAdmin.history.map((item) => [item.from, item.status, item.by]),
+    [[null, 'pending', 'customer'], ['pending', 'confirmed', 'admin'], ['confirmed', 'shipped', 'admin'], ['shipped', 'delivered', 'admin']],
+    'bấm lại cùng trạng thái không ghi thêm dòng',
+  );
+  assert.equal(asAdmin.history[1].note, 'Đã gọi khách xác nhận');
+  assert.ok(asAdmin.history.every((item, index, list) => index === 0 || new Date(item.at) >= new Date(list[index - 1].at)));
+  const asCustomer = await orderService.getOrderById(created.orderId, ctx.userId);
+  assert.equal(asCustomer.history.length, 4);
+  assert.equal(asCustomer.history[1].note, null, 'ghi chú nội bộ của admin không lộ cho khách');
+
+  const other = await orderService.createOrder(ctx.userId, { shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
+  await orderService.cancelOrder(other.orderId, ctx.userId, 'Đặt nhầm');
+  const last = (await orderService.getOrderById(other.orderId, ctx.userId)).history.at(-1);
+  assert.deepEqual([last.from, last.status, last.by, last.note], ['pending', 'cancelled', 'customer', 'Đặt nhầm']);
+  await assert.rejects(orderService.updateOrderStatus(other.orderId, 'confirmed', 'thử mở lại'), (err) => err.status === 422);
+  assert.equal((await orderService.getOrderById(other.orderId)).history.length, 2, 'đổi trạng thái bị từ chối thì không ghi lịch sử');
 });
 
 test('VNPay: sai số tiền → 04; đúng → 00; gọi lại → 02', async () => {
