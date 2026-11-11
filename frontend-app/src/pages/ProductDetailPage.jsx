@@ -227,7 +227,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
               <li key={review._id} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <strong className="text-slate-900">{review.title}</strong>
-                  <span className="text-amber-600">{review.rating}/5</span>
+                  <span className="font-semibold text-amber-700">{review.rating}/5</span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{review.content}</p>
                 <p className="mt-2 text-xs text-slate-500">{formatDateTime(review.createdAt)}</p>

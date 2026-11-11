@@ -47,7 +47,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
             {isLogin ? '🔓 Đăng nhập' : '✨ Đăng ký'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Đóng"
             className="rounded-xl bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
           >
             <StoreGlyph name="close" className="size-5" />

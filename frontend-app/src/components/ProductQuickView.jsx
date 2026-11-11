@@ -50,7 +50,7 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
                 <div className="flex items-end justify-between gap-4">
                   <div>
                     {product.oldPrice > product.price ? (
-                  <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
+                  <div className="text-sm text-slate-500 line-through">{formatCurrency(product.oldPrice)}</div>
                 ) : null}
                     <div className="text-3xl font-black text-red-600">{formatCurrency(product.price)}</div>
                   </div>
@@ -58,15 +58,15 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
                     Còn {product.stock} sản phẩm
                   </div>
                 </div>
-                <div className="mt-4 flex items-center gap-2 text-sm text-amber-500">
+                <div className="mt-4 flex items-center gap-2 text-sm text-slate-700">
                   {product.reviews > 0 ? (
                     <>
-                      <StoreGlyph name="star" className="size-4" />
+                      <StoreGlyph name="star" className="size-4 text-amber-500" />
                       <span className="font-bold">{product.rating.toFixed(1)}</span>
-                      <span className="text-slate-400">({product.reviews} đánh giá)</span>
+                      <span className="text-slate-500">({product.reviews} đánh giá)</span>
                     </>
                   ) : (
-                    <span className="text-slate-400">Chưa có đánh giá</span>
+                    <span className="text-slate-500">Chưa có đánh giá</span>
                   )}
                 </div>
               </div>

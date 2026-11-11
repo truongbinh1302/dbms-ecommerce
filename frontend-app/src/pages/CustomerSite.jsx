@@ -1035,7 +1035,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
           </div>
 
           {mobileCategoriesOpen ? (
-            <div className="mt-4 rounded-[30px] border border-white/10 bg-white/10 p-3 backdrop-blur-xl xl:hidden">
+            <div className="mt-4 rounded-[30px] border border-white/10 bg-red-700 p-3 xl:hidden">
               <div className="grid gap-2 sm:grid-cols-2">
                 {categories.map((category) => (
                   <button
