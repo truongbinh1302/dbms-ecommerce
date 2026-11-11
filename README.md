@@ -62,6 +62,10 @@ features and DBMS demonstrations.
   off topic); hidden reviews are not shown and not counted in the star rating,
   and the author is told why. The admin to-do list counts 1-2 star reviews
   still waiting for a reply.
+- Order progress and status history: every status change (order placed,
+  VNPay result, admin update, cancellation, payment expiry) is recorded with
+  who made it, in the same transaction as the change; the order page shows
+  the steps reached and the history, the admin drawer shows notes too.
 - Favorites (`#/yeu-thich`) with current price and stock, recently viewed
   products, and a page that recovers by itself when a new version is deployed
   while a tab is open (no blank screen).
@@ -210,6 +214,8 @@ requests at the same time (`npm run test:db`).
 | Supplier receipts | Lost stock updates | Products locked in `ProductID` order (same order as checkout, no deadlock); ledger row per change | many receipts for one product → all counted |
 | Account deletion during checkout | An open order on a deleted account | Both lock the `Users` row first | delete and order at once → no open order left |
 | VNPay IPN called twice | Order paid or stock restored twice | Order row locked; amount checked; repeated call answers `02` | wrong amount → 04, retry → 02 |
+| "Helpful" on a review | One person counted many times | Condition (`helpful_by` ≠ voter, not own review, visible) and increment in one MongoDB `findOneAndUpdate` | five clicks at once → one counted |
+| Order status and its history | History out of step with the order | Status `UPDATE … OUTPUT INTO` a table variable and the history `INSERT` in one transaction (no trigger: `OUTPUT` without `INTO` is not allowed on tables with triggers) | no-op and rejected updates add no row |
 | Price and stock alert sweeps | The same alert sent twice | `UPDATE … OUTPUT INTO` / `DELETE … OUTPUT INTO` and the notification insert in one transaction | sweep twice → one notification |
 
 The stock ledger keeps one more invariant: for every product, the sum of

@@ -934,13 +934,18 @@ Chi tiết đơn hàng.
         "unitPrice": 52990000
       }
     ],
-    "timeline": [
-      { "status": "pending", "timestamp": "2026-04-04T10:30:00Z", "note": "Đơn hàng được tạo" }
+    "history": [
+      { "from": null, "status": "pending", "by": "customer", "note": null, "at": "2026-04-04T10:30:00Z" },
+      { "from": "pending", "status": "confirmed", "by": "admin", "note": null, "at": "2026-04-04T11:02:00Z" }
     ],
     "createdAt": "2026-04-04T10:30:00Z"
   }
 }
 ```
+
+`history` lấy từ bảng `OrderStatusHistory` (migration `020`): mỗi lần đơn đổi trạng thái có một dòng, ghi trong cùng
+transaction với lệnh đổi trạng thái. `by` là `customer`, `admin`, `payment` (VNPay) hoặc `system` (quá hạn thanh toán).
+Khách chỉ thấy `note` của lần huỷ (lý do huỷ); admin thấy mọi ghi chú. Đơn có trước migration có một dòng trạng thái hiện tại.
 
 ---
 
