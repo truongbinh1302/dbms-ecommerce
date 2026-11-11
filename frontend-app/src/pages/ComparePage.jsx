@@ -6,24 +6,9 @@ import { removeCompare } from '../hooks/useCompare'
 import { formatCurrency } from '../utils/format'
 import { describePart } from '../utils/buildPc'
 import { mapApiProductToStoreProduct } from '../utils/productMapping'
+import { PART_ROWS } from '../utils/partSpecs'
 
 const CARD = 'rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]'
-const yesNo = (value) => (value === null || value === undefined ? null : value ? 'Có' : 'Không')
-const mm = (value) => (value ? `${value} mm` : null)
-const watts = (value) => (value ? `${value} W` : null)
-const capacity = (value) => (value ? (value >= 1000 ? `${value / 1000} TB` : `${value} GB`) : null)
-
-// Thông số so sánh theo loại linh kiện (từ bảng ComponentSpecs của Build PC).
-const PART_ROWS = {
-  cpu: [['Socket', (p) => p.socket], ['Công suất', (p) => watts(p.powerW)], ['Đồ hoạ tích hợp', (p) => yesNo(p.hasIntegratedGraphics)], ['Kèm tản nhiệt', (p) => yesNo(p.includesCooler)]],
-  mainboard: [['Socket', (p) => p.socket], ['Kích thước', (p) => p.formFactor], ['Loại RAM', (p) => p.memoryType], ['Số khe RAM', (p) => p.memorySlots], ['Số khe M.2', (p) => p.m2Slots]],
-  ram: [['Loại', (p) => p.memoryType], ['Dung lượng', (p) => capacity(p.capacityGB)], ['Số thanh', (p) => p.modules]],
-  gpu: [['VRAM', (p) => (p.vramGB ? `${p.vramGB} GB` : null)], ['Chiều dài', (p) => mm(p.lengthMm)], ['Công suất', (p) => watts(p.powerW)]],
-  storage: [['Dung lượng', (p) => capacity(p.capacityGB)], ['Chuẩn kết nối', (p) => p.storageInterface]],
-  psu: [['Công suất', (p) => watts(p.psuWatts)]],
-  case: [['Mainboard hỗ trợ', (p) => p.supportedFormFactors], ['Card dài tối đa', (p) => mm(p.maxGpuLengthMm)], ['Tản cao tối đa', (p) => mm(p.maxCoolerHeightMm)]],
-  cooler: [['Chiều cao', (p) => mm(p.heightMm)], ['Socket hỗ trợ', (p) => p.supportedSockets]],
-}
 
 function parseIds(value) {
   return [...new Set(String(value || '').split(',').map((item) => Number(item)).filter((id) => Number.isInteger(id) && id > 0))].slice(0, 3)

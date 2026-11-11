@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import StoreGlyph from '../components/StoreGlyph'
 import { fetchProduct } from '../api/client'
 import { formatCurrency } from '../utils/format'
@@ -14,6 +14,9 @@ import { toggleCompare, useCompareItems } from '../hooks/useCompare'
 import { hrefFor } from '../hooks/useHashRoute'
 import useCountdown, { formatClockTime, formatCountdown } from '../hooks/useCountdown'
 import useDocumentTitle from '../hooks/useDocumentTitle'
+
+// Thông số linh kiện Build PC: chỉ linh kiện mới cần, tải riêng để trang sản phẩm khác không phải tải phần mã này.
+const PartSpecs = lazy(() => import('../components/PartSpecs'))
 
 // Hot Deal đang chạy: đếm ngược tới giờ kết thúc, số suất còn lại, giới hạn mỗi đơn.
 function PromotionNotice({ promotion }) {
@@ -195,6 +198,10 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
           <CompareToggle product={product} items={compareItems} />
         </div>
       </section>
+
+      <Suspense fallback={null}>
+        <PartSpecs productId={productId} />
+      </Suspense>
 
       <PriceHistory productId={productId} />
 
