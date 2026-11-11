@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { formatCurrency } from '../utils/format'
+import useStoreInfo from '../hooks/useStoreInfo'
 
 // Ô nhập mã giảm giá dùng chung cho giỏ hàng và trang thanh toán.
 export function VoucherField({ voucherCode, voucherError, onApply, disabled = false }) {
@@ -48,7 +49,7 @@ export function VoucherField({ voucherCode, voucherError, onApply, disabled = fa
           <span className={voucherError ? 'text-red-600' : 'text-emerald-700'}>
             {voucherError || `Đã áp dụng mã ${voucherCode}`}
           </span>
-          <button type="button" onClick={handleRemove} className="font-semibold text-slate-400 hover:text-red-600">
+          <button type="button" onClick={handleRemove} className="font-semibold text-slate-600 hover:text-red-600">
             Bỏ mã
           </button>
         </div>
@@ -65,6 +66,10 @@ function formatExpiry(value) {
 
 // Các dòng tạm tính / phí ship / giảm giá / tổng. Số liệu lấy từ API báo giá của server.
 export default function PriceSummary({ subtotal, quote, quoteError, onClearPriceLock }) {
+  const storeInfo = useStoreInfo()
+  // Miễn phí giao theo cùng ngưỡng server dùng để tính (tạm tính >= freeThreshold).
+  const freeThreshold = Number(storeInfo?.shipping?.freeThreshold || 0)
+  const toFreeShipping = quote && quote.shippingFee > 0 && freeThreshold > quote.subtotal ? freeThreshold - quote.subtotal : 0
   const stockIssues = quote?.issues?.filter((issue) => issue.issue === 'insufficient_stock') || []
   const lockedLines = quote?.items?.filter((line) => line.priceLocked) || []
   const lockSaving = lockedLines.reduce((sum, line) => sum + (line.listPrice - line.unitPrice) * line.quantity, 0)
@@ -82,6 +87,9 @@ export default function PriceSummary({ subtotal, quote, quoteError, onClearPrice
             {!quote ? 'Tính khi đặt hàng' : quote.shippingFee === 0 ? 'Miễn phí' : formatCurrency(quote.shippingFee)}
           </strong>
         </div>
+        {toFreeShipping > 0 ? (
+          <p className="text-xs text-slate-500">Mua thêm {formatCurrency(toFreeShipping)} để được miễn phí giao hàng.</p>
+        ) : null}
         {quote && quote.promoDiscount > 0 ? (
           <div className="flex items-center justify-between">
             <span>Ưu đãi theo giá trị đơn</span>

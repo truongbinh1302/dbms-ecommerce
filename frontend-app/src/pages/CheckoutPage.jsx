@@ -291,13 +291,13 @@ export default function CheckoutPage({
               <li key={item.id} className="flex justify-between gap-3 text-sm">
                 <span className="text-slate-700">
                   <a href={hrefFor(`/san-pham/${item.id}`)} className="hover:text-red-600">{item.name}</a>
-                  <span className="text-slate-400"> × {item.quantity}</span>
+                  <span className="text-slate-500"> × {item.quantity}</span>
                   {line?.promotion ? <span className="mt-0.5 block text-xs font-bold text-red-600">Hot Deal: {line.promotion.name}</span> : null}
                   {line?.promotionNote ? <span className="mt-0.5 block text-xs text-amber-700">{line.promotionNote}, tính giá thường</span> : null}
                 </span>
                 <span className="shrink-0 text-right font-semibold text-slate-900">
                   {line?.priceLocked || line?.promotion ? (
-                    <span className="block text-xs font-normal text-slate-400 line-through">{formatCurrency(line.listPrice * line.quantity)}</span>
+                    <span className="block text-xs font-normal text-slate-500 line-through">{formatCurrency(line.listPrice * line.quantity)}</span>
                   ) : null}
                   {formatCurrency(line ? line.lineTotal : item.price * item.quantity)}
                 </span>
@@ -372,7 +372,7 @@ function PaymentOption({ value, current, onChange, title, description }) {
         <input type="radio" name="payment-method" value={value} checked={selected} onChange={() => onChange(value)} />
         <span className="font-bold text-slate-900">{title}</span>
       </div>
-      <p className="mt-1 text-sm text-slate-500">{description}</p>
+      <p className="mt-1 text-sm text-slate-600">{description}</p>
     </label>
   )
 }
