@@ -11,6 +11,8 @@ const SORT_OPTIONS = [
   { value: 'relevance', label: 'Phù hợp nhất' },
   { value: 'price_asc', label: 'Giá thấp đến cao' },
   { value: 'price_desc', label: 'Giá cao đến thấp' },
+  { value: 'rating', label: 'Đánh giá cao' },
+  { value: 'newest', label: 'Mới về' },
 ]
 
 // Khoảng giá theo triệu đồng: "2-5" là 2–5 triệu, "20-" là từ 20 triệu.
