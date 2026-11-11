@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import StoreGlyph from './StoreGlyph'
 import { formatCurrency } from '../utils/format'
 
@@ -5,8 +6,10 @@ export default function CartDrawer({
   open,
   items,
   subtotal,
-  shippingFee,
-  discount,
+  quote = null,
+  quoteError = '',
+  voucherCode = '',
+  onApplyVoucher,
   paymentMethod,
   onPaymentMethodChange,
   onClose,
@@ -16,6 +19,28 @@ export default function CartDrawer({
   onCheckout,
   checkoutLoading = false,
 }) {
+  const [voucherInput, setVoucherInput] = useState('')
+
+  // Mọi con số dưới đây (trừ tạm tính khi chưa có báo giá) đều lấy từ API báo giá của server.
+  const voucherError = quote?.voucherError?.message || ''
+  const stockIssues = quote?.issues?.filter((issue) => issue.issue === 'insufficient_stock') || []
+  const totalToPay = quote ? quote.total : subtotal
+
+  function handleApplyVoucher(event) {
+    event.preventDefault()
+    const code = voucherInput.trim().toUpperCase()
+    if (code && onApplyVoucher) {
+      onApplyVoucher(code)
+    }
+  }
+
+  function handleRemoveVoucher() {
+    setVoucherInput('')
+    if (onApplyVoucher) {
+      onApplyVoucher('')
+    }
+  }
+
   return (
     <>
       <div
@@ -133,6 +158,35 @@ export default function CartDrawer({
 
         <div className="border-t border-slate-200 bg-slate-50 px-6 py-5">
           <div className="rounded-[28px] bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+            <form onSubmit={handleApplyVoucher} className="mb-4 flex gap-2">
+              <input
+                type="text"
+                value={voucherInput}
+                onChange={(event) => setVoucherInput(event.target.value)}
+                placeholder="Nhập mã giảm giá"
+                aria-label="Mã giảm giá"
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm uppercase outline-none focus:border-slate-400"
+              />
+              <button
+                type="submit"
+                disabled={!voucherInput.trim() || items.length === 0}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Áp dụng
+              </button>
+            </form>
+
+            {voucherCode ? (
+              <div className="mb-4 flex items-center justify-between text-sm">
+                <span className={voucherError ? 'text-red-600' : 'text-emerald-700'}>
+                  {voucherError ? voucherError : `Đã áp dụng mã ${voucherCode}`}
+                </span>
+                <button type="button" onClick={handleRemoveVoucher} className="font-semibold text-slate-400 hover:text-red-600">
+                  Bỏ mã
+                </button>
+              </div>
+            ) : null}
+
             <div className="space-y-3 text-sm text-slate-600">
               <div className="flex items-center justify-between">
                 <span>Tạm tính</span>
@@ -140,18 +194,38 @@ export default function CartDrawer({
               </div>
               <div className="flex items-center justify-between">
                 <span>Phí giao hàng</span>
-                <strong className="text-slate-900">{shippingFee === 0 ? 'Miễn phí' : formatCurrency(shippingFee)}</strong>
+                <strong className="text-slate-900">
+                  {!quote ? 'Tính khi đặt hàng' : quote.shippingFee === 0 ? 'Miễn phí' : formatCurrency(quote.shippingFee)}
+                </strong>
               </div>
-              <div className="flex items-center justify-between">
-                <span>Ưu đãi demo</span>
-                <strong className="text-emerald-600">-{formatCurrency(discount)}</strong>
-              </div>
+              {quote && quote.promoDiscount > 0 ? (
+                <div className="flex items-center justify-between">
+                  <span>Ưu đãi theo giá trị đơn</span>
+                  <strong className="text-emerald-600">-{formatCurrency(quote.promoDiscount)}</strong>
+                </div>
+              ) : null}
+              {quote && quote.voucherDiscount > 0 ? (
+                <div className="flex items-center justify-between">
+                  <span>Mã {quote.voucher?.code}</span>
+                  <strong className="text-emerald-600">-{formatCurrency(quote.voucherDiscount)}</strong>
+                </div>
+              ) : null}
             </div>
 
+            {stockIssues.length > 0 ? (
+              <p className="mt-3 text-sm text-red-600">
+                {stockIssues.map((issue) => `${issue.productName}: chỉ còn ${issue.availableStock}`).join('; ')}
+              </p>
+            ) : null}
+
+            {quoteError ? (
+              <p className="mt-3 text-sm text-amber-700">Chưa tính được phí ship và giảm giá: {quoteError}</p>
+            ) : null}
+
             <div className="mt-4 flex items-center justify-between border-t border-dashed border-slate-200 pt-4">
-              <span className="text-base font-semibold text-slate-700">Tổng thanh toán</span>
+              <span className="text-base font-semibold text-slate-700">{quote ? 'Tổng thanh toán' : 'Tạm tính'}</span>
               <span className="text-2xl font-black text-red-600">
-                {formatCurrency(Math.max(subtotal + shippingFee - discount, 0))}
+                {formatCurrency(totalToPay)}
               </span>
             </div>
 

@@ -3,17 +3,50 @@ require('dotenv').config();
 const sqlServerRaw = process.env.SQL_SERVER || 'localhost';
 const [sqlHost, sqlPortFromHost] = sqlServerRaw.split(',');
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+
+const toNumber = (value, fallback) => {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+// Ở môi trường dev, VNPay sandbox không gọi được IPN về localhost,
+// nên mặc định cho phép trang return cập nhật đơn. Production chỉ tin IPN.
+const updateOnReturn = process.env.VNPAY_UPDATE_ON_RETURN
+  ? process.env.VNPAY_UPDATE_ON_RETURN === 'true'
+  : nodeEnv !== 'production';
+
 module.exports = {
   port: Number(process.env.PORT || 3000),
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   vnpay: {
     tmnCode: process.env.VNPAY_TMN_CODE || '',
     hashSecret: process.env.VNPAY_HASH_SECRET || '',
     returnUrl: process.env.VNPAY_RETURN_URL || 'http://localhost:3000/api/v1/payments/vnpay/return',
     ipnUrl: process.env.VNPAY_IPN_URL || 'http://localhost:3000/api/v1/payments/vnpay/ipn',
     url: 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
+    linkExpireMinutes: 15,
+    updateOnReturn,
   },
-  
+
+  // Quy tắc tính tiền chỉ nằm ở server; frontend chỉ hiển thị kết quả từ API báo giá.
+  pricing: {
+    shippingFee: toNumber(process.env.SHIPPING_FEE, 30000),
+    freeShippingThreshold: toNumber(process.env.FREE_SHIPPING_THRESHOLD, 3000000),
+    // Ưu đãi tự động theo giá trị đơn, xếp từ mốc cao xuống thấp.
+    tierDiscounts: [
+      { minSubtotal: 30000000, amount: 500000 },
+      { minSubtotal: 10000000, amount: 200000 },
+    ],
+  },
+
+  payment: {
+    // Đơn VNPay chưa thanh toán sau ngần này phút sẽ tự huỷ và hoàn kho.
+    expireMinutes: toNumber(process.env.PAYMENT_EXPIRE_MINUTES, 30),
+    sweepIntervalMs: toNumber(process.env.PAYMENT_SWEEP_INTERVAL_MS, 60000),
+  },
+
   sql: {
     server: sqlHost,
     port: Number(process.env.SQL_PORT || sqlPortFromHost || 1433),

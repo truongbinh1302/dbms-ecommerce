@@ -4,13 +4,18 @@ const config = require('../config/env');
 
 const pad = (value, length = 2) => String(value).padStart(length, '0');
 
+// VNPay đọc vnp_CreateDate / vnp_ExpireDate theo giờ Việt Nam (GMT+7).
+// Định dạng theo GMT+7 cố định để server chạy ở múi giờ nào (ví dụ Docker UTC) cũng đúng.
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
 const formatDate = (date) => {
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  const hour = pad(date.getHours());
-  const minute = pad(date.getMinutes());
-  const second = pad(date.getSeconds());
+  const vn = new Date(date.getTime() + VN_OFFSET_MS);
+  const year = vn.getUTCFullYear();
+  const month = pad(vn.getUTCMonth() + 1);
+  const day = pad(vn.getUTCDate());
+  const hour = pad(vn.getUTCHours());
+  const minute = pad(vn.getUTCMinutes());
+  const second = pad(vn.getUTCSeconds());
 
   return `${year}${month}${day}${hour}${minute}${second}`;
 };
@@ -31,7 +36,14 @@ const buildHashString = (params) => {
   return cleanParams.join('&');
 };
 
-const createPaymentUrl = ({ orderId, amount, orderInfo, ipAddr }) => {
+const createPaymentUrl = ({
+  orderId,
+  amount,
+  orderInfo,
+  ipAddr,
+  expireMinutes = config.vnpay.linkExpireMinutes,
+  now = new Date(),
+}) => {
   if (
     !config.vnpay.tmnCode ||
     !config.vnpay.hashSecret ||
@@ -40,15 +52,16 @@ const createPaymentUrl = ({ orderId, amount, orderInfo, ipAddr }) => {
     throw new Error('VNPay configuration is incomplete');
   }
 
-  const txnRef = `${orderId}_${Date.now()}`;
-  const createDate = formatDate(new Date());
+  // Định dạng "<orderId>_<timestamp>": order.service dựa vào đây để tìm lại đơn khi nhận IPN.
+  const txnRef = `${orderId}_${now.getTime()}`;
+  const createDate = formatDate(now);
 
   const params = {
     vnp_Amount: String(Math.round(Number(amount) * 100)),
     vnp_Command: 'pay',
     vnp_CreateDate: createDate,
     vnp_CurrCode: 'VND',
-    vnp_ExpireDate: formatDate(new Date(Date.now() + 15 * 60 * 1000)),
+    vnp_ExpireDate: formatDate(new Date(now.getTime() + expireMinutes * 60 * 1000)),
     vnp_IpAddr: ipAddr || '127.0.0.1',
     vnp_Locale: 'vn',
     vnp_OrderInfo: orderInfo || `Thanh toan don hang ${orderId}`,
@@ -79,6 +92,11 @@ const createPaymentUrl = ({ orderId, amount, orderInfo, ipAddr }) => {
 
 const verifySecureHash = (payload = {}) => {
   const secureHash = String(payload.vnp_SecureHash || '').toLowerCase();
+
+  // Thiếu secret thì ai cũng tự ký được callback giả, nên coi như chữ ký sai.
+  if (!config.vnpay.hashSecret || !secureHash) {
+    return false;
+  }
 
   const raw = { ...payload };
   delete raw.vnp_SecureHash;

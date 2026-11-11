@@ -45,10 +45,10 @@ const deleteReview = async (req, res) => {
 
 const markHelpful = async (req, res) => {
   try {
-    const review = await reviewService.updateHelpfulCount(req.params.reviewId, 1);
+    const review = await reviewService.markHelpful(req.params.reviewId, req.user.id);
     return success(res, review, 'Review marked helpful');
   } catch (err) {
-    return error(res, err.message, 400);
+    return error(res, err.message, err.status || 400);
   }
 };
 

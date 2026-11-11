@@ -47,7 +47,9 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
               <div className="rounded-[28px] bg-slate-50 p-5">
                 <div className="flex items-end justify-between gap-4">
                   <div>
-                    <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
+                    {product.oldPrice > product.price ? (
+                  <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
+                ) : null}
                     <div className="text-3xl font-black text-red-600">{formatCurrency(product.price)}</div>
                   </div>
                   <div className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm">
