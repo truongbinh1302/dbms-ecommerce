@@ -87,6 +87,8 @@ const HERO_TARGETS = {
 }
 
 // Số liệu trên banner lấy từ cấu hình thật (/store/info); chưa tải xong thì dùng giá trị mặc định của server.
+const DEFAULT_HOTLINE = '0338446502'
+
 const DEFAULT_STORE_INFO = {
   shipping: { freeThreshold: 3000000, deliveryDaysLocal: '1–2', province: 'TP. Hồ Chí Minh' },
   returnDays: 7,
@@ -243,6 +245,8 @@ function mergeCarts(localCart, serverItems) {
 
 export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isAdmin, onUserChange }) {
   const storeInfo = useStoreInfo() || DEFAULT_STORE_INFO
+  // Hotline: số khai trong STORE_PHONE nếu có (cùng số với trang Chính sách và nút Zalo), không thì số mặc định.
+  const hotline = String(storeInfo.seller?.phone || DEFAULT_HOTLINE).trim()
   const topTier = biggestTier(storeInfo)
   const route = useHashRoute()
   const [runtimeProducts, setRuntimeProducts] = useState([])
@@ -896,8 +900,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3 text-slate-300">
-            <a href="tel:0338446502" className="hidden items-center gap-2 rounded-full bg-white/5 px-3 py-1.5 hover:bg-white/10 xl:inline-flex">
-              <StoreGlyph name="phone" className="size-4" /> Hotline 0338446502
+            <a href={`tel:${hotline.replace(/[^0-9+]/g, '')}`} className="hidden items-center gap-2 rounded-full bg-white/5 px-3 py-1.5 hover:bg-white/10 xl:inline-flex">
+              <StoreGlyph name="phone" className="size-4" /> Hotline {hotline}
             </a>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1.5">
               <StoreGlyph name="shield" className="size-4" /> Đổi trả {storeInfo.returnDays} ngày
@@ -1012,7 +1016,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
 
             <div className="storefront-actions">
               {/* Màn hình 1280–1535px không đủ chỗ: ẩn hotline/showroom để ô tìm kiếm không bị ép mất. */}
-              <HeaderAction icon="phone" label="Hotline" value="0338446502" className="header-action-wide" />
+              <HeaderAction icon="phone" label="Hotline" value={hotline} className="header-action-wide" />
               <HeaderAction icon="map" label="Showroom" value="0 điểm bán" className="header-action-wide" />
               {/* Đã đăng nhập thì khung chào đã có nút "Đơn hàng": ẩn nút này ở màn rộng để ô tìm kiếm đủ chỗ. */}
               <HeaderAction icon="receipt" label="Đơn hàng" value="Tra cứu" onClick={() => navigate('/don-hang')} className={currentUser ? 'header-action-wide' : ''} />
