@@ -832,61 +832,73 @@ const expireStalePayments = async (expireMinutes = config.payment.expireMinutes)
   return expired;
 };
 
-const getAdminOrders = async (status = null, page = 1, limit = 20) => {
+/**
+ * Danh sách đơn cho admin: lọc theo một hoặc nhiều trạng thái ("confirmed,shipped"),
+ * tìm theo mã đơn, số đơn, tên/email khách, tên/số điện thoại người nhận.
+ */
+const getAdminOrders = async (status = null, page = 1, limit = 20, q = '') => {
   const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
   const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 100);
   const offset = (pageNum - 1) * pageSize;
-  const statusCondition = status ? 'WHERE o.Status = @status' : '';
-  const request = new sql.Request(getPool());
-  if (status) {
-    request.input('status', sql.NVarChar, status);
+  const statuses = String(status || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (statuses.some((item) => !allowedStatuses.includes(item))) {
+    throw createHttpError(400, `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`);
   }
-  request.input('offset', sql.Int, offset);
-  request.input('limit', sql.Int, pageSize);
+  const keyword = String(q || '').trim().slice(0, 100);
 
-  const result = await request.query(`
-    SELECT
-      o.OrderID AS id,
-      o.Status AS status,
-      o.PaymentMethod AS paymentMethod,
-      o.PaymentStatus AS paymentStatus,
-      o.Total AS total,
-      o.CreatedAt AS createdAt,
-      u.FullName AS customerName,
-      u.Email AS customerEmail,
-      COUNT(oi.OrderItemID) AS itemCount,
-      COALESCE(
-        STRING_AGG(
-          CONVERT(NVARCHAR(MAX), CONCAT(p.Name, N' x', oi.Quantity)), N', '
-        ),
-        N'Không có sản phẩm'
-      ) AS itemsText
+  const where = `
+    WHERE (@statuses IS NULL OR o.Status IN (SELECT value FROM OPENJSON(@statuses)))
+      AND (@q IS NULL
+        OR o.OrderCode LIKE N'%' + @q + N'%'
+        OR CAST(o.OrderID AS NVARCHAR(12)) = @q
+        OR u.FullName COLLATE Latin1_General_CI_AI LIKE N'%' + @q + N'%'
+        OR u.Email LIKE N'%' + @q + N'%'
+        OR JSON_VALUE(o.ShippingAddress, '$.recipientName') COLLATE Latin1_General_CI_AI LIKE N'%' + @q + N'%'
+        OR JSON_VALUE(o.ShippingAddress, '$.phone') LIKE N'%' + @q + N'%')`;
+  const bind = (request) => request
+    .input('statuses', sql.NVarChar(sql.MAX), statuses.length ? JSON.stringify(statuses) : null)
+    .input('q', sql.NVarChar(100), keyword || null);
+
+  const result = await bind(new sql.Request(getPool()))
+    .input('offset', sql.Int, offset)
+    .input('limit', sql.Int, pageSize)
+    .query(`
+      SELECT
+        o.OrderID AS id,
+        o.OrderCode AS orderCode,
+        o.Status AS status,
+        o.PaymentMethod AS paymentMethod,
+        o.PaymentStatus AS paymentStatus,
+        o.Total AS total,
+        o.CreatedAt AS createdAt,
+        u.FullName AS customerName,
+        u.Email AS customerEmail,
+        JSON_VALUE(o.ShippingAddress, '$.recipientName') AS recipientName,
+        JSON_VALUE(o.ShippingAddress, '$.phone') AS recipientPhone,
+        JSON_VALUE(o.ShippingAddress, '$.province') AS province,
+        items.ItemCount AS itemCount,
+        COALESCE(items.ItemsText, N'Không có sản phẩm') AS itemsText
+      FROM Orders o
+      JOIN Users u ON o.UserID = u.UserID
+      OUTER APPLY (
+        SELECT COUNT(*) AS ItemCount,
+               STRING_AGG(CONVERT(NVARCHAR(MAX), CONCAT(p.Name, N' x', oi.Quantity)), N', ') AS ItemsText
+        FROM OrderItems oi JOIN Products p ON oi.ProductID = p.ProductID
+        WHERE oi.OrderID = o.OrderID
+      ) items
+      ${where}
+      ORDER BY o.CreatedAt DESC, o.OrderID DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+
+  const countResult = await bind(new sql.Request(getPool())).query(`
+    SELECT COUNT(*) AS total
     FROM Orders o
     JOIN Users u ON o.UserID = u.UserID
-    LEFT JOIN OrderItems oi ON o.OrderID = oi.OrderID
-    LEFT JOIN Products p ON oi.ProductID = p.ProductID
-    ${statusCondition}
-    GROUP BY
-      o.OrderID,
-      o.Status,
-      o.PaymentMethod,
-      o.PaymentStatus,
-      o.Total,
-      o.CreatedAt,
-      u.FullName,
-      u.Email
-    ORDER BY o.CreatedAt DESC
-    OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-  `);
-
-  const countRequest = new sql.Request(getPool());
-  if (status) {
-    countRequest.input('status', sql.NVarChar, status);
-  }
-  const countResult = await countRequest.query(`
-    SELECT COUNT(*) AS total
-    FROM Orders
-    ${status ? 'WHERE Status = @status' : ''}
+    ${where}
   `);
 
   const totalItems = Number(countResult.recordset[0]?.total || 0);

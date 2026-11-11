@@ -142,3 +142,9 @@ svg {
     width: min(100%, 700px);
   }
 }
+/* In phiếu giao hàng từ trang quản trị: chỉ in khung chi tiết đơn (OrderDetailDrawer). */
+@media print {
+  body.print-order-slip #root {
+    display: none;
+  }
+}

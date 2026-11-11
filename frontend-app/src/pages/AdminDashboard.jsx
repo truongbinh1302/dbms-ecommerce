@@ -6,6 +6,7 @@ import InventoryPanel from '../components/admin/InventoryPanel'
 import PromotionsPanel from '../components/admin/PromotionsPanel'
 import ServiceRequestsPanel from '../components/admin/ServiceRequestsPanel'
 import useDocumentTitle from '../hooks/useDocumentTitle'
+import OrderDetailDrawer from '../components/admin/OrderDetailDrawer'
 import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
 import { formatCurrency, formatCompactNumber } from '../utils/format'
 
@@ -71,6 +72,9 @@ function normalizeAdminOrder(order) {
     statusRaw: rawStatus,
     status: orderStatusLabels[rawStatus] ?? rawStatus,
     createdAt: order.createdAt ?? order.CreatedAt,
+    code: order.orderCode || `#${id}`,
+    recipient: [order.recipientName, order.recipientPhone].filter(Boolean).join(' · '),
+    paymentStatus: order.paymentStatus || '',
   }
 }
 
@@ -80,6 +84,10 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState('')
   const [updatingOrderId, setUpdatingOrderId] = useState(null)
+  const [orderFilter, setOrderFilter] = useState({ status: '', q: '', page: 1 })
+  const [orderSearch, setOrderSearch] = useState('')
+  const [ordersTotal, setOrdersTotal] = useState({ items: 0, pages: 0 })
+  const [openOrderId, setOpenOrderId] = useState(null)
   const [overview, setOverview] = useState({ dashboard: null, today: null, yesterday: null, error: '', updatedAt: null })
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -131,18 +139,29 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
       setOrdersError('')
       const result = await fetchAdminOrders(
         {
-          page: 1,
+          page: orderFilter.page,
           limit: 20,
+          status: orderFilter.status,
+          q: orderFilter.q,
         },
         token,
       )
       setOrders(Array.isArray(result.items) ? result.items : [])
+      setOrdersTotal({ items: Number(result.pagination?.totalItems || 0), pages: Number(result.pagination?.totalPages || 0) })
     } catch (err) {
       setOrdersError(err.message || 'Không tải được danh sách đơn hàng.')
     } finally {
       setOrdersLoading(false)
     }
-  }, [token])
+  }, [token, orderFilter])
+
+  // Gõ tìm kiếm: chờ 350ms sau lần gõ cuối rồi mới lọc lại (về trang 1).
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setOrderFilter((current) => (current.q === orderSearch.trim() ? current : { ...current, q: orderSearch.trim(), page: 1 }))
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [orderSearch])
 
   useEffect(() => {
     loadOrders()
@@ -328,9 +347,9 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-2xl font-black">Đơn hàng gần đây</h3>
+                <h3 className="text-2xl font-black">Đơn hàng</h3>
                 <p className="text-sm text-slate-400">
-                  Dữ liệu lấy trực tiếp từ bảng Orders trong SQL Server
+                  Bấm vào một đơn để xem địa chỉ giao, sản phẩm và in phiếu giao hàng
                 </p>
               </div>
 
@@ -344,9 +363,32 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                   {ordersLoading ? 'Đang tải...' : 'Làm mới'}
                 </button>
                 <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200">
-                  {formatCompactNumber(displayOrders.length)} đơn hiển thị
+                  {ordersTotal.items.toLocaleString('vi-VN')} đơn
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <input
+                type="search"
+                value={orderSearch}
+                onChange={(event) => setOrderSearch(event.target.value)}
+                placeholder="Tìm mã đơn, tên, email, số điện thoại"
+                aria-label="Tìm đơn hàng"
+                className="min-w-0 flex-1 rounded-full border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none focus:border-white/40"
+              />
+              <select
+                value={orderFilter.status}
+                onChange={(event) => setOrderFilter((current) => ({ ...current, status: event.target.value, page: 1 }))}
+                aria-label="Lọc theo trạng thái"
+                className="rounded-full border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white"
+              >
+                <option value="">Mọi trạng thái</option>
+                <option value="pending,pending_payment,confirmed,processing">Cần xử lý</option>
+                {orderStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>{status.label}</option>
+                ))}
+              </select>
             </div>
 
             {ordersError ? (
@@ -383,8 +425,16 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                     className="grid gap-3 px-4 py-4 lg:grid-cols-[1.1fr_1.3fr_0.8fr_0.7fr_0.9fr] lg:items-center"
                   >
                     <div>
-                      <p className="font-bold text-white">{order.customer}</p>
-                      <p className="text-sm text-slate-400">#{order.id}</p>
+                      <button
+                        type="button"
+                        onClick={() => setOpenOrderId(order.id)}
+                        className="text-left font-bold text-white underline-offset-2 hover:underline"
+                        aria-label={`Xem chi tiết đơn ${order.code}`}
+                      >
+                        {order.customer}
+                      </button>
+                      <p className="text-sm text-slate-400">{order.code}</p>
+                      {order.recipient ? <p className="text-xs text-slate-400">{order.recipient}</p> : null}
                     </div>
                     <div className="text-sm leading-6 text-slate-300">
                       {order.item}
@@ -414,10 +464,33 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                 ))}
               </div>
             </div>
+
+            {ordersTotal.pages > 1 ? (
+              <div className="mt-4 flex items-center justify-between text-sm text-slate-300">
+                <button
+                  type="button"
+                  disabled={orderFilter.page <= 1}
+                  onClick={() => setOrderFilter((current) => ({ ...current, page: current.page - 1 }))}
+                  className="rounded-full bg-white/10 px-4 py-2 font-bold text-white hover:bg-white/20 disabled:opacity-40"
+                >
+                  Trang trước
+                </button>
+                <span>Trang {orderFilter.page}/{ordersTotal.pages}</span>
+                <button
+                  type="button"
+                  disabled={orderFilter.page >= ordersTotal.pages}
+                  onClick={() => setOrderFilter((current) => ({ ...current, page: current.page + 1 }))}
+                  className="rounded-full bg-white/10 px-4 py-2 font-bold text-white hover:bg-white/20 disabled:opacity-40"
+                >
+                  Trang sau
+                </button>
+              </div>
+            ) : null}
+            {openOrderId ? <OrderDetailDrawer orderId={openOrderId} onClose={() => setOpenOrderId(null)} /> : null}
           </div>
 
           <div className="space-y-6">
-            <WarrantyRegistration token={token} orders={displayOrders} />
+            <WarrantyRegistration token={token} />
 
             <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
               <h3 className="text-2xl font-black">Bán chạy nhất</h3>
@@ -469,8 +542,20 @@ const WARRANTY_STATUSES = ['confirmed', 'processing', 'shipped', 'delivered']
 const FIELD = 'w-full rounded-2xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-white/40'
 
 // Đăng ký số serial bảo hành cho sản phẩm trong đơn đã xác nhận (server kiểm tra lại toàn bộ).
-function WarrantyRegistration({ token, orders }) {
-  const eligible = orders.filter((order) => WARRANTY_STATUSES.includes(order.statusRaw))
+// Tự tải các đơn đủ điều kiện đăng ký bảo hành (không phụ thuộc bộ lọc của danh sách đơn).
+function WarrantyRegistration({ token }) {
+  const [eligibleState, setEligibleState] = useState([])
+  useEffect(() => {
+    if (!token) return undefined
+    let cancelled = false
+    fetchAdminOrders({ status: WARRANTY_STATUSES.join(','), limit: 50 }, token)
+      .then((result) => !cancelled && setEligibleState((result.items || []).map(normalizeAdminOrder)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+  const eligible = eligibleState
   const [orderId, setOrderId] = useState('')
   const [detail, setDetail] = useState({ orderId: null, items: [], error: '' })
   const [form, setForm] = useState({ productId: '', serialNumber: '', months: '36' })

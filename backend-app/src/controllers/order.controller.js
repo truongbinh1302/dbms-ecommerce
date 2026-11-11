@@ -30,10 +30,11 @@ const getUserOrders = async (req, res) => {
 
 const getAdminOrders = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
-    const result = await orderService.getAdminOrders(status, page, limit);
+    const { status, page = 1, limit = 20, q = '' } = req.query;
+    const result = await orderService.getAdminOrders(status, page, limit, q);
     return success(res, result, 'Admin orders retrieved successfully');
   } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
     return error(res, err.message);
   }
 };

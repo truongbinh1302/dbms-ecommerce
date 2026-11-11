@@ -980,9 +980,26 @@ const CANCELLABLE_STATUSES = ['pending', 'pending_payment', 'confirmed']
 
 ---
 
-### PATCH `/admin/orders/:id/status`
+### GET `/orders/admin`
 
-Admin cập nhật trạng thái đơn hàng.
+Danh sách đơn cho admin, mới nhất trước.
+
+**Auth:** admin
+
+**Query:**
+- `status` — một hoặc nhiều trạng thái, cách nhau bằng dấu phẩy (`pending,pending_payment,confirmed,processing` là nhóm "Cần xử lý" trên dashboard). Trạng thái lạ → `400`.
+- `q` — tìm theo mã đơn (`DH000123`), số đơn, tên/email khách, tên hoặc số điện thoại người nhận. Tên tìm không phân biệt dấu (`khach hoa` khớp "Khách Hoá").
+- `page`, `limit` (tối đa 100).
+
+**Response 200:** `data.items[]` gồm `id`, `orderCode`, `status`, `paymentMethod`, `paymentStatus`, `total`, `createdAt`, `customerName`, `customerEmail`, `recipientName`, `recipientPhone`, `province`, `itemCount`, `itemsText`; kèm `data.pagination { page, limit, totalItems, totalPages }`.
+
+Chi tiết một đơn (địa chỉ giao, ghi chú khách, sản phẩm, serial bảo hành) dùng chung `GET /orders/:id` — admin xem được mọi đơn. Dashboard có nút "In phiếu giao hàng" in từ dữ liệu này.
+
+---
+
+### PATCH `/orders/admin/:id/status`
+
+Admin cập nhật trạng thái đơn hàng. Ghi chú của admin vào lịch sử trạng thái, không ghi đè ghi chú của khách; khách nhận thông báo trong tài khoản.
 
 **Auth:** admin
 
