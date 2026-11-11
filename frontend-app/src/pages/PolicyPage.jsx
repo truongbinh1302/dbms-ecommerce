@@ -201,8 +201,14 @@ const POLICIES = [
         </Section>
         <Section title="Cách yêu cầu">
           <p>
-            Liên hệ cửa hàng ({contactLine(info)}) và cho biết mã đơn, sản phẩm, mô tả lỗi kèm ảnh hoặc video nếu có.
-            Cửa hàng phản hồi trong {info.complaintResponseDays} ngày làm việc. Tiền được hoàn theo Chính sách thanh toán.
+            Mở đơn hàng trong mục{' '}
+            <a href={hrefFor('/don-hang')} className="font-semibold text-red-600 underline">Đơn hàng của tôi</a>, bấm
+            “Yêu cầu đổi trả”, chọn sản phẩm, lý do và mô tả tình trạng. Bạn theo dõi được từng bước (duyệt, cửa hàng nhận hàng, hoàn tất)
+            ngay trên trang đơn và trong thông báo tài khoản. Có thể liên hệ trực tiếp ({contactLine(info)}) nếu cần gửi ảnh hoặc video.
+          </p>
+          <p>
+            Cửa hàng phản hồi trong {info.complaintResponseDays} ngày làm việc. Tiền được hoàn theo Chính sách thanh toán,
+            không vượt số tiền bạn đã trả cho đơn. Quá {info.returnDays} ngày, sản phẩm lỗi vẫn được bảo hành theo serial.
           </p>
         </Section>
       </>

@@ -19,6 +19,8 @@ const REASON_LABELS = {
   sale: 'Bán',
   cancel: 'Huỷ đơn, trả kho',
   adjust: 'Điều chỉnh',
+  return: 'Hàng trả về',
+  exchange: 'Xuất đổi hàng',
 }
 
 let lineSeq = 0

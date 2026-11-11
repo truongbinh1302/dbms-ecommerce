@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { fetchOrder } from '../../api/client'
+import { fetchOrder, updateAdminOrderStatus } from '../../api/client'
 import { formatCurrency } from '../../utils/format'
-import { formatAddress, formatDateTime } from '../../utils/orderLabels'
+import { RETURN_KIND_LABELS, RETURN_STATUS_LABELS, formatAddress, formatDateTime } from '../../utils/orderLabels'
 
 const STATUS_LABELS = {
   pending: 'Chờ xử lý',
@@ -21,20 +21,67 @@ const PAYMENT_LABELS = {
   refunded: 'Đã hoàn tiền',
 }
 
+const CARRIERS = ['Giao Hàng Nhanh (GHN)', 'Giao Hàng Tiết Kiệm (GHTK)', 'Viettel Post', 'J&T Express', 'VNPost', 'Ahamove', 'Cửa hàng tự giao']
+const SHIPPABLE = ['confirmed', 'processing', 'shipped']
+
+/* Giao cho đơn vị vận chuyển: lưu tên đơn vị và mã vận đơn, khách được báo kèm mã để tra cứu. */
+function ShipmentForm({ order, token, onSaved }) {
+  const [draft, setDraft] = useState(null)
+  const [state, setState] = useState({ busy: false, error: '' })
+  const form = draft ?? { carrier: order.shippingCarrier || '', trackingCode: order.trackingCode || '' }
+  const alreadyShipped = order.Status === 'shipped'
+
+  async function submit(event) {
+    event.preventDefault()
+    setState({ busy: true, error: '' })
+    try {
+      await updateAdminOrderStatus(order.id, 'shipped', undefined, token, form)
+      setDraft(null)
+      setState({ busy: false, error: '' })
+      onSaved()
+    } catch (err) {
+      setState({ busy: false, error: err.message || 'Không cập nhật được' })
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="rounded-2xl border border-slate-200 p-3 print:hidden">
+      <h4 className="font-black text-slate-900">{alreadyShipped ? 'Mã vận đơn' : 'Giao cho đơn vị vận chuyển'}</h4>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <label className="text-xs font-semibold text-slate-600">
+          Đơn vị vận chuyển
+          <input list="carrier-options" value={form.carrier} maxLength={50} onChange={(event) => setDraft({ ...form, carrier: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
+        </label>
+        <label className="text-xs font-semibold text-slate-600">
+          Mã vận đơn
+          <input value={form.trackingCode} maxLength={60} onChange={(event) => setDraft({ ...form, trackingCode: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm font-normal text-slate-900" />
+        </label>
+      </div>
+      <datalist id="carrier-options">{CARRIERS.map((name) => <option key={name} value={name} />)}</datalist>
+      {state.error ? <p className="mt-2 text-xs font-semibold text-red-700" role="alert">{state.error}</p> : null}
+      <button type="submit" disabled={state.busy || (alreadyShipped && !form.carrier.trim())} className="mt-2 rounded-xl bg-slate-900 px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
+        {alreadyShipped ? 'Cập nhật mã vận đơn' : 'Chuyển sang Đang giao'}
+      </button>
+    </form>
+  )
+}
+
 /* Chi tiết một đơn cho admin: địa chỉ giao, sản phẩm, tiền, ghi chú khách, serial; in phiếu giao hàng. */
-export default function OrderDetailDrawer({ orderId, onClose }) {
-  const [state, setState] = useState({ id: null, order: null, error: '' })
+export default function OrderDetailDrawer({ orderId, token, onChanged, onClose }) {
+  const [state, setState] = useState({ key: null, order: null, error: '' })
+  const [version, setVersion] = useState(0)
   const closeButton = useRef(null)
+  const key = `${orderId}:${version}`
 
   useEffect(() => {
     let cancelled = false
     fetchOrder(orderId)
-      .then((order) => !cancelled && setState({ id: orderId, order, error: '' }))
-      .catch((err) => !cancelled && setState({ id: orderId, order: null, error: err.message || 'Không tải được đơn' }))
+      .then((order) => !cancelled && setState({ key, order, error: '' }))
+      .catch((err) => !cancelled && setState({ key, order: null, error: err.message || 'Không tải được đơn' }))
     return () => {
       cancelled = true
     }
-  }, [orderId])
+  }, [orderId, key])
 
   // In phiếu: drawer nằm ngoài #root (portal), khi in thì ẩn #root để chỉ in phiếu giao hàng.
   useEffect(() => {
@@ -51,7 +98,8 @@ export default function OrderDetailDrawer({ orderId, onClose }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const order = state.id === orderId ? state.order : null
+  // Giữ đơn đang xem trong lúc tải lại sau khi cập nhật.
+  const order = state.order && Number(state.order.id) === Number(orderId) ? state.order : null
   const address = order?.shippingAddress || null
   const totalLabel = order?.PaymentStatus === 'paid'
     ? 'Đã thanh toán'
@@ -73,7 +121,7 @@ export default function OrderDetailDrawer({ orderId, onClose }) {
           </div>
         </div>
 
-        {state.error && state.id === orderId ? <p className="mt-4 text-sm font-semibold text-red-700">{state.error}</p> : null}
+        {state.error && state.key === key ? <p className="mt-4 text-sm font-semibold text-red-700">{state.error}</p> : null}
         {!order && !state.error ? <p className="mt-4 text-sm text-slate-500">Đang tải...</p> : null}
 
         {order ? (
@@ -90,7 +138,31 @@ export default function OrderDetailDrawer({ orderId, onClose }) {
               <dd>{String(order.PaymentMethod || '').toUpperCase()} · {PAYMENT_LABELS[order.PaymentStatus] || order.PaymentStatus}</dd>
               <dt className="text-slate-500">Đặt lúc</dt>
               <dd>{formatDateTime(order.CreatedAt)}</dd>
+              {order.shippingCarrier ? (
+                <>
+                  <dt className="text-slate-500">Vận chuyển</dt>
+                  <dd>{order.shippingCarrier}{order.trackingCode ? <> · <span className="font-mono">{order.trackingCode}</span></> : null}</dd>
+                </>
+              ) : null}
+              {order.deliveredAt ? (
+                <>
+                  <dt className="text-slate-500">Đã giao</dt>
+                  <dd>{formatDateTime(order.deliveredAt)}</dd>
+                </>
+              ) : null}
             </dl>
+
+            {SHIPPABLE.includes(order.Status) && token ? (
+              <ShipmentForm
+                key={`${order.id}:${order.Status}:${order.trackingCode || ''}`}
+                order={order}
+                token={token}
+                onSaved={() => {
+                  setVersion((value) => value + 1)
+                  onChanged?.()
+                }}
+              />
+            ) : null}
 
             <section>
               <h4 className="font-black text-slate-900">Giao tới</h4>
@@ -136,6 +208,21 @@ export default function OrderDetailDrawer({ orderId, onClose }) {
             </section>
 
             {order.CancelReason ? <p className="text-slate-600">Lý do huỷ: {order.CancelReason}</p> : null}
+
+            {(order.returns || []).length ? (
+              <section className="print:hidden">
+                <h4 className="font-black text-slate-900">Đổi trả</h4>
+                <ul className="mt-1 space-y-1">
+                  {order.returns.map((request) => (
+                    <li key={request.id}>
+                      <a href="#admin-returns" onClick={onClose} className="font-semibold text-red-700 underline">{request.code}</a>
+                      {' '}· {RETURN_KIND_LABELS[request.kind]} · {RETURN_STATUS_LABELS[request.status]}
+                      {' '}· {request.items.map((item) => `${item.productName} × ${item.quantity}`).join(', ')}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
         ) : null}
       </div>

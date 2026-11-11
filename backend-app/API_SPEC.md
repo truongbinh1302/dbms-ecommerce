@@ -999,7 +999,35 @@ Chi tiết một đơn (địa chỉ giao, ghi chú khách, sản phẩm, serial
 
 ### PATCH `/orders/admin/:id/status`
 
-Admin cập nhật trạng thái đơn hàng. Ghi chú của admin vào lịch sử trạng thái, không ghi đè ghi chú của khách; khách nhận thông báo trong tài khoản.
+Admin cập nhật trạng thái đơn hàng. Không ghi đè ghi chú của khách; khách nhận thông báo trong tài khoản.
+
+**Request:** `{ "status": "shipped", "carrier": "Giao Hàng Nhanh (GHN)", "trackingCode": "GHN123456" }` — `carrier` (≤ 50 ký tự) và `trackingCode` (chữ, số, `.`, `-`, `_`, 3–60 ký tự) chỉ dùng khi `status = shipped`; gửi lại với mã mới để sửa mã vận đơn (khách được báo lại).
+
+- Lần đầu sang `shipped` ghi `ShippedAt`; sang `delivered` ghi `DeliveredAt` — mốc tính hạn đổi trả. Chuyển đơn ra khỏi `delivered` thì xoá `DeliveredAt`.
+- `422 has_returns` — đơn đã có yêu cầu đổi trả (chưa bị từ chối/huỷ) thì giữ trạng thái `delivered`.
+
+`GET /orders/:id` trả thêm `shippingCarrier`, `trackingCode`, `shippedAt`, `deliveredAt`, `returns[]` và `returnWindow { days, open, deadline, items[{ productId, remaining }] }`.
+
+---
+
+### Đổi trả
+
+Theo Chính sách đổi trả: trong `RETURN_DAYS` ngày (mặc định 7) kể từ `DeliveredAt`, lý do `defective` (lỗi nhà sản xuất), `wrong_item` (giao sai, thiếu phụ kiện), `not_as_described` (khác mô tả).
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/orders/:id/returns` | Khách (đơn của mình) | Body `{ kind: "exchange" \| "refund", reason, description (≥ 10 ký tự), items: [{ productId, quantity }] }` → `201` yêu cầu `TH000001…` trạng thái `pending` |
+| PATCH | `/orders/returns/:returnId/cancel` | Khách | Huỷ yêu cầu còn `pending` |
+| GET | `/orders/admin/returns?status=pending,approved&page=&limit=` | Admin | Danh sách, yêu cầu đang mở lên đầu |
+| PATCH | `/orders/admin/returns/:returnId` | Admin | Body `{ status, adminNote?, restock?, refundAmount? }` |
+
+Các bước: `pending → approved | rejected`, `approved → received | rejected`, `received → completed`; khách tự huỷ → `cancelled`.
+- `rejected` cần `adminNote` (lý do gửi khách).
+- `received` với `restock: true`: cộng lại kho, sổ kho ghi lý do `return`.
+- `completed` với `kind = refund`: `refundAmount` mặc định bằng giá trị hàng trả, không vượt số khách đã trả cho đơn trừ các lần hoàn trước (`400 refund_too_large`). Với `kind = exchange`: trừ kho hàng mới gửi khách, sổ kho ghi `exchange`; hết hàng → `409 out_of_stock`.
+- Mỗi bước gửi thông báo cho khách.
+
+Lỗi khi khách gửi: `422 not_delivered`, `422 return_window_closed` (gợi ý bảo hành theo serial), `409 return_quantity_exceeded` (`data.available` = số còn yêu cầu được). Tạo yêu cầu khoá dòng đơn hàng (`UPDLOCK`) nên nhiều yêu cầu gửi cùng lúc không vượt số đã mua.
 
 **Auth:** admin
 

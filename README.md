@@ -23,8 +23,17 @@ features and DBMS demonstrations.
   48-hour price-locked quotes with a shareable link.
 - Price history on every product page and warranty lookup by serial number.
 - Admin workflows for product, image, order, warranty, user, and analytics management.
+  The order list searches by order code, customer or recipient name (without
+  accents) and phone, filters by status, and opens an order detail panel with a
+  printable delivery slip and the carrier and tracking code.
+- Returns: within `RETURN_DAYS` of delivery a customer requests an exchange or
+  a refund from the order page. Requested quantities never exceed what was
+  bought (the order row is locked, so concurrent requests queue up); the admin
+  approves, receives (optionally putting items back on sale), and completes.
+  Refunds are capped at what the customer paid; exchanges take the replacement
+  from stock. Every step is in the stock ledger and notifies the customer.
 - Stock receipts from suppliers and a stock ledger: every stock change (receipt,
-  sale, cancellation, manual adjustment) is recorded with the resulting stock,
+  sale, cancellation, manual adjustment, returned item, exchange) is recorded with the resulting stock,
   plus a daily report split by Vietnam time with CSV export.
 - Time-limited Hot Deals: start and end times, a number of deal units and a
   per-order limit. The server applies the deal price when quoting and when
@@ -115,7 +124,7 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/tim-kiem?q=` | Search results with sorting and pagination |
 | `#/thanh-toan` | Checkout: shipping address, payment method, voucher |
 | `#/don-hang` | Order history |
-| `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, warranty serials |
+| `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, carrier and tracking code, warranty serials, return requests |
 | `#/build-pc` | Build PC: pick parts, compatibility check, suggested builds, upgrade advice, save a quote |
 | `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |
 | `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties, warranty claims and repair history |
@@ -339,7 +348,7 @@ The API is mounted under `/api/v1` and includes:
 - `/builder` — Build PC parts, compatibility check, suggested builds, upgrade advice, price-locked quotes
 - `/warranties` — public lookup by serial, the customer's warranties, admin registration
 - `/products/:id/price-history` — price changes over the last 180 days
-- `/orders` — checkout, order history, status, cancellation
+- `/orders` — checkout, order history, status (with carrier and tracking code), cancellation, return requests (`/orders/:id/returns`, admin `/orders/admin/returns`)
 - `/payments` — VNPay sandbox flow
 - `/reviews` — product reviews
 - `/vouchers` — voucher validation and management

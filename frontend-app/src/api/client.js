@@ -189,13 +189,31 @@ export function fetchAdminOrders(params = {}, token) {
   });
 }
 
-export function updateAdminOrderStatus(orderId, status, note, token) {
+// shipment: { carrier, trackingCode } khi giao đơn cho đơn vị vận chuyển.
+export function updateAdminOrderStatus(orderId, status, note, token, shipment = {}) {
   return request(`/orders/admin/${orderId}/status`, {
     method: 'PATCH',
     auth: true,
     token,
-    body: JSON.stringify({ status, note }),
+    body: JSON.stringify({ status, note, ...shipment }),
   });
+}
+
+// --- Đổi trả ---
+export function createReturnRequest(orderId, payload) {
+  return request(`/orders/${orderId}/returns`, { method: 'POST', auth: true, body: JSON.stringify(payload) });
+}
+
+export function cancelReturnRequest(returnId) {
+  return request(`/orders/returns/${encodeURIComponent(returnId)}/cancel`, { method: 'PATCH', auth: true });
+}
+
+export function fetchAdminReturns(params, token) {
+  return adminGet('/orders/admin/returns', params, token);
+}
+
+export function updateAdminReturn(returnId, payload, token) {
+  return request(`/orders/admin/returns/${encodeURIComponent(returnId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
 }
 
 // Gợi ý khi gõ: endpoint gọn hơn /products (không đếm tổng số kết quả).

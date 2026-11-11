@@ -63,3 +63,37 @@ export function describePaymentResult(code) {
   if (code === 'loi') return { tone: 'error', text: 'Có lỗi khi xử lý kết quả thanh toán. Vui lòng kiểm tra lại đơn hàng.' }
   return { tone: 'warning', text: `Thanh toán chưa thành công (mã ${code}).` }
 }
+
+// --- Đổi trả ---
+export const RETURN_KIND_LABELS = {
+  exchange: 'Đổi sản phẩm mới',
+  refund: 'Trả hàng, hoàn tiền',
+}
+
+export const RETURN_REASON_LABELS = {
+  defective: 'Lỗi kỹ thuật do nhà sản xuất',
+  wrong_item: 'Giao sai sản phẩm, sai cấu hình, thiếu phụ kiện',
+  not_as_described: 'Khác với mô tả trên website',
+}
+
+export const RETURN_STATUS_LABELS = {
+  pending: 'Chờ duyệt',
+  approved: 'Đã duyệt, chờ nhận hàng',
+  received: 'Cửa hàng đã nhận hàng',
+  completed: 'Hoàn tất',
+  rejected: 'Bị từ chối',
+  cancelled: 'Đã huỷ',
+}
+
+const RETURN_TONES = {
+  pending: 'bg-amber-50 text-amber-800',
+  approved: 'bg-sky-50 text-sky-800',
+  received: 'bg-violet-50 text-violet-800',
+  completed: 'bg-emerald-50 text-emerald-800',
+  rejected: 'bg-red-50 text-red-700',
+  cancelled: 'bg-slate-100 text-slate-600',
+}
+
+export function returnTone(status) {
+  return RETURN_TONES[status] || 'bg-slate-100 text-slate-600'
+}

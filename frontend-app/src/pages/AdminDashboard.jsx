@@ -5,6 +5,7 @@ import DailyReport from '../components/admin/DailyReport'
 import InventoryPanel from '../components/admin/InventoryPanel'
 import PromotionsPanel from '../components/admin/PromotionsPanel'
 import ServiceRequestsPanel from '../components/admin/ServiceRequestsPanel'
+import ReturnsPanel from '../components/admin/ReturnsPanel'
 import useDocumentTitle from '../hooks/useDocumentTitle'
 import OrderDetailDrawer from '../components/admin/OrderDetailDrawer'
 import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
@@ -226,6 +227,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                 <a href="#admin-stock" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Kho hàng</a>
                 <a href="#admin-promotions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Hot Deal</a>
                 <a href="#admin-services" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Dịch vụ</a>
+                <a href="#admin-returns" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Đổi trả</a>
               </nav>
               <button
                 type="button"
@@ -486,7 +488,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                 </button>
               </div>
             ) : null}
-            {openOrderId ? <OrderDetailDrawer orderId={openOrderId} onClose={() => setOpenOrderId(null)} /> : null}
+            {openOrderId ? <OrderDetailDrawer orderId={openOrderId} token={token} onChanged={loadOrders} onClose={() => setOpenOrderId(null)} /> : null}
           </div>
 
           <div className="space-y-6">
@@ -532,6 +534,10 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
 
         <div id="admin-services" className="mt-6 scroll-mt-32">
           <ServiceRequestsPanel token={token} />
+        </div>
+
+        <div id="admin-returns" className="mt-6 scroll-mt-32">
+          <ReturnsPanel token={token} />
         </div>
       </div>
     </div>

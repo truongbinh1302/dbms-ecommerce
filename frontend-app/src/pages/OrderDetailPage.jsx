@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import OrderReturns from '../components/OrderReturns'
 import PageMessage from '../components/PageMessage'
 import { cancelMyOrder, createVNPayPaymentLink, fetchOrder } from '../api/client'
 import { hrefFor } from '../hooks/useHashRoute'
@@ -132,6 +133,13 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
               <p className="mt-2 text-slate-500">Đơn cũ không có địa chỉ chi tiết.</p>
             )}
             {order.Note ? <p className="mt-2 text-slate-500">Ghi chú: {order.Note}</p> : null}
+            {order.shippingCarrier ? (
+              <p className="mt-2 text-slate-700">
+                Vận chuyển: <strong>{order.shippingCarrier}</strong>
+                {order.trackingCode ? <> · mã vận đơn <strong className="select-all font-mono">{order.trackingCode}</strong></> : null}
+              </p>
+            ) : null}
+            {order.deliveredAt ? <p className="mt-1 text-slate-500">Đã giao lúc {formatDateTime(order.deliveredAt)}</p> : null}
             {order.quoteCode ? (
               <p className="mt-2 text-slate-500">
                 Giá theo báo giá <a href={hrefFor(`/bao-gia/${order.quoteCode}`)} className="font-semibold text-slate-700 hover:text-red-600">{order.quoteCode}</a>
@@ -186,6 +194,8 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
             ) : null}
           </div>
         ) : null}
+
+        <OrderReturns order={order} showToast={showToast} onChanged={() => setReloadCount((count) => count + 1)} />
 
         {['shipped', 'delivered'].includes(order.Status) ? (
           <p className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
