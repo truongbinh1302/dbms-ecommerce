@@ -5,6 +5,7 @@ import { hrefFor, navigate } from '../hooks/useHashRoute'
 import { removeCompare } from '../hooks/useCompare'
 import { formatCurrency } from '../utils/format'
 import { describePart } from '../utils/buildPc'
+import { mapApiProductToStoreProduct } from '../utils/productMapping'
 
 const CARD = 'rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]'
 const yesNo = (value) => (value === null || value === undefined ? null : value ? 'Có' : 'Không')
@@ -28,8 +29,9 @@ function parseIds(value) {
   return [...new Set(String(value || '').split(',').map((item) => Number(item)).filter((id) => Number.isInteger(id) && id > 0))].slice(0, 3)
 }
 
+// Sản phẩm đã qua mapApiProductToStoreProduct: price là giá khách trả (Hot Deal nếu đang chạy), listPrice là giá niêm yết.
 function priceOf(product) {
-  return product.promotion?.active && product.promotion.salePrice < product.price ? product.promotion.salePrice : product.price
+  return product.price
 }
 
 /* So sánh tối đa 3 sản phẩm: giá, tình trạng, đánh giá, thông số; linh kiện cùng loại có bảng thông số chi tiết. */
@@ -48,7 +50,7 @@ export default function ComparePage({ ids: rawIds, onAddToCart }) {
         const order = key.split(',').map(Number)
         setState({
           key,
-          products: order.map((id) => list.find((item) => Number(item.id) === id)).filter(Boolean),
+          products: order.map((id) => list.find((item) => Number(item.id) === id)).filter(Boolean).map(mapApiProductToStoreProduct),
           parts: builder.components || [],
           error: '',
         })
@@ -75,13 +77,13 @@ export default function ComparePage({ ids: rawIds, onAddToCart }) {
     ['Giá', (product) => (
       <span>
         <strong className={priceOf(product) === lowest ? 'text-emerald-700' : 'text-slate-900'}>{formatCurrency(priceOf(product))}</strong>
-        {priceOf(product) < product.price ? <span className="block text-xs text-red-700">Hot Deal (giá thường {formatCurrency(product.price)})</span> : null}
+        {product.promotion?.active ? <span className="block text-xs text-red-700">Hot Deal (giá thường {formatCurrency(product.listPrice)})</span> : null}
         {priceOf(product) === lowest ? <span className="block text-xs text-emerald-700">Rẻ nhất</span> : null}
       </span>
     )],
     ['Tình trạng', (product) => (product.stock > 0 ? `Còn ${product.stock}` : <span className="text-red-700">Tạm hết hàng</span>)],
     ['Hãng', (product) => product.brand || '—'],
-    ['Đánh giá', (product) => (product.reviewsCount > 0 ? `${Number(product.rating).toFixed(1)}/5 (${product.reviewsCount})` : 'Chưa có')],
+    ['Đánh giá', (product) => (product.reviews > 0 ? `${Number(product.rating).toFixed(1)}/5 (${product.reviews})` : 'Chưa có')],
   ]
   if (sameType) {
     for (const [label, read] of PART_ROWS[sameType] || []) {

@@ -7,6 +7,7 @@ import PageMessage from '../components/PageMessage'
 import PriceHistory from '../components/PriceHistory'
 import ReviewForm from '../components/ReviewForm'
 import ProductQuestions from '../components/ProductQuestions'
+import SimilarProducts from '../components/SimilarProducts'
 import PriceWatchButton from '../components/PriceWatchButton'
 import StockWatchButton from '../components/StockWatchButton'
 import { toggleCompare, useCompareItems } from '../hooks/useCompare'
@@ -206,6 +207,8 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
       </section>
 
       <PriceHistory productId={productId} />
+
+      <SimilarProducts product={product} />
 
       {product.description ? (
         <section className="rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
