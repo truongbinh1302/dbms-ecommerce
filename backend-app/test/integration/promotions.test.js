@@ -176,3 +176,20 @@ test('giới hạn mỗi đơn: mua quá giới hạn thì cả dòng tính giá
   const okQuote = await orderService.quoteCart([{ productId: ssd, quantity: 2 }]);
   assert.equal(okQuote.subtotal, 3000000);
 });
+
+test('lọc và sắp xếp theo giá dùng giá khách trả: Hot Deal đang chạy tính theo giá khuyến mãi', async () => {
+  const dealt = await newProduct('filter-deal', 8500000);
+  const plain = await newProduct('filter-plain', 8100000);
+  await createPromotion({ name: 'Deal lọc giá', startsAt: iso(-1), endsAt: iso(30), items: [{ productId: dealt, salePrice: 7900000 }] });
+  const ids = `${dealt},${plain}`;
+
+  const under8 = await productService.getProducts({ ids, maxPrice: 8000000 });
+  assert.deepEqual(under8.items.map((item) => item.id), [dealt], 'giá niêm yết 8,5 triệu nhưng khách trả 7,9 triệu: nằm trong "dưới 8 triệu"');
+  assert.equal(under8.pagination.totalItems, 1, 'tổng số khớp với danh sách');
+
+  const over8 = await productService.getProducts({ ids, minPrice: 8000000 });
+  assert.deepEqual(over8.items.map((item) => item.id), [plain]);
+
+  const cheapFirst = await productService.getProducts({ ids, sort: 'price_asc' });
+  assert.deepEqual(cheapFirst.items.map((item) => item.id), [dealt, plain], 'sắp xếp theo giá khách trả');
+});

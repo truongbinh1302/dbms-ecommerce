@@ -50,6 +50,10 @@ const parseIdList = (value) => {
  * Tìm kiếm: mọi từ khoá (đã bỏ dấu) phải có trong SearchText. Sản phẩm chưa có SearchText
  * (chưa chạy backfill) vẫn tìm được theo cách cũ bằng Name/Brand LIKE.
  */
+// Giá khách trả: giá Hot Deal đang chạy (promoApply) nếu có, không thì giá niêm yết.
+// Lọc và sắp xếp theo giá dùng giá này, nên câu truy vấn nào dùng buildProductFilter cũng phải có promoApply('p').
+const EFFECTIVE_PRICE = 'COALESCE(promo.PromoSalePrice, p.Price)';
+
 const buildProductFilter = (request, filters, tokens, ids) => {
   const {
     q = null,
@@ -85,8 +89,8 @@ const buildProductFilter = (request, filters, tokens, ids) => {
            OR (p.SearchText IS NULL AND (p.Name LIKE N'%' + @q + N'%' OR p.Brand LIKE N'%' + @q + N'%')))
       AND (@category IS NULL OR c.Slug = @category)
       AND (@brand IS NULL OR p.Brand = @brand)
-      AND (@minPrice IS NULL OR p.Price >= @minPrice)
-      AND (@maxPrice IS NULL OR p.Price <= @maxPrice)
+      AND (@minPrice IS NULL OR ${EFFECTIVE_PRICE} >= @minPrice)
+      AND (@maxPrice IS NULL OR ${EFFECTIVE_PRICE} <= @maxPrice)
       AND (@inStock IS NULL OR p.Stock > 0)
       AND (@featured IS NULL OR p.IsFeatured = @featured)
       ${idFilter}
@@ -103,8 +107,8 @@ const getProducts = async (filters = {}, { countTotal = true } = {}) => {
   const offset = (page - 1) * limit;
 
   let orderBy = 'p.ProductID DESC';
-  if (sort === 'price_asc') orderBy = 'p.Price ASC';
-  if (sort === 'price_desc') orderBy = 'p.Price DESC';
+  if (sort === 'price_asc') orderBy = `${EFFECTIVE_PRICE} ASC, p.ProductID ASC`;
+  if (sort === 'price_desc') orderBy = `${EFFECTIVE_PRICE} DESC, p.ProductID ASC`;
   if (sort === 'newest') orderBy = 'p.CreatedAt DESC';
   if (sort === 'rating') orderBy = 'p.Rating DESC, p.ReviewsCount DESC';
   // Sản phẩm nổi bật trước, rồi theo thứ tự nhập (sản phẩm thật trong seed có ID nhỏ).
@@ -149,6 +153,7 @@ const getProducts = async (filters = {}, { countTotal = true } = {}) => {
     SELECT COUNT(*) AS total
     FROM Products p
     LEFT JOIN Categories c ON p.CategoryID = c.CategoryID
+    ${promoApply('p')}
     ${countWhere}
   `);
 
