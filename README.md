@@ -102,6 +102,9 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/build-pc` | Build PC: pick parts, compatibility check, suggested builds, upgrade advice, save a quote |
 | `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |
 | `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties |
+| `#/tai-khoan` | Account: change password, download personal data, delete account |
+| `#/chinh-sach/:slug` | Purchase terms, shipping, payment, returns, warranty, complaints, seller information |
+| `#/chinh-sach-bao-mat` | Privacy policy |
 
 Search matches Vietnamese text without accents ("man hinh" finds "Màn hình").
 Each product stores a folded `SearchText` column (migration `006`); the API
@@ -118,6 +121,13 @@ price, and an expired quote is reported to the customer instead of silently
 charging a different amount. Price history is written in the same
 transaction as the product insert or update made through the API; edits made
 directly in SQL bypass it.
+
+Policy pages read their numbers (shipping fee, delivery days, return days,
+VNPay time limit, tier discounts) from `GET /store/info`, which serves the same
+configuration the API uses to price orders. Seller details come from the
+`STORE_*` variables in `backend-app/.env`; until they are set, the footer and
+the seller page show "chưa cập nhật". Checkout requires the customer to accept
+the purchase terms, and each order stores the accepted terms version.
 
 Shipping addresses follow the two-level administrative units in effect since
 1 July 2025 (province/city → ward/commune). The backend validates the address
@@ -208,6 +218,12 @@ node fix-password.js
 cd ..
 ```
 
+`run-migration.js` creates the schema on an empty server. On a database that
+already has tables it keeps the data and only applies the newer, re-runnable
+migrations. To drop everything and start over, run
+`node run-migration.js --reset` (this deletes all data). Run `run-seed.js`
+only once on a fresh database; running it again adds duplicate demo orders.
+
 ### 5. Run the application
 
 In one terminal:
@@ -226,6 +242,60 @@ npm run dev
 
 Open `http://localhost:5173`. The API health check is available at
 `http://localhost:3000/health`.
+
+### Run everything with Docker
+
+`docker-compose.yml` at the repository root runs SQL Server, MongoDB, the API
+and the web app (nginx serving the Vite build and proxying `/api`):
+
+```bash
+cp .env.docker.example .env      # then set passwords and two long random JWT secrets
+docker compose up -d sqlserver mongodb
+docker compose run --rm backend node run-migration.js
+docker compose run --rm backend node run-seed.js
+docker compose up -d --build
+```
+
+Open `http://localhost:8080`. The API refuses to start in production mode
+without `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`. Uploaded product images
+are kept in the `uploads` volume.
+
+### Backups and monitoring
+
+`scripts/backup.sh` backs up the running Docker stack into
+`backups/<date-time>/`: a SQL Server `.bak` (checked with `RESTORE
+VERIFYONLY`), a MongoDB archive, the uploaded images and a `SHA256SUMS`
+file. It keeps the newest 14 backups (`KEEP=...` to change). Run it daily
+from cron, for example:
+
+```bash
+0 2 * * * cd /path/to/dbms-ecommerce && ./scripts/backup.sh >> backups/backup.log 2>&1
+```
+
+Copy `backups/` to another machine or drive as well; a backup on the same
+disk does not survive a disk failure. To restore (overwrites all current
+data, asks for confirmation, checks the checksums first):
+
+```bash
+./scripts/restore.sh backups/20261111-020000
+```
+
+`/health` answers while the API process is up; `/health/ready` also checks
+SQL Server and MongoDB and returns 503 when one is down. Point an uptime
+monitor at `https://<your domain>/health/ready`. Server errors are logged
+as one JSON line with an `errorId`; in production the customer only sees
+a generic message and that id.
+
+SQL Server runs as Express edition in `docker-compose.yml` (free for
+production use, 10 GB per database). The image's default Developer
+edition is licensed for development and testing only.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request: backend unit
+tests, backend integration tests against fresh SQL Server and MongoDB
+containers (schema, sample data, then `npm run test:db`), frontend lint and
+build, and a build of both Docker images.
 
 ## Demo accounts
 

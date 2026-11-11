@@ -2,6 +2,7 @@ const { getPool, sql } = require('../config/db.sql');
 const { success, error } = require('../utils/response');
 const { parseStoredAddress, validateShippingAddress } = require('../services/address.service');
 const { hashPassword, comparePassword } = require('../utils/hash');
+const accountService = require('../services/account.service');
 
 const getMe = async (req, res) => {
   try {
@@ -43,24 +44,36 @@ const updateProfile = async (req, res) => {
 };
 
 const changePassword = async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
+  const { oldPassword, newPassword } = req.body || {};
+
+  if (typeof oldPassword !== 'string' || !oldPassword) {
+    return error(res, 'Vui lòng nhập mật khẩu hiện tại', 400);
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return error(res, 'Mật khẩu mới cần ít nhất 8 ký tự', 400);
+  }
+  if (newPassword === oldPassword) {
+    return error(res, 'Mật khẩu mới phải khác mật khẩu hiện tại', 400);
+  }
 
   try {
     const result = await getPool().request()
       .input('userId', req.user.id)
-      .query(`SELECT Password FROM Users WHERE UserID = @userId`);
+      .query(`SELECT Password FROM Users WHERE UserID = @userId AND IsActive = 1`);
 
     const user = result.recordset[0];
+    if (!user) return error(res, 'Không tìm thấy tài khoản', 404);
 
     const isMatch = await comparePassword(oldPassword, user.Password);
-    if (!isMatch) return error(res, 'Wrong password', 400);
+    if (!isMatch) return error(res, 'Mật khẩu hiện tại không đúng', 400);
 
     const hashed = await hashPassword(newPassword);
 
+    // Thu hồi refresh token: các máy khác đang đăng nhập phải đăng nhập lại bằng mật khẩu mới.
     await getPool().request()
       .input('userId', req.user.id)
       .input('password', hashed)
-      .query(`UPDATE Users SET Password = @password WHERE UserID = @userId`);
+      .query(`UPDATE Users SET Password = @password, RefreshToken = NULL, UpdatedAt = SYSDATETIME() WHERE UserID = @userId`);
 
     return success(res, null, 'Password changed');
   } catch (err) {
@@ -96,7 +109,31 @@ const updateAddress = async (req, res) => {
   }
 };
 
+// Tải bản sao dữ liệu cá nhân (quyền được biết, được cung cấp dữ liệu).
+const exportMyData = async (req, res) => {
+  try {
+    const data = await accountService.exportMyData(req.user.id);
+    return success(res, data, 'Personal data exported');
+  } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
+    return error(res, err.message);
+  }
+};
+
+// Xoá tài khoản theo yêu cầu của chính khách hàng, cần nhập lại mật khẩu.
+const deleteMyAccount = async (req, res) => {
+  try {
+    const result = await accountService.deleteAccount(req.user.id, (req.body || {}).password);
+    return success(res, result, 'Account deleted');
+  } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
+    return error(res, err.message);
+  }
+};
+
 module.exports = {
+  exportMyData,
+  deleteMyAccount,
   getMe,
   updateProfile,
   changePassword,

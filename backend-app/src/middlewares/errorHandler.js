@@ -1,7 +1,13 @@
 const { error } = require('../utils/response');
 
 const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
+  // Lỗi 5xx được ghi log (kèm mã lỗi) trong error(); ở đây chỉ in thêm stack để dò lỗi.
+  if (!err.status || err.status >= 500) console.error(err.stack || err);
+
+  // Body JSON hỏng là lỗi của request, không phải lỗi máy chủ.
+  if (err.type === 'entity.parse.failed') {
+    return error(res, 'Dữ liệu gửi lên không phải JSON hợp lệ', 400);
+  }
 
   if (err.code === 'EREQUEST' || err.code === 'ECONNCLOSED') {
     return error(res, 'Database connection error', 500);

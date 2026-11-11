@@ -1,0 +1,98 @@
+# Chạy toàn bộ BinhTinhStore bằng Docker: SQL Server, MongoDB, API và giao diện.
+#
+# Lần đầu:
+#   cp .env.docker.example .env        # rồi đổi mật khẩu và khoá JWT
+#   docker compose up -d sqlserver mongodb
+#   docker compose run --rm backend node run-migration.js
+#   docker compose run --rm backend node run-seed.js
+#   docker compose up -d --build
+# Mở http://localhost:8080
+#
+# Những lần sau chỉ cần: docker compose up -d
+# (dbms-env/docker-compose.yml vẫn dùng được khi chỉ cần database để chạy code trên máy.)
+
+name: binhtinhstore
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SQL_PASSWORD:?Đặt SQL_PASSWORD trong .env}
+      # Bản Express miễn phí cho cả chạy thật (giới hạn 10 GB/database), đủ cho cửa hàng nhỏ.
+      # Bản Developer (mặc định của image) chỉ được dùng để phát triển, thử nghiệm.
+      MSSQL_PID: ${MSSQL_PID:-Express}
+      MSSQL_MEMORY_LIMIT_MB: 1536
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?Đặt MONGO_PASSWORD trong .env}
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend-app/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      TRUST_PROXY: 1
+      SQL_SERVER: sqlserver,1433
+      SQL_DATABASE: ecommerce_dbms
+      SQL_USER: sa
+      SQL_PASSWORD: ${SQL_PASSWORD}
+      SQL_ENCRYPT: "false"
+      SQL_TRUST_SERVER_CERT: "true"
+      MONGO_URI: mongodb://${MONGO_USER:-admin}:${MONGO_PASSWORD}@mongodb:27017/ecommerce_mongo?authSource=admin
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Đặt JWT_ACCESS_SECRET trong .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Đặt JWT_REFRESH_SECRET trong .env}
+      CLIENT_URL: ${PUBLIC_URL:-http://localhost:8080}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_RETURN_URL: ${PUBLIC_URL:-http://localhost:8080}/api/v1/payments/vnpay/return
+      VNPAY_IPN_URL: ${PUBLIC_URL:-http://localhost:8080}/api/v1/payments/vnpay/ipn
+      # Chạy trên máy cá nhân VNPay không gọi IPN về được, nên cho trang return (đã kiểm chữ ký) cập nhật đơn.
+      # Khi có domain thật nhận được IPN thì đặt false.
+      VNPAY_UPDATE_ON_RETURN: ${VNPAY_UPDATE_ON_RETURN:-true}
+    volumes:
+      - uploads:/srv/backend-app/uploads
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend-app
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
+  mongodb_data:
+  uploads:

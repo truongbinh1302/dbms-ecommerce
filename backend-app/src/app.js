@@ -24,8 +24,15 @@ const analyticsRoutes = require('./routes/analytics.route');
 const locationRoutes = require('./routes/location.routes');
 const builderRoutes = require('./routes/builder.routes');
 const warrantyRoutes = require('./routes/warranty.routes');
+const storeRoutes = require('./routes/store.routes');
 
 const app = express();
+
+// Chạy sau reverse proxy (nginx trong docker-compose): tin header X-Forwarded-For của proxy
+// để giới hạn request theo IP thật của khách, không gộp mọi khách vào IP của proxy.
+if (config.trustProxy !== false) {
+  app.set('trust proxy', config.trustProxy);
+}
 
 app.use(helmet());
 app.use(cors());
@@ -37,10 +44,37 @@ app.use(generalLimiter);
 // Serve uploaded files as static
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Liveness: tiến trình còn chạy (Docker healthcheck dùng cái này).
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
     service: 'BinhTinhStore DBMS API',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Readiness: kiểm tra thật SQL Server và MongoDB, để dịch vụ theo dõi uptime báo khi database lỗi.
+app.get('/health/ready', async (req, res) => {
+  const checks = {};
+  const started = Date.now();
+  try {
+    const { getPool } = require('./config/db.sql');
+    await getPool().request().query('SELECT 1 AS ok');
+    checks.sqlServer = 'ok';
+  } catch (err) {
+    checks.sqlServer = 'down';
+  }
+  try {
+    const mongoose = require('mongoose');
+    checks.mongodb = mongoose.connection.readyState === 1 ? 'ok' : 'down';
+  } catch (err) {
+    checks.mongodb = 'down';
+  }
+  const ready = Object.values(checks).every((value) => value === 'ok');
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'OK' : 'DEGRADED',
+    checks,
+    tookMs: Date.now() - started,
     timestamp: new Date().toISOString(),
   });
 });
@@ -58,6 +92,7 @@ app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/locations', locationRoutes);
 app.use('/api/v1/builder', builderRoutes);
 app.use('/api/v1/warranties', warrantyRoutes);
+app.use('/api/v1/store', storeRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
@@ -95,6 +130,25 @@ const backfillSearchIndex = async () => {
   }
 };
 
+// Admin còn mật khẩu demo "password" (do migration tạo) là lỗ hổng khi chạy thật: báo to trong log.
+const warnDemoAdminPassword = async () => {
+  try {
+    const { getPool } = require('./config/db.sql');
+    const { comparePassword } = require('./utils/hash');
+    const admins = await getPool().request()
+      .query("SELECT Email, Password FROM Users WHERE Role = N'admin' AND IsActive = 1");
+    for (const admin of admins.recordset) {
+      if (await comparePassword('password', admin.Password)) {
+        const message = `Admin ${admin.Email} vẫn dùng mật khẩu demo "password". Đổi ngay ở trang Tài khoản của tôi.`;
+        if (config.nodeEnv === 'production') console.error(`[security] ${message}`);
+        else console.warn(`[security] ${message} (bỏ qua được khi chạy demo trên máy)`);
+      }
+    }
+  } catch (err) {
+    console.warn('[security] Could not check admin passwords:', err.message);
+  }
+};
+
 const startServer = async () => {
   try {
     await connectSQL();
@@ -102,6 +156,7 @@ const startServer = async () => {
 
     startPaymentExpirySweeper();
     backfillSearchIndex();
+    warnDemoAdminPassword();
 
     app.listen(config.port, () => {
       console.log(`Server running on port ${config.port}`);
@@ -113,6 +168,10 @@ const startServer = async () => {
 };
 
 if (require.main === module) {
+  // Lỗi không được bắt: ghi log rõ ràng thay vì để tiến trình chết im lặng.
+  process.on('unhandledRejection', (reason) => {
+    console.error(JSON.stringify({ level: 'error', type: 'unhandledRejection', time: new Date().toISOString(), message: String(reason && reason.stack ? reason.stack : reason) }));
+  });
   startServer();
 }
 

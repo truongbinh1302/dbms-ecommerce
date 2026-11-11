@@ -5,6 +5,18 @@ const [sqlHost, sqlPortFromHost] = sqlServerRaw.split(',');
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
+// Production không được chạy với khoá JWT mặc định (ai đọc mã nguồn cũng biết, giả token được).
+if (nodeEnv === 'production' && (!process.env.JWT_ACCESS_SECRET || !process.env.JWT_REFRESH_SECRET)) {
+  throw new Error('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be set when NODE_ENV=production');
+}
+
+// TRUST_PROXY: số proxy đứng trước API (ví dụ 1 khi chạy sau nginx). Bỏ trống = không có proxy.
+const parseTrustProxy = (value) => {
+  if (value === undefined || String(value).trim() === '' || value === 'false') return false;
+  const hops = Number(value);
+  return Number.isInteger(hops) && hops >= 0 ? hops : value;
+};
+
 const toNumber = (value, fallback) => {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const parsed = Number(value);
@@ -20,6 +32,7 @@ const updateOnReturn = process.env.VNPAY_UPDATE_ON_RETURN
 module.exports = {
   port: Number(process.env.PORT || 3000),
   nodeEnv,
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   // Trang return của VNPay chuyển khách về trang đơn hàng trên frontend này.
   clientUrl: (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, ''),
   vnpay: {
@@ -43,6 +56,25 @@ module.exports = {
     ],
     // Báo giá cấu hình Build PC giữ giá trong ngần này giờ.
     quoteValidHours: toNumber(process.env.QUOTE_VALID_HOURS, 48),
+  },
+
+  // Thông tin người bán và các con số trong chính sách, hiển thị ở trang Chính sách và chân trang.
+  // Thông tin pháp lý để trống cho tới khi cửa hàng đăng ký kinh doanh; trang sẽ ghi "chưa cập nhật".
+  store: {
+    legalName: process.env.STORE_LEGAL_NAME || null,
+    taxCode: process.env.STORE_TAX_CODE || null,
+    address: process.env.STORE_ADDRESS || null,
+    phone: process.env.STORE_PHONE || null,
+    email: process.env.STORE_EMAIL || null,
+    representative: process.env.STORE_REPRESENTATIVE || null,
+    // Đổi khi sửa nội dung điều khoản: đơn ghi lại phiên bản khách đã đồng ý.
+    termsVersion: process.env.STORE_TERMS_VERSION || '2026-11-11',
+    province: process.env.STORE_PROVINCE || 'TP. Hồ Chí Minh',
+    deliveryDaysLocal: process.env.DELIVERY_DAYS_LOCAL || '1–2',
+    deliveryDaysOther: process.env.DELIVERY_DAYS_OTHER || '2–5',
+    returnDays: toNumber(process.env.RETURN_DAYS, 7),
+    complaintResponseDays: toNumber(process.env.COMPLAINT_RESPONSE_DAYS, 3),
+    pricesIncludeTax: process.env.PRICES_INCLUDE_TAX !== 'false',
   },
 
   payment: {

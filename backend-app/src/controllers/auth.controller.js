@@ -59,8 +59,21 @@ async function ensureDemoAdminForLocalLogin(email, password) {
 }
 
 const register = async (req, res) => {
-  const { fullName, password, phone } = req.body;
+  const { password } = req.body;
+  const fullName = String(req.body.fullName || '').trim();
+  const phone = req.body.phone ? String(req.body.phone).trim() : null;
   const email = normalizeEmail(req.body.email);
+
+  // Đồng ý xử lý dữ liệu phải do khách tự tích (Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15).
+  if (req.body.acceptPrivacy !== true) {
+    return error(res, 'Bạn cần đồng ý với Chính sách bảo mật để tạo tài khoản', 400);
+  }
+  if (!fullName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return error(res, 'Vui lòng nhập họ tên và email hợp lệ', 400);
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return error(res, 'Mật khẩu cần ít nhất 8 ký tự', 400);
+  }
 
   try {
     const hashedPassword = await hashPassword(password);
@@ -71,9 +84,9 @@ const register = async (req, res) => {
       .input('password', sql.NVarChar, hashedPassword)
       .input('phone', sql.NVarChar, phone)
       .query(`
-        INSERT INTO Users (FullName, Email, Password, Phone, Role)
+        INSERT INTO Users (FullName, Email, Password, Phone, Role, PrivacyConsentAt)
         OUTPUT INSERTED.UserID, INSERTED.FullName, INSERTED.Email, INSERTED.Role
-        VALUES (@fullName, @email, @password, @phone, 'customer')
+        VALUES (@fullName, @email, @password, @phone, 'customer', SYSDATETIME())
       `);
 
     const user = result.recordset[0];

@@ -1,0 +1,10 @@
+# Build context là thư mục gốc repo (Dockerfile của backend cần cả thư mục database).
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+.git
+backend-app/uploads
+docs
+database-demo

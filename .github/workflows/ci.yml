@@ -1,0 +1,124 @@
+# Kiểm tra tự động cho mỗi lần push và pull request:
+# - backend-unit:        unit test backend (không cần database)
+# - backend-integration: tạo schema + dữ liệu mẫu trên SQL Server và MongoDB thật rồi chạy test tích hợp
+# - frontend:            ESLint và build Vite
+# - docker:              build thử image API và giao diện
+name: CI
+
+on:
+  push:
+    branches: [main, "phase-*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend-app/package-lock.json
+      - run: npm ci
+      - run: node --check src/app.js
+      - run: npm test
+
+  backend-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend-app
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Ci-Test-Passw0rd!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Ci-Test-Passw0rd! -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 20s
+      mongodb:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: ci-mongo-password
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Thông tin đăng nhập chỉ dùng cho database tạm trong CI, không phải bí mật thật.
+      SQL_SERVER: localhost,1433
+      SQL_DATABASE: ecommerce_dbms
+      SQL_USER: sa
+      SQL_PASSWORD: Ci-Test-Passw0rd!
+      SQL_ENCRYPT: "false"
+      SQL_TRUST_SERVER_CERT: "true"
+      MONGO_URI: mongodb://admin:ci-mongo-password@localhost:27017/ecommerce_mongo?authSource=admin
+      JWT_ACCESS_SECRET: ci-access-secret
+      JWT_REFRESH_SECRET: ci-refresh-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend-app/package-lock.json
+      - run: npm ci
+      - name: Create schema
+        run: node run-migration.js
+      - name: Load sample data (50,000 products, 5,000 orders)
+        run: node run-seed.js
+      - name: Re-running migrations keeps data
+        run: node run-migration.js
+      - run: npm run test:db
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend-app/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f backend-app/Dockerfile -t binhtinhstore-api:ci .
+      - name: Build web image
+        run: docker build -t binhtinhstore-web:ci frontend-app
+      - name: Validate docker-compose.yml
+        run: |
+          cp .env.docker.example .env
+          sed -i 's/^JWT_ACCESS_SECRET=$/JWT_ACCESS_SECRET=ci/; s/^JWT_REFRESH_SECRET=$/JWT_REFRESH_SECRET=ci/' .env
+          docker compose config --quiet

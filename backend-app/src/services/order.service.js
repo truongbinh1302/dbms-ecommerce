@@ -132,15 +132,18 @@ const createOrder = async (userId, orderData = {}) => {
   const shippingAddress = assertShippingAddress(orderData.shippingAddress);
   const note = orderData.note ? String(orderData.note).trim().slice(0, 500) || null : null;
   const quoteCode = orderData.quoteCode ? String(orderData.quoteCode).trim().toUpperCase() : null;
+  const termsVersion = orderData.termsVersion ? String(orderData.termsVersion).slice(0, 20) : null;
 
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
   await transaction.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
 
   try {
+    // UPDLOCK trên dòng Users: đặt hàng và xoá tài khoản cùng lúc sẽ chạy lần lượt,
+    // nên không có đơn mới lọt vào tài khoản vừa bị xoá.
     const userCheck = await new sql.Request(transaction)
       .input('userId', sql.Int, Number(userId))
-      .query(`SELECT UserID FROM Users WHERE UserID = @userId AND IsActive = 1`);
+      .query(`SELECT UserID FROM Users WITH (UPDLOCK, ROWLOCK) WHERE UserID = @userId AND IsActive = 1`);
 
     if (!userCheck.recordset[0]) {
       throw createHttpError(401, 'Invalid user or user not found');
@@ -183,10 +186,11 @@ const createOrder = async (userId, orderData = {}) => {
       .input('shippingAddress', sql.NVarChar, JSON.stringify(shippingAddress))
       .input('note', sql.NVarChar, note)
       .input('quoteCode', sql.NVarChar(20), lockedQuote ? lockedQuote.code : null)
+      .input('termsVersion', sql.NVarChar(20), termsVersion)
       .query(`
-        INSERT INTO Orders (UserID, PaymentMethod, Status, Subtotal, Discount, ShippingFee, Total, ShippingAddress, Note, QuoteCode)
+        INSERT INTO Orders (UserID, PaymentMethod, Status, Subtotal, Discount, ShippingFee, Total, ShippingAddress, Note, QuoteCode, TermsVersion)
         OUTPUT INSERTED.OrderID, INSERTED.CreatedAt
-        VALUES (@userId, @paymentMethod, @status, @subtotal, @discount, @shippingFee, @total, @shippingAddress, @note, @quoteCode)
+        VALUES (@userId, @paymentMethod, @status, @subtotal, @discount, @shippingFee, @total, @shippingAddress, @note, @quoteCode, @termsVersion)
       `);
 
     const orderId = orderResult.recordset[0].OrderID;
@@ -408,7 +412,7 @@ const getOrderById = async (orderId, userId = null) => {
   const result = await request.query(`
     SELECT o.OrderID AS id, o.OrderCode AS orderCode, o.Status, o.PaymentMethod, o.PaymentStatus,
            o.VNPayTxnRef AS txnRef, o.CancelReason,
-           o.Subtotal, o.Discount, o.ShippingFee, o.Total, o.Note, o.QuoteCode AS quoteCode,
+           o.Subtotal, o.Discount, o.ShippingFee, o.Total, o.Note, o.QuoteCode AS quoteCode, o.TermsVersion AS termsVersion,
            o.ShippingAddress, o.CreatedAt, o.UpdatedAt,
            u.FullName AS customerName, u.Email, u.Phone
     FROM Orders o
