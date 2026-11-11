@@ -83,6 +83,17 @@ module.exports = {
     bookingDays: toNumber(process.env.SERVICE_BOOKING_DAYS, 14),
   },
 
+  // Trợ lý mua hàng (OpenAI). Không có OPENAI_API_KEY thì tắt, website ẩn nút trợ lý.
+  assistant: {
+    apiKey: process.env.OPENAI_API_KEY || '',
+    model: process.env.OPENAI_MODEL || 'gpt-5.4-mini',
+    baseUrl: (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
+    timeoutMs: toNumber(process.env.ASSISTANT_TIMEOUT_MS, 30000),
+    // Giới hạn chi phí: số câu hỏi mỗi IP mỗi giờ và tổng số câu hỏi của cả cửa hàng mỗi ngày (giờ Việt Nam).
+    perHour: toNumber(process.env.ASSISTANT_MAX_PER_HOUR, 20),
+    dailyLimit: toNumber(process.env.ASSISTANT_DAILY_LIMIT, 500),
+  },
+
   priceWatch: {
     // Chu kỳ so giá với các lượt "theo dõi giá" (mili giây).
     sweepIntervalMs: toNumber(process.env.PRICE_WATCH_SWEEP_MS, 5 * 60 * 1000),

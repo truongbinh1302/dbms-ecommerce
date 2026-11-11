@@ -29,6 +29,7 @@ const inventoryRoutes = require('./routes/inventory.routes');
 const promotionRoutes = require('./routes/promotion.routes');
 const afterSalesRoutes = require('./routes/afterSales.routes');
 const notificationRoutes = require('./routes/notification.routes');
+const assistantRoutes = require('./routes/assistant.routes');
 
 const app = express();
 
@@ -103,6 +104,7 @@ app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/promotions', promotionRoutes);
 app.use('/api/v1/services', afterSalesRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/assistant', assistantRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
