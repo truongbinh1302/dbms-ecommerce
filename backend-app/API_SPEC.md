@@ -1645,10 +1645,14 @@ khuyến mãi khi cả dòng nằm trong giới hạn mỗi đơn và số suấ
 ### Thông báo và theo dõi giá — `/notifications` (đăng nhập)
 
 - `GET /notifications` → `{ unread, items: [{ id, type, title, body, link, read, createdAt }] }`;
-  `type` là `price_drop`, `order_status` hoặc `service_update`.
+  `type` là `price_drop`, `order_status`, `service_update` hoặc `back_in_stock`.
 - `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`.
 - `GET /notifications/price-watches`, `POST /notifications/price-watches` `{ productId, targetPrice? }`,
   `DELETE /notifications/price-watches/:productId`.
+- Báo khi có hàng: `GET /notifications/stock-watches`, `POST /notifications/stock-watches` `{ productId }`
+  (chỉ sản phẩm đang hết, còn hàng → 400 `in_stock`; tối đa 50), `DELETE /notifications/stock-watches/:productId`.
+  Khi tồn > 0 (nhập kho, huỷ đơn, hàng trả nhập lại, admin sửa tồn, hoặc lượt quét định kỳ), server ghi thông báo
+  `back_in_stock` ("Hiện còn N sản phẩm, giá X") và xoá lượt chờ trong cùng transaction: mỗi lượt báo một lần.
 
 Giá so sánh là giá khách trả được lúc đó (giá Hot Deal đang chạy nếu thấp hơn giá niêm yết). Server quét định kỳ
 (`PRICE_WATCH_SWEEP_MS`, mặc định 5 phút) và quét ngay khi admin đổi giá hoặc tạo Hot Deal. Mỗi mức giá chỉ báo

@@ -299,8 +299,8 @@ const updateProduct = async (id, productData, adminId = null) => {
     `);
 
   await syncSearchText(Number(id));
-  // Giá đổi: báo ngay cho khách đang theo dõi giá (không chờ lượt quét định kỳ).
-  if (price !== undefined) notificationService.sweepSoon();
+  // Giá hoặc tồn đổi: báo ngay cho khách đang theo dõi giá / chờ có hàng (không chờ lượt quét định kỳ).
+  if (price !== undefined || stock !== undefined) notificationService.sweepSoon();
   await writeProductLog({
     productId: Number(id),
     action: 'updated',
@@ -379,6 +379,7 @@ const updateStock = async (id, stock, reason, adminId) => {
     notes: note,
   });
 
+  if (oldStock <= 0 && nextStock > 0) notificationService.sweepSoon();
   return { productId: Number(id), oldStock, newStock: nextStock };
 };
 

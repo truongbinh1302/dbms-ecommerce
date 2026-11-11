@@ -124,13 +124,15 @@ const startPaymentExpirySweeper = () => {
   timer.unref();
 };
 
-// Định kỳ so giá với các lượt theo dõi giá (bắt cả Hot Deal hẹn giờ bắt đầu).
+// Định kỳ so giá với các lượt theo dõi giá (bắt cả Hot Deal hẹn giờ bắt đầu) và báo khi có hàng lại.
 const startPriceWatchSweeper = () => {
   const notificationService = require('./services/notification.service');
   const run = async () => {
     try {
       const sent = await notificationService.sweepPriceWatches();
       if (sent > 0) console.log(`[price-watch] Sent ${sent} price drop notification(s)`);
+      const restocked = await notificationService.sweepStockWatches();
+      if (restocked > 0) console.log(`[stock-watch] Sent ${restocked} back-in-stock notification(s)`);
     } catch (err) {
       console.error('[price-watch] Sweep failed:', err.message);
     }

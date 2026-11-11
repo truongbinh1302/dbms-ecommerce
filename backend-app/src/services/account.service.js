@@ -72,6 +72,9 @@ const exportMyData = async (userId) => {
       SELECT w.ProductID, p.Name AS ProductName, w.PriceAtWatch, w.TargetPrice, w.CreatedAt
       FROM PriceWatches w JOIN Products p ON p.ProductID = w.ProductID WHERE w.UserID = @userId;
 
+      SELECT w.ProductID, p.Name AS ProductName, w.CreatedAt
+      FROM StockWatches w JOIN Products p ON p.ProductID = w.ProductID WHERE w.UserID = @userId;
+
       SELECT Type, Title, Body, Link, IsRead, CreatedAt FROM Notifications WHERE UserID = @userId ORDER BY NotificationID;
 
       SELECT r.ReturnID, r.ReturnCode, r.OrderID, r.Kind, r.Reason, r.Description, r.Status, r.RefundAmount, r.AdminNote,
@@ -87,7 +90,7 @@ const exportMyData = async (userId) => {
 
   const [
     users, orders, orderItems, cart, quotes, warranties, vouchers,
-    serviceRequests = [], priceWatches = [], notifications = [], returns = [], returnItems = [],
+    serviceRequests = [], priceWatches = [], stockWatches = [], notifications = [], returns = [], returnItems = [],
   ] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
@@ -126,6 +129,7 @@ const exportMyData = async (userId) => {
       DeviceInfo: parseJson(request.DeviceInfo),
     })),
     priceWatches,
+    stockWatches,
     notifications,
     returnRequests: returns.map(({ ReturnID, ...request }) => ({
       ...request,
@@ -206,6 +210,7 @@ const deleteAccount = async (userId, password) => {
       .query(`
         DELETE FROM CartItems WHERE UserID = @userId;
         DELETE FROM PriceWatches WHERE UserID = @userId;
+        DELETE FROM StockWatches WHERE UserID = @userId;
         DELETE FROM Notifications WHERE UserID = @userId;
         UPDATE BuildQuotes SET UserID = NULL WHERE UserID = @userId;
         -- Yêu cầu dịch vụ: huỷ yêu cầu đang mở, xoá địa chỉ, số điện thoại và mô tả (giữ mã và ngày để đối soát).

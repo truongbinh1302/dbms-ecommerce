@@ -439,6 +439,7 @@ const updateReturn = async (adminId, returnId, payload = {}) => {
 
     const updated = await getReturn(transaction, current.ReturnID);
     await transaction.commit();
+    if (restocked) notificationService.sweepSoon(); // hàng trả về đã nhập kho: báo khách đang chờ có hàng
     return updated;
   } catch (err) {
     await safeRollback(transaction);

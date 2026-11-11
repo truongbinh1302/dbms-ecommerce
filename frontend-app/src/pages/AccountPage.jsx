@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import PageMessage from '../components/PageMessage'
-import { changePassword, deleteMyAccount, exportMyData, fetchMe, fetchPriceWatches, unwatchPrice } from '../api/client'
+import { changePassword, deleteMyAccount, exportMyData, fetchMe, fetchPriceWatches, fetchStockWatches, unwatchPrice, unwatchStock } from '../api/client'
 import { formatCurrency } from '../utils/format'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatAddress } from '../utils/orderLabels'
@@ -55,6 +55,48 @@ function PriceWatchList({ userId }) {
             </li>
           )
         })}
+      </ul>
+    </section>
+  )
+}
+
+// Sản phẩm đang chờ có hàng: chỉ hiện khi có, bỏ chờ được.
+function StockWatchList({ userId }) {
+  const [state, setState] = useState({ userId: null, items: [] })
+  const [version, setVersion] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchStockWatches()
+      .then((items) => !cancelled && setState({ userId, items: Array.isArray(items) ? items : [] }))
+      .catch(() => !cancelled && setState({ userId, items: [] }))
+    return () => {
+      cancelled = true
+    }
+  }, [userId, version])
+
+  const items = state.userId === userId ? state.items : []
+  if (items.length === 0) return null
+  return (
+    <section className={CARD}>
+      <h2 className="text-xl font-black text-slate-900">Đang chờ có hàng</h2>
+      <p className="mt-2 text-sm text-slate-600">Khi hàng về, bạn nhận một thông báo ở biểu tượng chuông.</p>
+      <ul className="mt-3 divide-y divide-slate-100">
+        {items.map((item) => (
+          <li key={item.productId} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+            <span className="min-w-0">
+              <a href={hrefFor(`/san-pham/${item.productId}`)} className="font-semibold text-slate-900 hover:text-red-600">{item.name}</a>
+              <span className="block text-slate-500">{item.stock > 0 ? `Đã có ${item.stock} sản phẩm` : 'Chưa có hàng'} · giá {formatCurrency(item.price)}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => unwatchStock(item.productId).finally(() => setVersion((value) => value + 1))}
+              className="shrink-0 text-xs font-bold text-slate-500 hover:text-red-600 hover:underline"
+            >
+              Bỏ chờ
+            </button>
+          </li>
+        ))}
       </ul>
     </section>
   )
@@ -154,6 +196,7 @@ export default function AccountPage({ currentUser, onRequireLogin, onAccountDele
       </section>
 
       <PriceWatchList userId={userId} />
+      <StockWatchList userId={userId} />
 
       <form onSubmit={handleChangePassword} className={CARD}>
         <h2 className="text-xl font-black text-slate-900">Đổi mật khẩu</h2>

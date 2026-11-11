@@ -50,7 +50,9 @@ features and DBMS demonstrations.
 - Price watch and in-account notifications: a customer can watch a product
   (optionally with a target price) and gets a notification when the price, or
   a running Hot Deal, drops below it; order status changes and service
-  request updates also notify the customer (bell in the header).
+  request updates also notify the customer (bell in the header). A sold-out
+  product has "Báo tôi khi có hàng": when stock comes back (a receipt, a
+  cancelled order, a restocked return) the customer is notified once.
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -358,7 +360,7 @@ The API is mounted under `/api/v1` and includes:
 - `/inventory` — stock receipts, stock ledger, low-stock list (admin)
 - `/promotions` — running and upcoming Hot Deals (public), create/list/stop (admin)
 - `/services` — home service slots, trade-in estimate, customer service requests, admin processing
-- `/notifications` — the customer's notifications, mark as read, price watches
+- `/notifications` — the customer's notifications, mark as read, price watches, back-in-stock alerts
 
 Detailed request and response examples are documented in
 [`backend-app/API_SPEC.md`](backend-app/API_SPEC.md).

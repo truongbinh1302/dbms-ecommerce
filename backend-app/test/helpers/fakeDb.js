@@ -114,6 +114,9 @@ const createFakeDb = () => {
       return [];
     }],
 
+    // notification.service: quét theo dõi giá / chờ có hàng (chạy nền sau khi giá hoặc tồn đổi). Không có lượt chờ nào.
+    [/^SET XACT_ABORT ON; BEGIN TRANSACTION; DECLARE @hits TABLE/, () => [{ Sent: 0 }]],
+
     // inventory.service.changeStock: đổi tồn + ghi StockMovements trong một câu lệnh.
     [/^DECLARE @after TABLE \(Stock INT\); UPDATE Products SET Stock = Stock \+ @change/, (i, s) => {
       const p = s.products.find((x) => x.ProductID === i.productId);

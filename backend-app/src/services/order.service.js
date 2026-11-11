@@ -592,6 +592,7 @@ const cancelOrder = async (orderId, userId, reason) => {
 
     const result = await cancelLockedOrder(transaction, order, { reason: reason || null });
     await transaction.commit();
+    notificationService.sweepSoon(); // hàng trả về kho: báo khách đang chờ có hàng
     return { orderId: result.orderId, status: result.status, paymentStatus: result.paymentStatus };
   } catch (err) {
     await safeRollback(transaction);
@@ -647,6 +648,7 @@ const updateOrderStatus = async (orderId, status, note, shipment = {}) => {
         link: `/don-hang/${order.OrderID}`,
       });
       await transaction.commit();
+      notificationService.sweepSoon();
       return { id: result.orderId, status: result.status, updatedAt: result.updatedAt };
     } catch (err) {
       await safeRollback(transaction);

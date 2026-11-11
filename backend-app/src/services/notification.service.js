@@ -206,10 +206,99 @@ const sweepPriceWatches = async () => {
   return Number(result.recordset[0]?.Sent || 0);
 };
 
-/** Chạy quét ngay (không chờ), dùng sau khi admin đổi giá hoặc tạo Hot Deal. Lỗi chỉ ghi log. */
+// ---------- Báo khi có hàng ----------
+
+const watchStock = async (userId, productId) => {
+  const id = Number(productId);
+  if (!Number.isInteger(id) || id <= 0) throw createHttpError(400, 'Sản phẩm không hợp lệ');
+  const product = await new sql.Request(getPool())
+    .input('productId', sql.Int, id)
+    .query('SELECT ProductID, Stock FROM Products WHERE ProductID = @productId AND IsDeleted = 0');
+  if (!product.recordset[0]) throw createHttpError(404, 'Không tìm thấy sản phẩm');
+  if (Number(product.recordset[0].Stock) > 0) {
+    throw createHttpError(400, 'Sản phẩm đang còn hàng, bạn có thể đặt ngay', { code: 'in_stock' });
+  }
+
+  const result = await new sql.Request(getPool())
+    .input('userId', sql.Int, Number(userId))
+    .input('productId', sql.Int, id)
+    .input('max', sql.Int, MAX_WATCHES)
+    .query(`
+      SET XACT_ABORT ON;
+      BEGIN TRANSACTION;
+      DECLARE @total INT = (SELECT COUNT(*) FROM StockWatches WITH (UPDLOCK, HOLDLOCK) WHERE UserID = @userId AND ProductID <> @productId);
+      IF @total < @max AND NOT EXISTS (SELECT 1 FROM StockWatches WHERE UserID = @userId AND ProductID = @productId)
+        INSERT INTO StockWatches (UserID, ProductID) VALUES (@userId, @productId);
+      COMMIT TRANSACTION;
+      SELECT @total AS Others;
+    `);
+  if (Number(result.recordset[0].Others) >= MAX_WATCHES) {
+    throw createHttpError(409, `Bạn đang chờ ${MAX_WATCHES} sản phẩm, hãy bỏ bớt trước khi thêm`, { code: 'too_many_watches' });
+  }
+  return { productId: id, waiting: true };
+};
+
+const unwatchStock = async (userId, productId) => {
+  await new sql.Request(getPool())
+    .input('userId', sql.Int, Number(userId))
+    .input('productId', sql.Int, Number(productId) || 0)
+    .query('DELETE FROM StockWatches WHERE UserID = @userId AND ProductID = @productId');
+  return { productId: Number(productId), waiting: false };
+};
+
+const listStockWatches = async (userId) => {
+  const result = await new sql.Request(getPool())
+    .input('userId', sql.Int, Number(userId))
+    .query(`
+      SELECT w.ProductID, p.Name, p.Price, p.Stock, w.CreatedAt
+      FROM StockWatches w JOIN Products p ON p.ProductID = w.ProductID
+      WHERE w.UserID = @userId AND p.IsDeleted = 0
+      ORDER BY w.CreatedAt DESC
+    `);
+  return result.recordset.map((row) => ({
+    productId: row.ProductID,
+    name: row.Name,
+    price: Number(row.Price),
+    stock: Number(row.Stock),
+    createdAt: row.CreatedAt,
+  }));
+};
+
+/**
+ * Báo cho mọi khách đang chờ sản phẩm đã có hàng lại, rồi xoá lượt chờ (mỗi lượt báo một lần).
+ * Xoá và ghi thông báo trong cùng transaction nên chạy song song hai lần không báo trùng.
+ */
+const sweepStockWatches = async () => {
+  const result = await new sql.Request(getPool()).query(`
+    SET XACT_ABORT ON;
+    BEGIN TRANSACTION;
+    DECLARE @hits TABLE (UserID INT, ProductID INT);
+
+    DELETE w
+    OUTPUT DELETED.UserID, DELETED.ProductID INTO @hits
+    FROM StockWatches w
+    JOIN Products p ON p.ProductID = w.ProductID
+    JOIN Users u ON u.UserID = w.UserID AND u.IsActive = 1
+    WHERE p.Stock > 0 AND p.IsDeleted = 0;
+
+    INSERT INTO Notifications (UserID, Type, Title, Body, Link)
+    SELECT h.UserID, N'back_in_stock',
+           LEFT(N'Đã có hàng: ' + p.Name, 200),
+           N'Hiện còn ' + CAST(p.Stock AS NVARCHAR(12)) + N' sản phẩm, giá ' + FORMAT(p.Price, N'#,0', 'vi-VN') + N'đ.',
+           N'/san-pham/' + CAST(h.ProductID AS NVARCHAR(12))
+    FROM @hits h JOIN Products p ON p.ProductID = h.ProductID;
+
+    COMMIT TRANSACTION;
+    SELECT COUNT(*) AS Sent FROM @hits;
+  `);
+  return Number(result.recordset[0]?.Sent || 0);
+};
+
+/** Chạy quét ngay (không chờ), dùng sau khi giá hoặc tồn kho đổi (đổi giá, Hot Deal, nhập kho, huỷ đơn, trả hàng). Lỗi chỉ ghi log. */
 const sweepSoon = () => {
   setImmediate(() => {
     sweepPriceWatches().catch((err) => console.warn('[price-watch] sweep failed:', err.message));
+    sweepStockWatches().catch((err) => console.warn('[stock-watch] sweep failed:', err.message));
   });
 };
 
@@ -222,5 +311,9 @@ module.exports = {
   unwatchProduct,
   listWatches,
   sweepPriceWatches,
+  watchStock,
+  unwatchStock,
+  listStockWatches,
+  sweepStockWatches,
   sweepSoon,
 };

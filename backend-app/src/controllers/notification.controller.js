@@ -17,4 +17,7 @@ module.exports = {
   listWatches: handle((req) => notificationService.listWatches(req.user.id), 'Price watches retrieved'),
   watch: handle((req) => notificationService.watchProduct(req.user.id, req.body || {}), 'Watching price', 201),
   unwatch: handle((req) => notificationService.unwatchProduct(req.user.id, req.params.productId), 'Stopped watching price'),
+  listStockWatches: handle((req) => notificationService.listStockWatches(req.user.id), 'Stock watches retrieved'),
+  watchStock: handle((req) => notificationService.watchStock(req.user.id, (req.body || {}).productId), 'Waiting for stock', 201),
+  unwatchStock: handle((req) => notificationService.unwatchStock(req.user.id, req.params.productId), 'Stopped waiting for stock'),
 };

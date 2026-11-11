@@ -12,9 +12,10 @@ const notificationService = require('../../src/services/notification.service');
 const productService = require('../../src/services/product.service');
 const promotionService = require('../../src/services/promotion.service');
 const orderService = require('../../src/services/order.service');
+const inventoryService = require('../../src/services/inventory.service');
 
 const tag = `nt${Date.now()}`;
-const ctx = { userIds: [], productId: null, promotionIds: [] };
+const ctx = { userIds: [], productId: null, promotionIds: [], extraProductIds: [], receiptIds: [] };
 
 const query = async (text, inputs = {}) => {
   const request = new sql.Request(getPool());
@@ -52,7 +53,15 @@ test.before(async () => {
 test.after(async () => {
   const users = ctx.userIds.join(',') || '0';
   const promotions = ctx.promotionIds.join(',') || '0';
+  const extra = ctx.extraProductIds.join(',') || '0';
+  const receipts = ctx.receiptIds.join(',') || '0';
   await query(`
+    DELETE FROM StockWatches WHERE UserID IN (${users});
+    DELETE FROM StockReceiptItems WHERE ReceiptID IN (${receipts});
+    DELETE FROM StockReceipts WHERE ReceiptID IN (${receipts});
+    DELETE FROM StockMovements WHERE ProductID IN (${extra});
+    DELETE FROM PriceHistory WHERE ProductID IN (${extra});
+    DELETE FROM Products WHERE ProductID IN (${extra});
     DELETE FROM Notifications WHERE UserID IN (${users});
     DELETE FROM PriceWatches WHERE UserID IN (${users});
     DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID IN (${users});
@@ -65,7 +74,7 @@ test.after(async () => {
     DELETE FROM PriceHistory WHERE ProductID = @productId;
     DELETE FROM Products WHERE ProductID = @productId;
   `, { productId: [sql.Int, ctx.productId] });
-  await ProductLog.deleteMany({ productId: ctx.productId });
+  await ProductLog.deleteMany({ productId: { $in: [ctx.productId, ...ctx.extraProductIds] } });
   // Chờ lượt quét sweepSoon cuối cùng (do updateProduct) chạy xong trước khi đóng kết nối.
   await new Promise((resolve) => setTimeout(resolve, 300));
   await mongoose.disconnect();
@@ -169,4 +178,42 @@ test('đơn đổi trạng thái: khách nhận thông báo, ghi chú của khá
   assert.deepEqual(await notificationService.markRead(ctx.userIds[0], mine.items[1].id), { updated: 0 });
   await notificationService.markRead(chi);
   assert.equal((await notificationService.listMine(chi)).unread, 0);
+});
+
+test('báo khi có hàng: chỉ cho sản phẩm đang hết, báo một lần khi hàng về rồi xoá lượt chờ', async () => {
+  const [category] = await query('SELECT TOP 1 CategoryID FROM Categories ORDER BY CategoryID');
+  const [admin] = await query("SELECT UserID FROM Users WHERE Email = N'admin@btstore.local'");
+  const { productId: soldOut } = await productService.createProduct({
+    name: `Hết hàng ${tag}`, slug: `${tag}-sold-out`, price: 2500000, stock: 0, categoryId: category.CategoryID,
+  }, null);
+  ctx.extraProductIds.push(soldOut);
+  const ben = await newUser('ben');
+  const backInStock = () => query(
+    "SELECT Title, Body, Link FROM Notifications WHERE UserID = @userId AND Type = N'back_in_stock'",
+    { userId: [sql.Int, ben] },
+  );
+
+  await assert.rejects(notificationService.watchStock(ben, ctx.productId), (err) => err.status === 400 && err.data.code === 'in_stock');
+  await assert.rejects(notificationService.watchStock(ben, 0), (err) => err.status === 400);
+  assert.deepEqual(await notificationService.watchStock(ben, soldOut), { productId: soldOut, waiting: true });
+  await notificationService.watchStock(ben, soldOut); // bấm lại không tạo trùng
+  const waiting = await notificationService.listStockWatches(ben);
+  assert.deepEqual(waiting.map((item) => [item.productId, item.stock]), [[soldOut, 0]]);
+
+  await notificationService.sweepStockWatches();
+  assert.equal((await backInStock()).length, 0, 'còn hết hàng thì chưa báo');
+
+  const receipt = await inventoryService.createReceipt({ supplier: 'NCC báo có hàng', items: [{ productId: soldOut, quantity: 4, unitCost: 2000000 }] }, admin.UserID);
+  ctx.receiptIds.push(receipt.id);
+  await notificationService.sweepStockWatches();
+  await notificationService.sweepStockWatches();
+  const sent = await backInStock();
+  assert.equal(sent.length, 1, 'báo đúng một lần');
+  assert.match(sent[0].Title, new RegExp(`Đã có hàng: Hết hàng ${tag}`));
+  assert.match(sent[0].Body, /Hiện còn 4 sản phẩm, giá 2\.500\.000đ/);
+  assert.equal(sent[0].Link, `/san-pham/${soldOut}`);
+  assert.equal((await notificationService.listStockWatches(ben)).length, 0, 'lượt chờ đã xoá');
+
+  await assert.rejects(notificationService.watchStock(ben, soldOut), (err) => err.data?.code === 'in_stock');
+  assert.deepEqual(await notificationService.unwatchStock(ben, soldOut), { productId: soldOut, waiting: false });
 });

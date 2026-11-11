@@ -7,6 +7,7 @@ import PageMessage from '../components/PageMessage'
 import PriceHistory from '../components/PriceHistory'
 import ReviewForm from '../components/ReviewForm'
 import PriceWatchButton from '../components/PriceWatchButton'
+import StockWatchButton from '../components/StockWatchButton'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatDateTime } from '../utils/orderLabels'
 import useCountdown, { formatClockTime, formatCountdown } from '../hooks/useCountdown'
@@ -135,6 +136,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
             <div className={`mt-2 text-sm font-semibold ${outOfStock ? 'text-red-600' : 'text-emerald-700'}`}>
               {outOfStock ? 'Tạm hết hàng' : `Còn ${product.stock} sản phẩm`}
             </div>
+            {outOfStock ? <StockWatchButton productId={product.id} currentUser={currentUser} onRequireLogin={onRequireLogin} /> : null}
           </div>
 
           {product.specs.length > 0 ? (

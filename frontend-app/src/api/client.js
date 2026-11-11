@@ -363,6 +363,19 @@ export function unwatchPrice(productId) {
   return request(`/notifications/price-watches/${encodeURIComponent(productId)}`, { method: 'DELETE', auth: true });
 }
 
+// Báo khi có hàng (sản phẩm đang hết).
+export function fetchStockWatches() {
+  return request('/notifications/stock-watches', { method: 'GET', auth: true });
+}
+
+export function watchStock(productId) {
+  return request('/notifications/stock-watches', { method: 'POST', auth: true, body: JSON.stringify({ productId }) });
+}
+
+export function unwatchStock(productId) {
+  return request(`/notifications/stock-watches/${encodeURIComponent(productId)}`, { method: 'DELETE', auth: true });
+}
+
 // --- Dịch vụ sau bán ---
 export function fetchServiceOptions() {
   return request('/services/options');

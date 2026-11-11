@@ -1,4 +1,5 @@
 const { getPool, sql } = require('../config/db.sql');
+const notificationService = require('./notification.service');
 
 /*
   Sổ kho.
@@ -196,6 +197,7 @@ const createReceipt = async (payload, adminId) => {
     throw err;
   }
 
+  notificationService.sweepSoon(); // hàng về: báo khách đang chờ có hàng
   return getReceipt(receiptId);
 };
 

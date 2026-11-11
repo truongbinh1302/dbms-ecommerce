@@ -12,5 +12,8 @@ router.patch('/:id/read', controller.readOne);
 router.get('/price-watches', controller.listWatches);
 router.post('/price-watches', controller.watch);
 router.delete('/price-watches/:productId', controller.unwatch);
+router.get('/stock-watches', controller.listStockWatches);
+router.post('/stock-watches', controller.watchStock);
+router.delete('/stock-watches/:productId', controller.unwatchStock);
 
 module.exports = router;
