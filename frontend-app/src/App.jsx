@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import './App.css'
 import CustomerSite from './pages/CustomerSite'
-import AdminDashboard from './pages/AdminDashboard'
-import ProductManagement from './pages/ProductManagement'
 import { getStoredToken, normalizeUser } from './api/client'
+
+// Trang quản trị chỉ admin dùng: tải riêng khi mở, để khách không phải tải phần mã này.
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+const ProductManagement = lazy(() => import('./pages/ProductManagement'))
+
+function AdminLoading() {
+  return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm font-semibold text-slate-300">Đang tải trang quản trị...</div>
+}
 
 const VIEW_STORAGE_KEY = 'binhtinhstore-view-mode'
 const normalizeRole = (role = '') => String(role || '').trim().toLowerCase()
@@ -61,10 +67,12 @@ export default function App() {
 
   return view === 'products' ? (
     isAdmin ? (
-      <ProductManagement 
-        token={token} 
-        onBackToAdmin={() => setView('admin')} 
-      />
+      <Suspense fallback={<AdminLoading />}>
+        <ProductManagement
+          token={token}
+          onBackToAdmin={() => setView('admin')}
+        />
+      </Suspense>
     ) : (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
         <div className="rounded-lg bg-white p-8 shadow-lg text-center">
@@ -80,11 +88,13 @@ export default function App() {
       </div>
     )
   ) : view === 'admin' ? (
-    <AdminDashboard 
-      onBackToStore={() => setView('store')}
-      onGoToProductManagement={() => setView('products')}
-      token={token}
-    />
+    <Suspense fallback={<AdminLoading />}>
+      <AdminDashboard
+        onBackToStore={() => setView('store')}
+        onGoToProductManagement={() => setView('products')}
+        token={token}
+      />
+    </Suspense>
   ) : (
     <CustomerSite 
       onOpenAdmin={() => setView('admin')}

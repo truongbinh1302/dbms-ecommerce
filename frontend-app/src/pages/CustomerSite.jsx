@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import heroAsset from '../assets/hero.png'
 import CartDrawer from '../components/CartDrawer'
 import FooterSellerInfo from '../components/FooterSellerInfo'
@@ -11,18 +11,11 @@ import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
 import { clearAuthSession, fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
 import useHashRoute, { hrefFor, navigate } from '../hooks/useHashRoute'
-import AccountPage from './AccountPage'
-import BuildPcPage from './BuildPcPage'
-import ServicesPage from './ServicesPage'
 import CheckoutPage from './CheckoutPage'
 import OrderDetailPage from './OrderDetailPage'
 import OrdersPage from './OrdersPage'
-import PolicyPage from './PolicyPage'
-import PrivacyPolicyPage from './PrivacyPolicyPage'
 import ProductDetailPage from './ProductDetailPage'
-import QuotePage from './QuotePage'
 import SearchPage from './SearchPage'
-import WarrantyPage from './WarrantyPage'
 import {
   categories,
   featuredTiles,
@@ -42,6 +35,13 @@ const CART_STORAGE_KEY = 'binhtinhstore-cart'
 const VIEWED_STORAGE_KEY = 'binhtinhstore-viewed'
 const FAVORITES_STORAGE_KEY = 'binhtinhstore-favorites'
 // Mã báo giá Build PC đang giữ giá cho giỏ hàng (khách bấm "Mua theo báo giá").
+const BuildPcPage = lazy(() => import('./BuildPcPage'))
+const ServicesPage = lazy(() => import('./ServicesPage'))
+const AccountPage = lazy(() => import('./AccountPage'))
+const PrivacyPolicyPage = lazy(() => import('./PrivacyPolicyPage'))
+const PolicyPage = lazy(() => import('./PolicyPage'))
+const QuotePage = lazy(() => import('./QuotePage'))
+const WarrantyPage = lazy(() => import('./WarrantyPage'))
 const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
 // Nút nhanh dưới header có trang riêng.
 const QUICK_LINK_ROUTES = {
@@ -1092,7 +1092,9 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
       </div>
 
       {routeContent ? (
-        <main className="mx-auto min-h-[60vh] max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">{routeContent}</main>
+        <main className="mx-auto min-h-[60vh] max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
+          <Suspense fallback={<p className="py-10 text-center text-sm text-slate-500">Đang tải...</p>}>{routeContent}</Suspense>
+        </main>
       ) : (
       <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
         <section id="hero" className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
