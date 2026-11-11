@@ -55,7 +55,7 @@ const QUICK_LINK_ROUTES = {
 // Liên kết chân trang đã có trang riêng; các mục còn lại chưa có nội dung.
 const FOOTER_LINK_ROUTES = {
   'Giới thiệu': '/chinh-sach/thong-tin',
-  'Hướng dẫn mua hàng': '/chinh-sach/dieu-khoan',
+  'Hướng dẫn mua hàng': '/chinh-sach/huong-dan',
   'Phương thức thanh toán': '/chinh-sach/thanh-toan',
   'Tra cứu đơn hàng': '/don-hang',
   'Liên hệ chăm sóc': '/chinh-sach/khieu-nai',
