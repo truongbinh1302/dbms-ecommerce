@@ -1642,10 +1642,22 @@ khuyến mãi khi cả dòng nằm trong giới hạn mỗi đơn và số suấ
 
 ---
 
+### Hỏi đáp sản phẩm
+
+- `GET /products/:id/questions` (không bắt buộc đăng nhập) → `{ items, mine }`: `items` là câu đã trả lời (công khai,
+  tối đa 50, mới trả lời trước); `mine` là câu đang chờ của chính người xem (cần gửi token).
+- `POST /products/:id/questions` `{ question }` (đăng nhập, ≥ 10 ký tự) → `201`. Mỗi người tối đa 5 câu đang chờ
+  (`409 too_many_pending`); tên hiển thị chỉ là tên gọi.
+- Admin: `GET /products/admin/questions?status=pending|answered|hidden` → `{ items, pendingCount }`;
+  `PATCH /products/admin/questions/:questionId` `{ answer }` để trả lời (công khai, báo người hỏi một lần bằng
+  thông báo `question_answered`) hoặc `{ hidden: true }` để ẩn.
+
+---
+
 ### Thông báo và theo dõi giá — `/notifications` (đăng nhập)
 
 - `GET /notifications` → `{ unread, items: [{ id, type, title, body, link, read, createdAt }] }`;
-  `type` là `price_drop`, `order_status`, `service_update` hoặc `back_in_stock`.
+  `type` là `price_drop`, `order_status`, `service_update`, `back_in_stock` hoặc `question_answered`.
 - `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`.
 - `GET /notifications/price-watches`, `POST /notifications/price-watches` `{ productId, targetPrice? }`,
   `DELETE /notifications/price-watches/:productId`.

@@ -41,6 +41,7 @@ export default function PrivacyPolicyPage() {
           <li><strong>Thanh toán VNPay:</strong> chúng tôi không nhận và không lưu số thẻ hay tài khoản ngân hàng. Chỉ lưu mã giao dịch và kết quả VNPay trả về.</li>
           <li><strong>Hoạt động mua sắm:</strong> giỏ hàng (lưu trên máy chủ khi bạn đăng nhập), báo giá Build PC, đánh giá sản phẩm, số serial bảo hành, sản phẩm bạn bấm theo dõi giá (kèm giá mong muốn nếu bạn nhập) hoặc chờ có hàng, và các thông báo gửi tới tài khoản.</li>
           <li><strong>Yêu cầu dịch vụ:</strong> khi bạn đặt lịch kỹ thuật tại nhà, gửi yêu cầu thu cũ hoặc bảo hành: địa chỉ và ngày giờ hẹn, số điện thoại liên hệ, mô tả lỗi, thông tin máy cũ (loại, mẫu, giá mua, thời gian dùng, tình trạng).</li>
+          <li><strong>Hỏi đáp:</strong> câu hỏi bạn gửi ở trang sản phẩm. Sau khi cửa hàng trả lời, câu hỏi hiện công khai kèm tên gọi của bạn (chữ cuối trong họ tên), không kèm họ tên đầy đủ hay email.</li>
           <li><strong>Đổi trả:</strong> sản phẩm, số lượng, lý do và mô tả tình trạng bạn nhập khi yêu cầu đổi hoặc trả hàng; số tiền cửa hàng đã hoàn.</li>
           <li><strong>Trên trình duyệt của bạn (localStorage):</strong> phiên đăng nhập, giỏ hàng, sản phẩm đã xem, sản phẩm yêu thích, cấu hình Build PC đang chọn. Website không dùng cookie quảng cáo hay công cụ theo dõi của bên thứ ba.</li>
           <li><strong>Kỹ thuật:</strong> địa chỉ IP và thời điểm truy cập, dùng để giới hạn số lần gọi và chống tấn công.</li>
@@ -98,6 +99,7 @@ export default function PrivacyPolicyPage() {
           <li>Họ tên, email, số điện thoại, địa chỉ mặc định và mật khẩu bị thay bằng giá trị vô danh; tài khoản bị khoá và không đăng nhập lại được.</li>
           <li>Giỏ hàng, đánh giá sản phẩm, danh sách theo dõi giá, danh sách chờ có hàng và thông báo của bạn bị xoá; báo giá Build PC không còn gắn với bạn.</li>
           <li>Yêu cầu dịch vụ đang mở bị huỷ; địa chỉ, số điện thoại, mô tả và thông tin máy trong các yêu cầu dịch vụ bị xoá.</li>
+          <li>Câu hỏi chưa được trả lời bị xoá; câu đã trả lời được giữ cho người mua sau tham khảo nhưng hiện là “Khách hàng”, không còn gắn với bạn.</li>
           <li>Đơn hàng đã đặt được giữ lại làm chứng từ bán hàng như mục 4.</li>
           <li>Nếu còn đơn đang xử lý hoặc đang giao, bạn cần chờ giao xong hoặc huỷ đơn trước; còn yêu cầu đổi trả đang xử lý thì chờ cửa hàng hoàn tiền hoặc gửi hàng đổi xong.</li>
           <li>Sau khi xoá, bạn có thể đăng ký lại bằng chính email đó như một tài khoản mới.</li>

@@ -6,6 +6,7 @@ import { mapApiProductToStoreProduct } from '../utils/productMapping'
 import PageMessage from '../components/PageMessage'
 import PriceHistory from '../components/PriceHistory'
 import ReviewForm from '../components/ReviewForm'
+import ProductQuestions from '../components/ProductQuestions'
 import PriceWatchButton from '../components/PriceWatchButton'
 import StockWatchButton from '../components/StockWatchButton'
 import { hrefFor } from '../hooks/useHashRoute'
@@ -216,6 +217,8 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
           onCreated={() => setReviewsVersion((version) => version + 1)}
         />
       </section>
+
+      <ProductQuestions productId={productId} currentUser={currentUser} onRequireLogin={onRequireLogin} />
     </div>
   )
 }

@@ -53,6 +53,9 @@ features and DBMS demonstrations.
   request updates also notify the customer (bell in the header). A sold-out
   product has "Báo tôi khi có hàng": when stock comes back (a receipt, a
   cancelled order, a restocked return) the customer is notified once.
+- Product Q&A: signed-in customers ask about a product, the store answers and
+  the answer is published under the question with the asker's given name only;
+  the asker is notified. Unanswered questions are visible only to the asker.
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -346,7 +349,7 @@ The API is mounted under `/api/v1` and includes:
 - `/auth` — registration, login, token refresh
 - `/users` — profile and user management
 - `/categories` — category operations
-- `/products` — catalog and product management
+- `/products` — catalog and product management, product Q&A (`/products/:id/questions`, admin `/products/admin/questions`)
 - `/cart` — saved cart (`GET`/`PUT /cart`), validation and server-side price quote (`POST /cart/quote`)
 - `/locations/provinces` — the 34 provinces and cities used by the address form
 - `/builder` — Build PC parts, compatibility check, suggested builds, upgrade advice, price-locked quotes

@@ -7,6 +7,7 @@ import PromotionsPanel from '../components/admin/PromotionsPanel'
 import ServiceRequestsPanel from '../components/admin/ServiceRequestsPanel'
 import ReturnsPanel from '../components/admin/ReturnsPanel'
 import VouchersPanel from '../components/admin/VouchersPanel'
+import QuestionsPanel from '../components/admin/QuestionsPanel'
 import useDocumentTitle from '../hooks/useDocumentTitle'
 import OrderDetailDrawer from '../components/admin/OrderDetailDrawer'
 import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
@@ -230,6 +231,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                 <a href="#admin-vouchers" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Mã giảm giá</a>
                 <a href="#admin-services" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Dịch vụ</a>
                 <a href="#admin-returns" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Đổi trả</a>
+                <a href="#admin-questions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Hỏi đáp</a>
               </nav>
               <button
                 type="button"
@@ -544,6 +546,10 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
 
         <div id="admin-returns" className="mt-6 scroll-mt-32">
           <ReturnsPanel token={token} />
+        </div>
+
+        <div id="admin-questions" className="mt-6 scroll-mt-32">
+          <QuestionsPanel token={token} />
         </div>
       </div>
     </div>

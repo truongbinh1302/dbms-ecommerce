@@ -512,6 +512,24 @@ export function fetchMyWarranties() {
   return request('/warranties/me', { auth: true });
 }
 
+// --- Hỏi đáp sản phẩm ---
+// Gửi kèm token nếu đã đăng nhập để thấy cả câu hỏi đang chờ của mình.
+export function fetchProductQuestions(productId) {
+  return request(`/products/${productId}/questions`, { auth: Boolean(getStoredToken()) });
+}
+
+export function askProductQuestion(productId, question) {
+  return request(`/products/${productId}/questions`, { method: 'POST', auth: true, body: JSON.stringify({ question }) });
+}
+
+export function fetchAdminQuestions(params, token) {
+  return adminGet('/products/admin/questions', params, token);
+}
+
+export function moderateQuestion(questionId, payload, token) {
+  return request(`/products/admin/questions/${encodeURIComponent(questionId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
+}
+
 export function fetchReviews(productId) {
   return request(`/reviews/products/${productId}`);
 }
