@@ -10,7 +10,7 @@ import SectionHeader from '../components/SectionHeader'
 import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
 import { clearAuthSession, fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
-import useHashRoute, { navigate } from '../hooks/useHashRoute'
+import useHashRoute, { hrefFor, navigate } from '../hooks/useHashRoute'
 import AccountPage from './AccountPage'
 import BuildPcPage from './BuildPcPage'
 import ServicesPage from './ServicesPage'
@@ -34,6 +34,7 @@ import {
   trustHighlights,
 } from '../data/storeData'
 import { classNames, formatCurrency } from '../utils/format'
+import useStoreInfo from '../hooks/useStoreInfo'
 import { mapApiProductToStoreProduct, normalizeText } from '../utils/productMapping'
 
 const CART_STORAGE_KEY = 'binhtinhstore-cart'
@@ -59,6 +60,8 @@ const FOOTER_LINK_ROUTES = {
   'Đổi trả': '/chinh-sach/doi-tra',
   'Bảo mật thông tin': '/chinh-sach-bao-mat',
   'Lắp đặt tại nhà': '/dich-vu/tai-nha',
+  'Dịch vụ sau bán': '/dich-vu/tai-nha',
+  'Định giá máy cũ': '/dich-vu/thu-cu',
 }
 const SEEDED_VIEWED = []
 
@@ -78,11 +81,52 @@ const HERO_TARGETS = {
   'hero-office-setup': 'section-laptops',
 }
 
-const PROMO_TARGETS = {
-  'pc-monitor': 'section-monitors',
-  'keyboard-deal': 'section-keyboards',
-  'chair-deal': 'section-accessories',
-  'mouse-deal': 'section-mice',
+// Số liệu trên banner lấy từ cấu hình thật (/store/info); chưa tải xong thì dùng giá trị mặc định của server.
+const DEFAULT_STORE_INFO = {
+  shipping: { freeThreshold: 3000000, deliveryDaysLocal: '1–2', province: 'TP. Hồ Chí Minh' },
+  returnDays: 7,
+  quoteValidHours: 48,
+  tierDiscounts: [{ minSubtotal: 30000000, amount: 500000 }],
+}
+
+function compactMoney(value) {
+  const amount = Number(value) || 0
+  if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`
+  return `${amount.toLocaleString('vi-VN')}đ`
+}
+
+function heroStat(key, info) {
+  switch (key) {
+    case 'delivery':
+      return { value: `${info.shipping.deliveryDaysLocal} ngày`, label: `giao tại ${info.shipping.province}` }
+    case 'freeShip':
+      return { value: 'Free ship', label: `đơn từ ${compactMoney(info.shipping.freeThreshold)}` }
+    case 'returns':
+      return { value: `${info.returnDays} ngày`, label: 'đổi trả nếu lỗi nhà sản xuất' }
+    case 'quoteHold':
+      return { value: `${info.quoteValidHours} giờ`, label: 'giữ giá báo giá Build PC' }
+    case 'payment':
+      return { value: 'COD', label: 'hoặc VNPay' }
+    case 'warranty':
+      return { value: 'Serial', label: 'tra cứu bảo hành online' }
+    default:
+      return null
+  }
+}
+
+function trustDescription(item, info) {
+  if (item.id === 'shipping') return `Đơn từ ${formatCurrency(info.shipping.freeThreshold)}`
+  if (item.id === 'returns') return 'Lỗi nhà sản xuất, giao sai, khác mô tả'
+  return item.description
+}
+
+function trustTitle(item, info) {
+  if (item.id === 'returns') return `Đổi trả ${info.returnDays} ngày`
+  return item.title
+}
+
+function biggestTier(info) {
+  return [...(info.tierDiscounts || [])].sort((a, b) => b.amount - a.amount)[0] || null
 }
 
 
@@ -193,6 +237,8 @@ function mergeCarts(localCart, serverItems) {
 }
 
 export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isAdmin, onUserChange }) {
+  const storeInfo = useStoreInfo() || DEFAULT_STORE_INFO
+  const topTier = biggestTier(storeInfo)
   const route = useHashRoute()
   const [runtimeProducts, setRuntimeProducts] = useState([])
   const [apiStatus, setApiStatus] = useState('Đang kết nối API SQL Server')
@@ -766,22 +812,28 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
-      <DesktopSideAd align="left" />
-      <DesktopSideAd align="right" />
+      <DesktopSideAd align="left" topTier={topTier} quoteHours={storeInfo.quoteValidHours} />
+      <DesktopSideAd align="right" topTier={topTier} quoteHours={storeInfo.quoteValidHours} />
 
       <div className="bg-slate-950 text-white">
         <div className="mx-auto flex max-w-[1480px] flex-col gap-2 px-4 py-1.5 text-xs sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex flex-wrap items-center gap-3 text-slate-200">
             <span className="rounded-full bg-red-500/15 px-3 py-1 font-semibold text-red-200">BinhTinhStore • Demo Storefront</span>
             <span>Build PC, laptop, gear và phụ kiện trong một giao diện duy nhất.</span>
-            <span className="rounded-full bg-emerald-500/15 px-3 py-1 font-semibold text-emerald-200">{apiStatus}</span>
+            {/* Trạng thái kết nối API chỉ để lập trình viên xem khi chạy dev. */}
+            {import.meta.env.DEV ? (
+              <span className="rounded-full bg-emerald-500/15 px-3 py-1 font-semibold text-emerald-200">{apiStatus}</span>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3 text-slate-300">
+            <a href="tel:0338446502" className="hidden items-center gap-2 rounded-full bg-white/5 px-3 py-1.5 hover:bg-white/10 xl:inline-flex">
+              <StoreGlyph name="phone" className="size-4" /> Hotline 0338446502
+            </a>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1.5">
-              <StoreGlyph name="shield" className="size-4" /> Chính hãng 100%
+              <StoreGlyph name="shield" className="size-4" /> Đổi trả {storeInfo.returnDays} ngày
             </span>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1.5">
-              <StoreGlyph name="truck" className="size-4" /> Giao nhanh toàn quốc
+              <StoreGlyph name="truck" className="size-4" /> Giao {storeInfo.shipping.deliveryDaysLocal} ngày tại {storeInfo.shipping.province}
             </span>
           </div>
         </div>
@@ -1093,7 +1145,9 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                     </button>
                     <button
                       type="button"
-                      onClick={() => scrollToElement('support-zone')}
+                      onClick={() => (activeSlideData.secondaryPath.startsWith('#')
+                        ? scrollToElement(activeSlideData.secondaryPath.slice(1))
+                        : navigate(activeSlideData.secondaryPath))}
                       className="rounded-2xl border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
                     >
                       {activeSlideData.secondaryCta}
@@ -1101,7 +1155,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                   </div>
 
                   <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                    {activeSlideData.stats.map((item) => (
+                    {activeSlideData.stats.map((key) => heroStat(key, storeInfo)).filter(Boolean).map((item) => (
                       <div key={item.label} className="rounded-[24px] bg-white/12 p-4 backdrop-blur-sm">
                         <div className="text-2xl font-black">{item.value}</div>
                         <div className="mt-1 text-sm text-white/85">{item.label}</div>
@@ -1118,13 +1172,15 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                     className="relative w-[260px] max-w-full drop-shadow-[0_26px_40px_rgba(0,0,0,0.24)] md:w-[320px]"
                   />
                   <div className="absolute -left-2 top-8 rounded-2xl bg-white/15 px-4 py-3 text-left shadow-xl backdrop-blur-xl">
-                    <div className="text-xs uppercase tracking-[0.24em] text-white/75">Deal nổi bật</div>
-                    <div className="mt-1 text-xl font-black">Tặng lắp đặt miễn phí</div>
+                    <div className="text-xs uppercase tracking-[0.24em] text-white/75">Dịch vụ</div>
+                    <div className="mt-1 text-xl font-black">Kỹ thuật viên tới nhà</div>
                   </div>
-                  <div className="absolute bottom-8 right-2 rounded-2xl bg-white px-4 py-3 text-slate-900 shadow-xl">
-                    <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Combo tiết kiệm</div>
-                    <div className="mt-1 text-xl font-black text-red-600">Giảm tới 2.000.000đ</div>
-                  </div>
+                  {topTier ? (
+                    <div className="absolute bottom-8 right-2 rounded-2xl bg-white px-4 py-3 text-slate-900 shadow-xl">
+                      <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Đơn từ {compactMoney(topTier.minSubtotal)}</div>
+                      <div className="mt-1 text-xl font-black text-red-600">Giảm {formatCurrency(topTier.amount)}</div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -1145,7 +1201,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 </div>
                 <div className="hidden md:flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-sm font-medium backdrop-blur-sm">
                   <StoreGlyph name="sparkles" className="size-4" />
-                  Giao diện này có thể phát triển tiếp thành SPA thương mại điện tử hoàn chỉnh.
+                  Giá và tồn kho cập nhật trực tiếp từ kho của cửa hàng
                 </div>
               </div>
             </div>
@@ -1181,7 +1237,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
               <button
                 key={promo.id}
                 type="button"
-                onClick={() => scrollToElement(PROMO_TARGETS[promo.id])}
+                onClick={() => navigate(promo.path)}
                 className={classNames(
                   'group relative flex min-h-[210px] w-full overflow-hidden rounded-[32px] bg-gradient-to-br p-5 text-left text-white shadow-[0_22px_60px_rgba(15,23,42,0.15)] transition hover:-translate-y-1',
                   promo.accent,
@@ -1191,7 +1247,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 <div className="relative flex w-full items-end justify-between gap-4">
                   <div>
                     <div className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white/90">
-                      Promo
+                      Dịch vụ
                     </div>
                     <h3 className="mt-4 text-3xl font-black leading-tight">{promo.title}</h3>
                     <p className="mt-3 max-w-xs text-sm leading-6 text-white/90">{promo.subtitle}</p>
@@ -1208,7 +1264,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 <button
                   key={promo.id}
                   type="button"
-                  onClick={() => scrollToElement(PROMO_TARGETS[promo.id])}
+                  onClick={() => navigate(promo.path)}
                   className={classNames(
                     'relative overflow-hidden rounded-[28px] bg-gradient-to-br p-5 text-left text-white shadow-[0_18px_50px_rgba(15,23,42,0.14)] transition hover:-translate-y-1',
                     promo.accent,
@@ -1238,8 +1294,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                   <StoreGlyph name={item.icon} className="size-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-900">{item.title}</h3>
-                  <p className="text-sm text-slate-500">{item.description}</p>
+                  <h3 className="text-lg font-black text-slate-900">{trustTitle(item, storeInfo)}</h3>
+                  <p className="text-sm text-slate-500">{trustDescription(item, storeInfo)}</p>
                 </div>
               </div>
             </div>
@@ -1255,7 +1311,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                   Chọn nhu cầu trước, BinhTinhStore gợi ý cấu hình sau.
                 </h2>
                 <p className="mt-3 max-w-xl text-base leading-7 text-white/90">
-                  Bạn có thể mở rộng tiếp module này thành configurator build PC với CPU, GPU, mainboard và bộ lọc tương thích.
+                  Chọn phần mềm bạn dùng (chơi game, đồ hoạ, lập trình, chạy AI trên máy); Build PC gợi ý cấu hình trong ngân sách
+                  và kiểm tra tương thích từng linh kiện. Đã có máy thì xem gợi ý nâng cấp.
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <button
@@ -1267,17 +1324,17 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                   </button>
                   <button
                     type="button"
-                    onClick={onOpenAdmin}
+                    onClick={() => navigate('/build-pc')}
                     className="rounded-2xl border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
                   >
-                    Mở trang quản trị demo
+                    Mở Build PC
                   </button>
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-3 lg:w-[360px] lg:grid-cols-1">
-                <MiniFeature label="Gaming" value="165 FPS+" />
-                <MiniFeature label="Creator" value="Render nhanh" />
-                <MiniFeature label="AI" value="CUDA Ready" />
+                <MiniFeature label="Chơi game" value="Theo game bạn chơi" />
+                <MiniFeature label="Đồ hoạ" value="Blender, dựng phim" />
+                <MiniFeature label="AI trên máy" value="Ưu tiên card NVIDIA" />
               </div>
             </div>
           </div>
@@ -1285,10 +1342,10 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
           <div className="rounded-[36px] bg-gradient-to-br from-red-600 via-rose-600 to-orange-400 p-6 text-white shadow-[0_30px_80px_rgba(15,23,42,0.16)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.26em] text-white/80">Ghế bàn hạ giá</div>
+                <div className="text-sm font-semibold uppercase tracking-[0.26em] text-white/80">Góc làm việc</div>
                 <h2 className="mt-3 text-4xl font-black leading-tight">Setup gọn, ngồi lâu vẫn thoải mái.</h2>
                 <p className="mt-3 max-w-md text-base leading-7 text-white/90">
-                  Thêm module nội thất setup để tăng giá trị đơn hàng và đẩy combo chuột, bàn phím, màn hình.
+                  Ghế, bàn, màn hình và phụ kiện cho góc làm việc. Cần lắp đặt tại nhà thì đặt lịch kỹ thuật viên theo khung giờ.
                 </p>
               </div>
               <div className="hidden rounded-[28px] bg-white/15 p-5 backdrop-blur-sm md:block">
@@ -1420,7 +1477,11 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         </div>
       </footer>
 
-      <FloatingSupportButtons favoriteCount={favoriteIds.length} onOpenCart={() => setCartOpen(true)} />
+      <FloatingSupportButtons
+        favoriteCount={favoriteIds.length}
+        onOpenSupport={() => navigate('/chinh-sach/khieu-nai')}
+        zaloPhone={storeInfo.seller?.phone || ''}
+      />
 
       <CartDrawer
         open={isCartOpen}
@@ -1508,36 +1569,42 @@ function MiniFeature({ label, value }) {
   )
 }
 
-function DesktopSideAd({ align }) {
+// Quảng cáo hai bên (màn hình rất rộng): chỉ nói tính năng và ưu đãi có thật trong cấu hình.
+function DesktopSideAd({ align, topTier, quoteHours }) {
   return (
     <div
       className={classNames(
-        'fixed top-[180px] z-20 hidden w-[148px] 2xl:block',
+        // Chỉ hiện khi hai bên nội dung (rộng tối đa 1480px) còn đủ chỗ, để không che danh mục và thẻ dịch vụ.
+        'fixed top-[180px] z-20 hidden w-[148px] min-[1860px]:block',
         align === 'left' ? 'left-4' : 'right-4',
       )}
     >
-      <div className="rounded-[32px] bg-gradient-to-br from-orange-400 via-red-500 to-rose-500 p-4 text-white shadow-[0_26px_70px_rgba(15,23,42,0.18)]">
-        <div className="text-sm font-semibold uppercase tracking-[0.24em] text-white/80">Setup Sale</div>
-        <div className="mt-3 text-3xl font-black leading-tight">Build PC</div>
-        <div className="mt-2 text-sm leading-6 text-white/90">Tặng gói tối ưu hệ thống và miễn phí lắp đặt.</div>
-        <div className="mt-5 rounded-[24px] bg-white/15 p-4 backdrop-blur-sm">
-          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">Ưu đãi nhanh</div>
-          <div className="mt-2 text-2xl font-black">Giảm 2%</div>
-        </div>
-      </div>
+      <a href={hrefFor('/build-pc')} className="block rounded-[32px] bg-gradient-to-br from-orange-400 via-red-500 to-rose-500 p-4 text-white shadow-[0_26px_70px_rgba(15,23,42,0.18)]">
+        <div className="text-sm font-semibold uppercase tracking-[0.24em] text-white/80">Build PC</div>
+        <div className="mt-3 text-2xl font-black leading-tight">Kiểm tra tương thích</div>
+        <div className="mt-2 text-sm leading-6 text-white/90">Báo giá giữ giá {quoteHours} giờ.</div>
+        {topTier ? (
+          <div className="mt-5 rounded-[24px] bg-white/15 p-4 backdrop-blur-sm">
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">Đơn từ {compactMoney(topTier.minSubtotal)}</div>
+            <div className="mt-2 text-xl font-black">Giảm {compactMoney(topTier.amount)}</div>
+          </div>
+        ) : null}
+      </a>
     </div>
   )
 }
 
-function FloatingSupportButtons({ favoriteCount, onOpenCart }) {
+// "Bạn cần hỗ trợ?" mở trang liên hệ; nút Zalo chỉ hiện khi cửa hàng đã khai báo số điện thoại (STORE_PHONE).
+function FloatingSupportButtons({ favoriteCount, onOpenSupport, zaloPhone }) {
+  const phone = String(zaloPhone || '').replace(/[^0-9]/g, '')
   return (
     <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">
       <button
         type="button"
-        onClick={onOpenCart}
+        onClick={onOpenSupport}
         className="inline-flex items-center gap-3 rounded-full bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-[0_18px_50px_rgba(220,38,38,0.3)] transition hover:bg-red-700"
       >
-        <StoreGlyph name="cart" className="size-4" />
+        <StoreGlyph name="message" className="size-4" />
         Bạn cần hỗ trợ?
       </button>
       <div className="flex items-center gap-3">
@@ -1545,9 +1612,17 @@ function FloatingSupportButtons({ favoriteCount, onOpenCart }) {
           <StoreGlyph name="heart" className="size-4 text-rose-500" />
           {favoriteCount} yêu thích
         </div>
-        <div className="flex size-12 items-center justify-center rounded-full bg-sky-500 text-white shadow-[0_16px_40px_rgba(14,165,233,0.35)]">
-          Z
-        </div>
+        {phone ? (
+          <a
+            href={`https://zalo.me/${phone}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Nhắn Zalo cho cửa hàng"
+            className="flex size-12 items-center justify-center rounded-full bg-sky-500 font-bold text-white shadow-[0_16px_40px_rgba(14,165,233,0.35)]"
+          >
+            Z
+          </a>
+        ) : null}
       </div>
     </div>
   )

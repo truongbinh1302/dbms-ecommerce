@@ -174,10 +174,12 @@ export default function ProductCard({
               </p>
             ) : null}
 
-            <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
-              <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.installment}</span>
-              <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.shipping}</span>
-            </div>
+            {product.installment || product.shipping ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+                {product.installment ? <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.installment}</span> : null}
+                {product.shipping ? <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.shipping}</span> : null}
+              </div>
+            ) : null}
           </div>
         </div>
 

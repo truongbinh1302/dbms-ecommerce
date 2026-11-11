@@ -1,8 +1,10 @@
 import { ProductVisual } from './ProductCard'
 import StoreGlyph from './StoreGlyph'
 import { formatCurrency } from '../utils/format'
+import useStoreInfo from '../hooks/useStoreInfo'
 
 export default function ProductQuickView({ product, open, onClose, onAddToCart, isFavorite, onToggleFavorite }) {
+  const storeInfo = useStoreInfo()
   if (!product) {
     return null
   }
@@ -41,7 +43,7 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 <span className="rounded-full bg-red-50 px-3 py-1.5 font-bold text-red-600">{product.badge}</span>
                 <span className="rounded-full bg-slate-100 px-3 py-1.5 font-semibold text-slate-600">{product.brand}</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 font-semibold text-slate-600">{product.shipping}</span>
+                {product.shipping ? <span className="rounded-full bg-slate-100 px-3 py-1.5 font-semibold text-slate-600">{product.shipping}</span> : null}
               </div>
 
               <div className="rounded-[28px] bg-slate-50 p-5">
@@ -87,9 +89,9 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
                     <h4 className="font-black">Quyền lợi đi kèm</h4>
                   </div>
                   <ul className="mt-3 space-y-2 text-sm leading-6 text-emerald-900">
-                    <li>- {product.installment}</li>
-                    <li>- Kiểm tra hàng trước khi thanh toán</li>
-                    <li>- Hỗ trợ cài đặt cơ bản miễn phí</li>
+                    <li>- Miễn phí giao hàng cho đơn từ {formatCurrency(storeInfo?.shipping?.freeThreshold ?? 3000000)}</li>
+                    <li>- Thanh toán khi nhận hàng (COD) hoặc VNPay</li>
+                    <li>- Đổi trả trong {storeInfo?.returnDays ?? 7} ngày nếu lỗi nhà sản xuất hoặc giao sai</li>
                   </ul>
                 </div>
 
@@ -99,9 +101,9 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
                     <h4 className="font-black">Bảo hành & hỗ trợ</h4>
                   </div>
                   <ul className="mt-3 space-y-2 text-sm leading-6 text-violet-900">
-                    <li>- Bảo hành chính hãng toàn quốc</li>
-                    <li>- Hỗ trợ kỹ thuật từ xa qua Zalo</li>
-                    <li>- Đổi mới 1-1 nếu lỗi phần cứng sớm</li>
+                    <li>- Bảo hành theo số serial, thời hạn ghi trên phiếu hoặc tem của hãng</li>
+                    <li>- Gửi yêu cầu bảo hành online ở trang Tra cứu bảo hành</li>
+                    <li>- Đặt kỹ thuật viên tới nhà để lắp đặt, cài đặt</li>
                   </ul>
                 </div>
               </div>

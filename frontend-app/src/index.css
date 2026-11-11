@@ -125,7 +125,9 @@ svg {
   }
 }
 
-@media (min-width: 1280px) and (max-width: 1535.98px) {
+/* Header không rộng quá 1480px nên từ 1280px trở lên không đủ chỗ cho hotline/showroom cạnh ô tìm kiếm:
+   ẩn ở header, hotline vẫn hiện trên thanh trên cùng. */
+@media (min-width: 1280px) {
   .header-action-wide {
     display: none;
   }
