@@ -12,6 +12,7 @@ const orderService = require('../../src/services/order.service');
 const returnService = require('../../src/services/return.service');
 const inventoryService = require('../../src/services/inventory.service');
 const accountService = require('../../src/services/account.service');
+const reportService = require('../../src/services/report.service');
 const { hashPassword } = require('../../src/utils/hash');
 
 const ADDRESS = {
@@ -209,6 +210,13 @@ test('trả hàng hoàn tiền: không vượt số đã mua, nhận hàng nhậ
   assert.equal(completed.refundAmount, Math.min(2000000, Number(order.Total)));
   assert.ok(completed.resolvedAt);
   assert.match((await lastNotification(ctx.customer)).Body, /Đã hoàn/);
+
+  // Báo cáo ngày: tiền hoàn tính vào ngày hoàn tất.
+  const today = reportService.vietnamToday();
+  const report = await reportService.getDailyReport({ from: today, to: today });
+  assert.ok(report.days[0].refunds >= completed.refundAmount);
+  assert.ok(report.days[0].returnRequests >= 2);
+  assert.equal(report.totals.refunds, report.days[0].refunds);
 
   // Đã yêu cầu hết số card mua: không gửi thêm được.
   await assert.rejects(

@@ -38,6 +38,8 @@ const COLUMNS = [
   { key: 'newCustomers', label: 'Khách mới' },
   { key: 'unitsReceived', label: 'SL nhập kho' },
   { key: 'receiptCost', label: 'Tiền nhập', money: true },
+  { key: 'returnRequests', label: 'Yêu cầu đổi trả' },
+  { key: 'refunds', label: 'Tiền hoàn', money: true },
 ]
 
 function csvCell(value) {
@@ -202,7 +204,11 @@ export default function DailyReport({ token, refreshKey = 0 }) {
       {totals ? (
         <>
           <div className={`mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 ${state.loading ? 'opacity-60' : ''}`}>
-            <Tile label="Doanh số" value={formatCurrency(totals.netSales)} hint={`Đã thu ${formatCurrency(totals.paidAmount)}`} />
+            <Tile
+              label="Doanh số"
+              value={formatCurrency(totals.netSales)}
+              hint={`Đã thu ${formatCurrency(totals.paidAmount)}${totals.refunds ? ` · đã hoàn ${formatCurrency(totals.refunds)}` : ''}`}
+            />
             <Tile label="Đơn hàng" value={totals.orders.toLocaleString('vi-VN')} hint={`${totals.cancelledOrders.toLocaleString('vi-VN')} đơn huỷ`} />
             <Tile label="Sản phẩm bán" value={totals.unitsSold.toLocaleString('vi-VN')} hint={`${totals.newCustomers.toLocaleString('vi-VN')} khách mới`} />
             <Tile label="Nhập kho" value={`${totals.unitsReceived.toLocaleString('vi-VN')} sp`} hint={`${totals.receipts} phiếu · ${formatCurrency(totals.receiptCost)}`} />

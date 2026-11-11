@@ -56,7 +56,11 @@ const emptyDay = (date) => ({
   receipts: 0,
   unitsReceived: 0,
   receiptCost: 0,
+  returnRequests: 0,
+  refunds: 0,
 });
+
+const emptyDayTotals = () => Object.fromEntries(Object.entries(emptyDay('')).filter(([key]) => key !== 'date'));
 
 const toIsoDate = (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10));
 
@@ -95,6 +99,19 @@ const getDailyReport = async (query = {}, now = new Date()) => {
       FROM StockReceipts r
       WHERE r.CreatedAt >= @start AND r.CreatedAt < @end
       GROUP BY CAST(SWITCHOFFSET(TODATETIMEOFFSET(r.CreatedAt, @tz), @vn) AS DATE);
+
+      -- Đổi trả: số yêu cầu gửi trong ngày; tiền hoàn tính vào ngày hoàn tất (ResolvedAt).
+      SELECT Day, SUM(Requests) AS Requests, SUM(Refunds) AS Refunds
+      FROM (
+        SELECT CAST(SWITCHOFFSET(TODATETIMEOFFSET(rr.CreatedAt, @tz), @vn) AS DATE) AS Day, 1 AS Requests, 0 AS Refunds
+        FROM ReturnRequests rr
+        WHERE rr.CreatedAt >= @start AND rr.CreatedAt < @end
+        UNION ALL
+        SELECT CAST(SWITCHOFFSET(TODATETIMEOFFSET(rr.ResolvedAt, @tz), @vn) AS DATE), 0, rr.RefundAmount
+        FROM ReturnRequests rr
+        WHERE rr.Status = N'completed' AND rr.RefundAmount > 0 AND rr.ResolvedAt >= @start AND rr.ResolvedAt < @end
+      ) x
+      GROUP BY Day;
     `);
 
   const days = new Map();
@@ -102,7 +119,7 @@ const getDailyReport = async (query = {}, now = new Date()) => {
     const date = addDays(range.from, i);
     days.set(date, emptyDay(date));
   }
-  const [orderRows = [], userRows = [], receiptRows = []] = result.recordsets || [];
+  const [orderRows = [], userRows = [], receiptRows = [], returnRows = []] = result.recordsets || [];
   for (const row of orderRows) {
     const day = days.get(toIsoDate(row.Day));
     if (!day) continue;
@@ -124,11 +141,18 @@ const getDailyReport = async (query = {}, now = new Date()) => {
     day.receiptCost = Number(row.ReceiptCost);
   }
 
+  for (const row of returnRows) {
+    const day = days.get(toIsoDate(row.Day));
+    if (!day) continue;
+    day.returnRequests = Number(row.Requests);
+    day.refunds = Number(row.Refunds);
+  }
+
   const list = [...days.values()];
   const totals = list.reduce((sum, day) => {
     for (const key of Object.keys(sum)) sum[key] += day[key];
     return sum;
-  }, { orders: 0, cancelledOrders: 0, netSales: 0, paidAmount: 0, unitsSold: 0, newCustomers: 0, receipts: 0, unitsReceived: 0, receiptCost: 0 });
+  }, emptyDayTotals());
 
   return { from: range.from, to: range.to, timezone: 'Asia/Ho_Chi_Minh', days: list, totals };
 };
