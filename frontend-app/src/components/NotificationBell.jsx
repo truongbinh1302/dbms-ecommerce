@@ -104,7 +104,7 @@ export default function NotificationBell({ userId }) {
                       <span className="min-w-0">
                         <span className="block text-sm font-bold">{item.title}</span>
                         {item.body ? <span className="block text-xs text-slate-600">{item.body}</span> : null}
-                        <span className="block text-[11px] text-slate-400">{formatDateTime(item.createdAt)}</span>
+                        <span className="block text-[11px] text-slate-600">{formatDateTime(item.createdAt)}</span>
                       </span>
                     </span>
                   </button>

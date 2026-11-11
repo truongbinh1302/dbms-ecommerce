@@ -89,7 +89,7 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
 
   return (
     <div className="space-y-5">
-      <nav className="text-sm text-slate-500">
+      <nav className="text-sm text-slate-600">
         <a href={hrefFor('/don-hang')} className="hover:text-red-600">Đơn hàng của tôi</a> / {order.orderCode || `#${order.id}`}
       </nav>
 
@@ -159,7 +159,7 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
               <span>
                 <a href={hrefFor(`/san-pham/${item.ProductID}`)} className="font-semibold text-slate-900 hover:text-red-600">{item.productName}</a>
                 {item.promotionName ? <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">Giá Hot Deal: {item.promotionName}</span> : null}
-                <span className="text-slate-400"> × {item.Quantity}</span>
+                <span className="text-slate-500"> × {item.Quantity}</span>
                 {(order.warranties || []).filter((warranty) => warranty.productId === item.ProductID).map((warranty) => (
                   <span key={warranty.serialNumber} className="block text-xs text-slate-500">
                     Serial {warranty.serialNumber} · bảo hành đến hết {warranty.endDate.split('-').reverse().join('/')}

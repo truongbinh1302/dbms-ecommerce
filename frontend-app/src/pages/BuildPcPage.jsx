@@ -475,7 +475,7 @@ function PresetPicker({ onApplyParts }) {
             >
               <div className="font-bold text-slate-900">{preset.name}</div>
               <div className="mt-1 text-sm text-slate-600">{preset.software}</div>
-              <div className="mt-2 text-xs text-slate-500">
+              <div className="mt-2 text-xs text-slate-600">
                 RAM từ {preset.needs.ramGB} GB · ổ từ {preset.needs.storageGB >= 1000 ? `${preset.needs.storageGB / 1000} TB` : `${preset.needs.storageGB} GB`}
                 {preset.needs.gpu ? ` · card từ ${preset.needs.gpu.minVramGB} GB VRAM` : ' · không cần card rời'}
               </div>
