@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import heroAsset from '../assets/hero.png'
 import StoreGlyph from '../components/StoreGlyph'
-import { fetchAdminOrders, updateAdminOrderStatus } from '../api/client'
+import { fetchAdminOrders, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
 import { adminCategoryPerformance, adminInventoryAlerts, adminSummary, allProducts } from '../data/storeData'
 import { formatCurrency, formatCompactNumber } from '../utils/format'
 
@@ -345,6 +345,8 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           </div>
 
           <div className="space-y-6">
+            <WarrantyRegistration token={token} orders={displayOrders} />
+
             <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
               <div className="flex items-center gap-3">
                 <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-300">
@@ -397,5 +399,98 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
         </section>
       </div>
     </div>
+  )
+}
+
+const WARRANTY_STATUSES = ['confirmed', 'processing', 'shipped', 'delivered']
+const FIELD = 'w-full rounded-2xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-white/40'
+
+// Đăng ký số serial bảo hành cho sản phẩm trong đơn đã xác nhận (server kiểm tra lại toàn bộ).
+function WarrantyRegistration({ token, orders }) {
+  const eligible = orders.filter((order) => WARRANTY_STATUSES.includes(order.statusRaw))
+  const [orderId, setOrderId] = useState('')
+  const [detail, setDetail] = useState({ orderId: null, items: [], error: '' })
+  const [form, setForm] = useState({ productId: '', serialNumber: '', months: '36' })
+  const [state, setState] = useState({ busy: false, message: '', error: '' })
+
+  useEffect(() => {
+    if (!orderId) return undefined
+    let cancelled = false
+    fetchOrder(orderId)
+      .then((order) => {
+        if (!cancelled) setDetail({ orderId, items: order.items || [], error: '' })
+      })
+      .catch((err) => {
+        if (!cancelled) setDetail({ orderId, items: [], error: err.message || 'Không tải được đơn' })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [orderId])
+
+  const items = detail.orderId === orderId ? detail.items : []
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setState({ busy: true, message: '', error: '' })
+    try {
+      const warranty = await registerWarranty({
+        orderId: Number(orderId),
+        productId: Number(form.productId),
+        serialNumber: form.serialNumber.trim(),
+        months: Number(form.months),
+      }, token)
+      setState({ busy: false, message: `Đã đăng ký ${warranty.serialNumber}, bảo hành đến hết ${warranty.endDate.split('-').reverse().join('/')}`, error: '' })
+      setForm((current) => ({ ...current, serialNumber: '' }))
+    } catch (err) {
+      setState({ busy: false, message: '', error: err.message || 'Không đăng ký được' })
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+      <div>
+        <h3 className="text-2xl font-black">Đăng ký bảo hành</h3>
+        <p className="mt-1 text-sm text-slate-400">Nhập serial cho sản phẩm trong đơn đã xác nhận. Khách tra cứu được ở trang Tra cứu bảo hành.</p>
+      </div>
+      <label className="block text-sm">
+        <span className="text-slate-300">Đơn hàng</span>
+        <select value={orderId} onChange={(event) => { setOrderId(event.target.value); setForm((current) => ({ ...current, productId: '' })) }} className={`mt-1 ${FIELD}`}>
+          <option value="">Chọn đơn đã xác nhận</option>
+          {eligible.map((order) => (
+            <option key={order.id} value={order.id}>#{order.id} · {order.customer}</option>
+          ))}
+        </select>
+      </label>
+      {detail.error && detail.orderId === orderId ? <p className="text-sm text-rose-300">{detail.error}</p> : null}
+      <label className="block text-sm">
+        <span className="text-slate-300">Sản phẩm</span>
+        <select value={form.productId} onChange={(event) => setForm((current) => ({ ...current, productId: event.target.value }))} disabled={items.length === 0} className={`mt-1 ${FIELD}`}>
+          <option value="">Chọn sản phẩm</option>
+          {items.map((item) => (
+            <option key={item.ProductID} value={item.ProductID}>{item.productName} × {item.Quantity}</option>
+          ))}
+        </select>
+      </label>
+      <div className="grid grid-cols-[1fr_110px] gap-3">
+        <label className="block text-sm">
+          <span className="text-slate-300">Số serial</span>
+          <input value={form.serialNumber} onChange={(event) => setForm((current) => ({ ...current, serialNumber: event.target.value }))} maxLength={60} className={`mt-1 uppercase ${FIELD}`} />
+        </label>
+        <label className="block text-sm">
+          <span className="text-slate-300">Số tháng</span>
+          <input type="number" min="1" max="120" value={form.months} onChange={(event) => setForm((current) => ({ ...current, months: event.target.value }))} className={`mt-1 ${FIELD}`} />
+        </label>
+      </div>
+      <button
+        type="submit"
+        disabled={state.busy || !orderId || !form.productId || form.serialNumber.trim().length < 4}
+        className="w-full rounded-full bg-white px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {state.busy ? 'Đang lưu...' : 'Đăng ký serial'}
+      </button>
+      {state.message ? <p className="text-sm text-emerald-300" role="status">{state.message}</p> : null}
+      {state.error ? <p className="text-sm text-rose-300" role="alert">{state.error}</p> : null}
+    </form>
   )
 }

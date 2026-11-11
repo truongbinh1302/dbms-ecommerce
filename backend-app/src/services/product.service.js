@@ -210,9 +210,17 @@ const createProduct = async (productData, adminId) => {
     .input('images', sql.NVarChar, JSON.stringify(images || []))
     .input('isFeatured', sql.Bit, isFeatured ? 1 : 0)
     .query(`
+      SET XACT_ABORT ON;
+      BEGIN TRANSACTION;
+      DECLARE @created TABLE (ProductID INT, Price DECIMAL(18,2), OldPrice DECIMAL(18,2));
       INSERT INTO Products (Name, Slug, Brand, Description, Price, OldPrice, Stock, CategoryID, Specs, Images, IsFeatured)
-      OUTPUT INSERTED.ProductID
-      VALUES (@name, @slug, @brand, @description, @price, @oldPrice, @stock, @categoryId, @specs, @images, @isFeatured)
+      OUTPUT INSERTED.ProductID, INSERTED.Price, INSERTED.OldPrice INTO @created
+      VALUES (@name, @slug, @brand, @description, @price, @oldPrice, @stock, @categoryId, @specs, @images, @isFeatured);
+      -- Mốc giá đầu tiên cho lịch sử giá.
+      INSERT INTO PriceHistory (ProductID, Price, OldPrice)
+      SELECT ProductID, Price, OldPrice FROM @created;
+      COMMIT TRANSACTION;
+      SELECT ProductID FROM @created;
     `);
 
   const productId = result.recordset[0].ProductID;
@@ -250,6 +258,9 @@ const updateProduct = async (id, productData, adminId = null) => {
     .input('images', sql.NVarChar, images === undefined ? null : JSON.stringify(images || []))
     .input('isFeatured', sql.Bit, isFeatured === undefined ? null : (isFeatured ? 1 : 0))
     .query(`
+      SET XACT_ABORT ON;
+      BEGIN TRANSACTION;
+      DECLARE @changed TABLE (ProductID INT, PriceBefore DECIMAL(18,2), Price DECIMAL(18,2), OldPrice DECIMAL(18,2));
       UPDATE Products
       SET Name = COALESCE(@name, Name),
           Slug = COALESCE(@slug, Slug),
@@ -264,7 +275,12 @@ const updateProduct = async (id, productData, adminId = null) => {
           IsFeatured = COALESCE(@isFeatured, IsFeatured),
           Version = Version + 1,
           UpdatedAt = GETDATE()
-      WHERE ProductID = @id AND IsDeleted = 0
+      OUTPUT INSERTED.ProductID, DELETED.Price, INSERTED.Price, INSERTED.OldPrice INTO @changed
+      WHERE ProductID = @id AND IsDeleted = 0;
+      -- Chỉ ghi lịch sử khi giá bán thật sự đổi.
+      INSERT INTO PriceHistory (ProductID, Price, OldPrice)
+      SELECT ProductID, Price, OldPrice FROM @changed WHERE Price <> PriceBefore;
+      COMMIT TRANSACTION;
     `);
 
   await syncSearchText(Number(id));
@@ -325,7 +341,56 @@ const updateStock = async (id, stock, reason, adminId) => {
   return { productId: Number(id), oldStock, newStock: Number(stock) };
 };
 
+/**
+ * Lịch sử giá trong `days` ngày gần nhất, kèm mức giá ngay trước khoảng đó
+ * để vẽ được đường giá liền mạch, và giá thấp/cao nhất trong khoảng.
+ */
+const getPriceHistory = async (id, days = 180) => {
+  const productId = Number(id);
+  const windowDays = Math.min(Math.max(Number.parseInt(days, 10) || 180, 7), 730);
+  if (!Number.isInteger(productId) || productId <= 0) return null;
+
+  const result = await new sql.Request(getPool())
+    .input('id', sql.Int, productId)
+    .input('days', sql.Int, windowDays)
+    .query(`
+      DECLARE @from DATETIME2 = DATEADD(DAY, -@days, SYSDATETIME());
+      SELECT Price, IsDeleted FROM Products WHERE ProductID = @id;
+      SELECT Price, OldPrice, ChangedAt
+      FROM (
+        SELECT TOP (1) Price, OldPrice, ChangedAt
+        FROM PriceHistory
+        WHERE ProductID = @id AND ChangedAt < @from
+        ORDER BY ChangedAt DESC, PriceHistoryID DESC
+      ) AS before
+      UNION ALL
+      SELECT Price, OldPrice, ChangedAt
+      FROM PriceHistory
+      WHERE ProductID = @id AND ChangedAt >= @from
+      ORDER BY ChangedAt;
+    `);
+
+  const product = result.recordsets[0][0];
+  if (!product || product.IsDeleted) return null;
+
+  const points = result.recordsets[1].map((row) => ({
+    price: Number(row.Price),
+    oldPrice: row.OldPrice === null ? null : Number(row.OldPrice),
+    changedAt: row.ChangedAt,
+  }));
+  const prices = points.map((point) => point.price).concat(Number(product.Price));
+  return {
+    productId,
+    days: windowDays,
+    currentPrice: Number(product.Price),
+    lowestPrice: Math.min(...prices),
+    highestPrice: Math.max(...prices),
+    points,
+  };
+};
+
 module.exports = {
+  getPriceHistory,
   getProducts,
   getProductSuggestions,
   getProductById,

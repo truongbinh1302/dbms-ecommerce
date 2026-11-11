@@ -29,6 +29,7 @@
 19. [Data Model](#19-data-model)
 20. [Cấu trúc project](#20-cấu-trúc-project)
 21. [API tối thiểu để demo](#21-api-tối-thiểu-để-demo)
+22. [Build PC, báo giá, lịch sử giá, bảo hành](#22-build-pc-báo-giá-lịch-sử-giá-bảo-hành)
 
 ---
 
@@ -171,10 +172,11 @@ Dùng `express-rate-limit` để chống spam và bảo vệ server.
 // middlewares/rateLimiter.js
 import rateLimit from 'express-rate-limit'
 
-// General: 100 request / 15 phút
+// General: 1500 request / 15 phút (đổi bằng RATE_LIMIT_MAX).
+// Mức 100 cũ quá thấp: một phiên mua sắm bình thường gọi vài trăm request.
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1500,
   message: { success: false, message: 'Too many requests' }
 })
 
@@ -1946,3 +1948,78 @@ Tuần 4 — Bonus (Payment + Voucher):
 ---
 
 *Tài liệu này là phiên bản mở rộng từ API_SPEC.md ban đầu. Lưu tại `docs/API_SPEC_FULL.md`.*
+
+---
+
+## 22. Build PC, báo giá, lịch sử giá, bảo hành
+
+Thêm ở giai đoạn 2 (migration `007_build_pc.sql`, seed `003_seed_components.sql`).
+
+### Build PC — `/builder` (không cần đăng nhập)
+
+| Method | Path | Mô tả |
+| --- | --- | --- |
+| GET | `/builder/components` | Toàn bộ linh kiện có thông số, kèm danh sách ô (`cpu`, `mainboard`, `ram`, `gpu`, `storage`, `cooler`, `psu`, `case`) |
+| GET | `/builder/presets` | Nhu cầu theo phần mềm: văn phòng, lập trình web, Android, đồ hoạ 3D, AI local |
+| POST | `/builder/check` | Kiểm tra cấu hình. Body `{ items: [{ productId, quantity?, owned? }] }`; `owned: true` là linh kiện khách đã có, không tính tiền |
+| POST | `/builder/auto` | Ráp cấu hình rẻ nhất còn hàng cho một nhu cầu. Body `{ presetId }` |
+| POST | `/builder/upgrade` | Gợi ý nâng cấp. Body `{ socket?, memoryType?, psuWatts?, maxGpuLengthMm?, cpuPowerW?, gpuPowerW?, hasM2Slot? }` |
+| POST | `/builder/quotes` | Lưu báo giá giữ giá 48 giờ (đăng nhập thì gắn với tài khoản). Body `{ items, title? }` |
+| GET | `/builder/quotes/:code` | Xem báo giá: giá báo, giá hiện tại, còn hạn hay không, kết quả kiểm tra |
+
+Kết quả `check`:
+
+```json
+{
+  "ok": false,
+  "complete": true,
+  "errors": [{ "code": "socket_mismatch", "message": "CPU dùng socket AM5 nhưng mainboard là socket LGA1700", "types": ["cpu", "mainboard"] }],
+  "warnings": [{ "code": "psu_low_headroom", "message": "Nguồn 550 W hơi sát; nên dùng từ 650 W", "types": ["psu"] }],
+  "estimatedPowerW": 475,
+  "recommendedPsuW": 650
+}
+```
+
+Mã lỗi: `too_many`, `socket_mismatch`, `memory_type_mismatch`, `memory_slots`, `m2_slots`, `form_factor`,
+`gpu_length`, `cooler_socket`, `cooler_height`, `no_display_output`, `psu_too_weak`.
+Cảnh báo: `no_cooler`, `psu_low_headroom`, `incomplete`.
+Công suất ước tính = 75 W (mainboard, RAM, ổ, quạt) + CPU + card; nguồn nên dư 30%, làm tròn lên bội số 50 W.
+
+### Giữ giá theo báo giá
+
+- `POST /cart/quote` và `POST /orders` nhận thêm `quoteCode`.
+- Mỗi dòng tính theo giá thấp hơn giữa giá hiện tại và giá báo, khi số lượng mua không vượt số lượng đã báo.
+- `/cart/quote` trả `priceLock: { code, expiresAt }` hoặc `priceLockError: { code: "quote_expired" | "quote_not_found" }`,
+  từng dòng có `listPrice`, `unitPrice`, `priceLocked`.
+- `POST /orders` với báo giá hết hạn trả **410** `{ errors: { code: "quote_expired" } }` và không tạo đơn,
+  để khách xem lại giá thay vì bị tính số tiền khác với số đã thấy. Đơn lưu mã ở cột `Orders.QuoteCode`.
+- Báo giá không giữ hàng trong kho.
+
+### Lịch sử giá
+
+`GET /products/:id/price-history?days=180` (7–730 ngày):
+
+```json
+{
+  "productId": 50003,
+  "days": 180,
+  "currentPrice": 4990000,
+  "lowestPrice": 4990000,
+  "highestPrice": 5490000,
+  "points": [{ "price": 4990000, "oldPrice": 5490000, "changedAt": "2026-11-01T03:30:00.000Z" }]
+}
+```
+
+Mốc giá được ghi trong cùng transaction với câu `INSERT`/`UPDATE` sản phẩm qua API, chỉ khi giá bán thay đổi.
+
+### Bảo hành — `/warranties`
+
+| Method | Path | Quyền | Mô tả |
+| --- | --- | --- | --- |
+| GET | `/warranties/:serial` | Công khai (60 lần/15 phút) | Tên sản phẩm, ngày bắt đầu/kết thúc, `status: active/expired`, `daysLeft`. Không trả thông tin người mua |
+| GET | `/warranties/me` | Khách | Bảo hành của các đơn của mình |
+| POST | `/warranties/admin` | Admin | Body `{ serialNumber, orderId, productId, months, startDate? }` |
+
+Quy tắc đăng ký: đơn phải ở trạng thái `confirmed`, `processing`, `shipped` hoặc `delivered`;
+số serial của một sản phẩm không vượt số lượng đã mua (khoá `UPDLOCK, HOLDLOCK` để hai admin đăng ký cùng lúc không vượt);
+serial trùng trả 409. Ngày hết hạn = ngày bắt đầu + số tháng − 1 ngày.

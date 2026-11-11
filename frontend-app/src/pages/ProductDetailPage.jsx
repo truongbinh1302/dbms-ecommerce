@@ -4,6 +4,7 @@ import { fetchProduct, fetchReviews } from '../api/client'
 import { formatCurrency } from '../utils/format'
 import { mapApiProductToStoreProduct } from '../utils/productMapping'
 import PageMessage from '../components/PageMessage'
+import PriceHistory from '../components/PriceHistory'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatDateTime } from '../utils/orderLabels'
 
@@ -147,6 +148,8 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
           </div>
         </div>
       </section>
+
+      <PriceHistory productId={productId} />
 
       {product.description ? (
         <section className="rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">

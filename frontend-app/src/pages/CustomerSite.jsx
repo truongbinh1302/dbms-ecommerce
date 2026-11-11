@@ -8,11 +8,14 @@ import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
 import { fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
 import useHashRoute, { navigate } from '../hooks/useHashRoute'
+import BuildPcPage from './BuildPcPage'
 import CheckoutPage from './CheckoutPage'
 import OrderDetailPage from './OrderDetailPage'
 import OrdersPage from './OrdersPage'
 import ProductDetailPage from './ProductDetailPage'
+import QuotePage from './QuotePage'
 import SearchPage from './SearchPage'
+import WarrantyPage from './WarrantyPage'
 import {
   categories,
   featuredTiles,
@@ -30,6 +33,13 @@ import { mapApiProductToStoreProduct, normalizeText } from '../utils/productMapp
 const CART_STORAGE_KEY = 'binhtinhstore-cart'
 const VIEWED_STORAGE_KEY = 'binhtinhstore-viewed'
 const FAVORITES_STORAGE_KEY = 'binhtinhstore-favorites'
+// Mã báo giá Build PC đang giữ giá cho giỏ hàng (khách bấm "Mua theo báo giá").
+const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
+// Nút nhanh dưới header có trang riêng.
+const QUICK_LINK_ROUTES = {
+  'Build PC': '/build-pc',
+  'Tra cứu bảo hành': '/bao-hanh',
+}
 const SEEDED_VIEWED = []
 
 const SECTION_ICONS = {
@@ -214,6 +224,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
+  const [priceLockCode, setPriceLockCode] = useState(() => loadFromStorage(PRICE_LOCK_STORAGE_KEY, ''))
   const [quoteState, setQuoteState] = useState(null)
 
   useEffect(() => {
@@ -276,6 +287,14 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
       // ignore storage failure
     }
   }, [favoriteIds])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PRICE_LOCK_STORAGE_KEY, JSON.stringify(priceLockCode || ''))
+    } catch {
+      // ignore storage failure
+    }
+  }, [priceLockCode])
 
   useEffect(() => {
     if (!toast) {
@@ -391,8 +410,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   const quoteKey = useMemo(() => {
     const items = cartItems.map((item) => ({ productId: Number(item.id), quantity: item.quantity }))
     const canQuote = items.length > 0 && items.every((item) => Number.isInteger(item.productId) && item.productId > 0)
-    return canQuote ? JSON.stringify({ items, voucherCode }) : ''
-  }, [cartItems, voucherCode])
+    return canQuote ? JSON.stringify({ items, voucherCode, quoteCode: priceLockCode }) : ''
+  }, [cartItems, voucherCode, priceLockCode])
 
   useEffect(() => {
     if (!quoteKey) {
@@ -400,9 +419,9 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     }
 
     let cancelled = false
-    const { items, voucherCode: code } = JSON.parse(quoteKey)
+    const { items, voucherCode: code, quoteCode } = JSON.parse(quoteKey)
 
-    quoteCart(items, code)
+    quoteCart(items, code, quoteCode)
       .then((data) => {
         if (!cancelled) setQuoteState({ key: quoteKey, data, error: '' })
       })
@@ -561,7 +580,38 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   const handleOrderPlaced = useCallback(() => {
     setCart([])
     setVoucherCode('')
+    setPriceLockCode('')
   }, [])
+
+  const clearPriceLock = useCallback(() => setPriceLockCode(''), [])
+
+  // Mua cả cấu hình Build PC: thêm linh kiện vào giỏ (đủ số lượng của cấu hình), giữ giá nếu có mã báo giá.
+  const buyBuild = useCallback((parts, quoteCode = '') => {
+    const products = parts.map((part) => mapApiProductToStoreProduct({
+      id: part.productId,
+      name: part.name,
+      brand: part.brand,
+      price: part.price ?? part.unitPrice,
+      oldPrice: part.oldPrice,
+      stock: part.stock,
+      images: part.image ? [part.image] : [],
+      specs: [],
+    }))
+    rememberProducts(products)
+    setCart((currentCart) => {
+      const next = [...currentCart]
+      for (const part of parts) {
+        const id = Number(part.productId)
+        const quantity = Math.min(99, Math.max(1, Number(part.quantity) || 1))
+        const index = next.findIndex((item) => Number(item.id) === id)
+        if (index >= 0) next[index] = { ...next[index], quantity: Math.max(next[index].quantity, quantity) }
+        else next.push({ id, quantity })
+      }
+      return next
+    })
+    setPriceLockCode(quoteCode || '')
+    navigate('/thanh-toan')
+  }, [rememberProducts])
 
   async function handleLogout() {
     try {
@@ -580,13 +630,18 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   }
 
   function handleHeroAction(slideId) {
+    if (slideId === 'hero-build-pc') {
+      navigate('/build-pc')
+      return
+    }
     const target = HERO_TARGETS[slideId]
     if (target) {
       scrollToElement(target)
     }
   }
 
-  // Trang con theo hash: #/san-pham/:id, #/tim-kiem?q=, #/thanh-toan, #/don-hang, #/don-hang/:id.
+  // Trang con theo hash: #/san-pham/:id, #/tim-kiem?q=, #/thanh-toan, #/don-hang, #/don-hang/:id,
+  // #/build-pc, #/bao-gia/:code, #/bao-hanh.
   const routeSection = route.segments[0] || ''
   const routeId = Number.parseInt(route.segments[1] || '', 10)
   const routePage = Math.max(1, Number.parseInt(route.query.get('trang') || '1', 10) || 1)
@@ -629,6 +684,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         currentUser={currentUser}
         onRequireLogin={requireLogin}
         onOrderPlaced={handleOrderPlaced}
+        priceLockCode={priceLockCode}
+        onClearPriceLock={clearPriceLock}
       />
     )
   } else if (routeSection === 'don-hang' && routeId > 0) {
@@ -643,6 +700,18 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         showToast={showToast}
       />
     )
+  } else if (routeSection === 'build-pc') {
+    routeContent = (
+      <BuildPcPage
+        initialTab={route.segments[1] || 'tu-chon'}
+        onBuyBuild={buyBuild}
+        onAddToCart={addToCart}
+      />
+    )
+  } else if (routeSection === 'bao-gia' && route.segments[1]) {
+    routeContent = <QuotePage key={route.segments[1]} code={route.segments[1]} onBuyBuild={buyBuild} />
+  } else if (routeSection === 'bao-hanh') {
+    routeContent = <WarrantyPage currentUser={currentUser} />
   } else if (routeSection === 'don-hang') {
     routeContent = (
       <OrdersPage
@@ -762,9 +831,10 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
             </div>
 
             <div className="storefront-actions">
-              <HeaderAction icon="phone" label="Hotline" value="0338446502" />
-              <HeaderAction icon="map" label="Showroom" value="0 điểm bán" />
-              <HeaderAction icon="receipt" label="Đơn hàng" value="Tra cứu" />
+              {/* Màn hình 1280–1535px không đủ chỗ: ẩn hotline/showroom để ô tìm kiếm không bị ép mất. */}
+              <HeaderAction icon="phone" label="Hotline" value="0338446502" className="header-action-wide" />
+              <HeaderAction icon="map" label="Showroom" value="0 điểm bán" className="header-action-wide" />
+              <HeaderAction icon="receipt" label="Đơn hàng" value="Tra cứu" onClick={() => navigate('/don-hang')} />
               
               {currentUser ? (
                 <div className="flex min-h-14 items-center gap-2 rounded-2xl bg-white/10 px-3 text-white">
@@ -873,6 +943,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
             <button
               key={link}
               type="button"
+              onClick={QUICK_LINK_ROUTES[link] ? () => navigate(QUICK_LINK_ROUTES[link]) : undefined}
               className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-red-200 hover:text-red-600"
             >
               {link}
@@ -1349,6 +1420,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         onDecrease={(productId) => changeQuantity(productId, -1)}
         onRemove={removeFromCart}
         onCheckout={goToCheckout}
+        onClearPriceLock={clearPriceLock}
         onOpenProduct={(product) => {
           setCartOpen(false)
           openProduct(product)
@@ -1388,11 +1460,11 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   )
 }
 
-function HeaderAction({ icon, label, value }) {
-  return (
-    <div className="header-action-compact">
+function HeaderAction({ icon, label, value, className = '', onClick }) {
+  const content = (
+    <>
       <StoreGlyph name={icon} className="size-5 shrink-0" />
-      <div className="leading-tight">
+      <div className="leading-tight text-left">
         <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-red-100">
           {label}
         </div>
@@ -1400,8 +1472,16 @@ function HeaderAction({ icon, label, value }) {
           {value}
         </div>
       </div>
-    </div>
+    </>
   )
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={classNames('header-action-compact', className)}>
+        {content}
+      </button>
+    )
+  }
+  return <div className={classNames('header-action-compact', className)}>{content}</div>
 }
 
 function MiniFeature({ label, value }) {

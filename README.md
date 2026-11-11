@@ -17,7 +17,12 @@ features and DBMS demonstrations.
   across the whole catalog, a cart saved on the server for signed-in users,
   checkout with a validated Vietnamese shipping address, order history and
   detail pages, cancellation, reviews, vouchers, and VNPay sandbox integration.
-- Admin workflows for product, image, order, user, and analytics management.
+- Build PC with compatibility checks (socket, RAM type and slots, M.2 slots,
+  form factor, GPU length, cooler height, PSU headroom), suggested builds by
+  the software a customer needs, upgrade advice for an existing PC, and
+  48-hour price-locked quotes with a shareable link.
+- Price history on every product page and warranty lookup by serial number.
+- Admin workflows for product, image, order, warranty, user, and analytics management.
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -93,12 +98,26 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/tim-kiem?q=` | Search results with sorting and pagination |
 | `#/thanh-toan` | Checkout: shipping address, payment method, voucher |
 | `#/don-hang` | Order history |
-| `#/don-hang/:id` | Order detail: cancel, retry VNPay payment |
+| `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, warranty serials |
+| `#/build-pc` | Build PC: pick parts, compatibility check, suggested builds, upgrade advice, save a quote |
+| `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |
+| `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties |
 
 Search matches Vietnamese text without accents ("man hinh" finds "Màn hình").
 Each product stores a folded `SearchText` column (migration `006`); the API
 fills it on startup for existing rows and whenever a product is created or
 edited.
+
+Build PC data lives in `ComponentSpecs` (migration `007`, sample parts in
+`database/seeds/003_seed_components.sql`; specs and prices there are sample
+values for the demo). Compatibility rules are pure functions in
+`backend-app/src/utils/compatibility.js`, so they are unit tested without a
+database. A saved quote keeps each part's price for 48 hours
+(`QUOTE_VALID_HOURS`): the order uses the lower of the quoted and current
+price, and an expired quote is reported to the customer instead of silently
+charging a different amount. Price history is written in the same
+transaction as the product insert or update made through the API; edits made
+directly in SQL bypass it.
 
 Shipping addresses follow the two-level administrative units in effect since
 1 July 2025 (province/city → ward/commune). The backend validates the address
@@ -229,6 +248,9 @@ The API is mounted under `/api/v1` and includes:
 - `/products` — catalog and product management
 - `/cart` — saved cart (`GET`/`PUT /cart`), validation and server-side price quote (`POST /cart/quote`)
 - `/locations/provinces` — the 34 provinces and cities used by the address form
+- `/builder` — Build PC parts, compatibility check, suggested builds, upgrade advice, price-locked quotes
+- `/warranties` — public lookup by serial, the customer's warranties, admin registration
+- `/products/:id/price-history` — price changes over the last 180 days
 - `/orders` — checkout, order history, status, cancellation
 - `/payments` — VNPay sandbox flow
 - `/reviews` — product reviews
@@ -259,7 +281,7 @@ Useful local checks:
 cd backend-app
 npm test
 
-# Backend integration tests against the Docker SQL Server
+# Backend integration tests against the Docker SQL Server and MongoDB
 # (start dbms-env and run the migration + seed steps first)
 npm run test:db
 

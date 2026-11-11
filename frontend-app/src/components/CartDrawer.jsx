@@ -16,6 +16,7 @@ export default function CartDrawer({
   onRemove,
   onCheckout,
   onOpenProduct,
+  onClearPriceLock,
 }) {
   return (
     <>
@@ -124,7 +125,7 @@ export default function CartDrawer({
               />
             </div>
 
-            <PriceSummary subtotal={subtotal} quote={quote} quoteError={quoteError} />
+            <PriceSummary subtotal={subtotal} quote={quote} quoteError={quoteError} onClearPriceLock={onClearPriceLock} />
 
             <button
               type="button"

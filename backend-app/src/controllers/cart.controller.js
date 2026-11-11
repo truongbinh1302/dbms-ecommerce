@@ -66,8 +66,8 @@ const validateCart = async (req, res) => {
  */
 const quoteCart = async (req, res) => {
   try {
-    const { items, voucherCode } = req.body || {};
-    const quote = await orderService.quoteCart(items, voucherCode);
+    const { items, voucherCode, quoteCode } = req.body || {};
+    const quote = await orderService.quoteCart(items, voucherCode, quoteCode);
     return success(res, quote, 'Cart quote calculated');
   } catch (err) {
     if (err.status) return error(res, err.message, err.status, err.data);

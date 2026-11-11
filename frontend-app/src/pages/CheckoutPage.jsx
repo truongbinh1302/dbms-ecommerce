@@ -43,6 +43,8 @@ export default function CheckoutPage({
   currentUser,
   onRequireLogin,
   onOrderPlaced,
+  priceLockCode = '',
+  onClearPriceLock,
 }) {
   const [provinces, setProvinces] = useState([])
   const [address, setAddress] = useState(EMPTY_ADDRESS)
@@ -88,6 +90,8 @@ export default function CheckoutPage({
       cancelled = true
     }
   }, [userId, touched])
+
+  const quoteLines = new Map((quote?.items || []).map((line) => [Number(line.productId), line]))
 
   if (cartItems.length === 0) {
     return (
@@ -135,6 +139,8 @@ export default function CheckoutPage({
         items,
         paymentMethod,
         voucherCode: voucherCode || undefined,
+        // Chỉ gửi mã báo giá khi server vừa xác nhận còn hạn, để khách không bị chặn vì mã cũ.
+        quoteCode: priceLockCode && quote?.priceLock ? priceLockCode : undefined,
         shippingAddress: address,
         note: note.trim() || undefined,
       })
@@ -165,6 +171,12 @@ export default function CheckoutPage({
       onOrderPlaced(order)
     } catch (err) {
       setFieldErrors(err.details?.fields || {})
+      if (err.status === 410) {
+        // Báo giá vừa hết hạn giữa lúc khách điền form: bỏ mã, giá được tính lại theo giá hiện tại.
+        if (onClearPriceLock) onClearPriceLock()
+        setFormError('Báo giá vừa hết hạn giữ giá. Tổng tiền đã được tính lại theo giá hiện tại, vui lòng kiểm tra rồi đặt lại.')
+        return
+      }
       setFormError(err.message || 'Không đặt được đơn hàng')
     } finally {
       setSubmitting(false)
@@ -248,22 +260,30 @@ export default function CheckoutPage({
       <aside className="h-fit rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] lg:sticky lg:top-28">
         <h2 className="text-xl font-black text-slate-900">Đơn hàng ({cartItems.length} sản phẩm)</h2>
         <ul className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-1">
-          {cartItems.map((item) => (
-            <li key={item.id} className="flex justify-between gap-3 text-sm">
-              <span className="text-slate-700">
-                <a href={hrefFor(`/san-pham/${item.id}`)} className="hover:text-red-600">{item.name}</a>
-                <span className="text-slate-400"> × {item.quantity}</span>
-              </span>
-              <span className="shrink-0 font-semibold text-slate-900">{formatCurrency(item.price * item.quantity)}</span>
-            </li>
-          ))}
+          {cartItems.map((item) => {
+            const line = quoteLines.get(Number(item.id))
+            return (
+              <li key={item.id} className="flex justify-between gap-3 text-sm">
+                <span className="text-slate-700">
+                  <a href={hrefFor(`/san-pham/${item.id}`)} className="hover:text-red-600">{item.name}</a>
+                  <span className="text-slate-400"> × {item.quantity}</span>
+                </span>
+                <span className="shrink-0 text-right font-semibold text-slate-900">
+                  {line?.priceLocked ? (
+                    <span className="block text-xs font-normal text-slate-400 line-through">{formatCurrency(line.listPrice * line.quantity)}</span>
+                  ) : null}
+                  {formatCurrency(line ? line.lineTotal : item.price * item.quantity)}
+                </span>
+              </li>
+            )
+          })}
         </ul>
 
         <div className="my-5 border-t border-slate-100 pt-5">
           <VoucherField voucherCode={voucherCode} voucherError={quote?.voucherError?.message || ''} onApply={onApplyVoucher} />
         </div>
 
-        <PriceSummary subtotal={subtotal} quote={quote} quoteError={quoteError} />
+        <PriceSummary subtotal={subtotal} quote={quote} quoteError={quoteError} onClearPriceLock={onClearPriceLock} />
 
         {formError ? <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{formError}</p> : null}
 
