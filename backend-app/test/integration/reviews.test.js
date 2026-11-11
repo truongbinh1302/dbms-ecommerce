@@ -159,3 +159,28 @@ test('kiểm duyệt: ẩn đánh giá thì không hiện, không tính điểm,
   await assert.rejects(reviewService.moderateReview(new mongoose.Types.ObjectId().toString(), { hidden: false }), (err) => err.status === 404);
   await assert.rejects(reviewService.listForAdmin({ filter: 'lost' }), (err) => err.status === 400);
 });
+
+test('lọc theo số sao; bấm hữu ích: không tự bấm, mỗi người một lần kể cả bấm dồn, đánh giá bị ẩn thì không bấm được', async () => {
+  const oneStar = await reviewService.getProductReviews(ctx.productId, 1, 10, 1);
+  assert.equal(oneStar.total, 1);
+  assert.ok(oneStar.reviews.every((item) => item.rating === 1));
+  assert.equal((await reviewService.getProductReviews(ctx.productId, 1, 10, 'x')).total, 2, 'giá trị lọc sai thì bỏ qua');
+
+  const [target] = (await reviewService.getProductReviews(ctx.productId, 1, 10, 4)).reviews;
+  const id = String(target._id);
+  await assert.rejects(reviewService.markHelpful(id, target.userId), (err) => err.status === 400);
+
+  const [voter, burst] = ctx.userIds.filter((userId) => userId !== target.userId);
+  assert.equal((await reviewService.markHelpful(id, voter)).helpful_count, 1);
+  await assert.rejects(reviewService.markHelpful(id, voter), (err) => err.status === 409);
+
+  const results = await Promise.allSettled(Array.from({ length: 5 }, () => reviewService.markHelpful(id, burst)));
+  assert.equal(results.filter((item) => item.status === 'fulfilled').length, 1, 'bấm dồn 5 lần chỉ tính 1');
+  assert.ok(results.filter((item) => item.status === 'rejected').every((item) => item.reason.status === 409));
+  assert.equal((await Review.findById(id).lean()).helpful_count, 2);
+
+  await reviewService.moderateReview(id, { hidden: true, reason: 'spam' });
+  const third = ctx.userIds.find((userId) => ![target.userId, voter, burst].includes(userId));
+  await assert.rejects(reviewService.markHelpful(id, third), (err) => err.status === 404);
+  await reviewService.moderateReview(id, { hidden: false });
+});

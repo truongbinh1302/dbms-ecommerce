@@ -6,6 +6,13 @@ const notificationService = require('./notification.service');
 // Đánh giá đang hiện công khai (bản ghi cũ chưa có trường hidden cũng tính là hiện).
 const VISIBLE = { hidden: { $ne: true } };
 
+const httpError = (status, message, data = null) => {
+  const err = new Error(message);
+  err.status = status;
+  err.data = data;
+  return err;
+};
+
 /**
  * Review Service - Handles all review-related business logic
  * - Manages review CRUD operations with MongoDB
@@ -20,23 +27,26 @@ const VISIBLE = { hidden: { $ne: true } };
  * @param {number} limit - Number of reviews per page (default: 10)
  * @returns {Promise} - { reviews, total, page, pages }
  */
-const getProductReviews = async (productId, page = 1, limit = 10) => {
+const getProductReviews = async (productId, page = 1, limit = 10, rating = null) => {
   try {
     // Validate inputs
     if (!productId || productId <= 0) {
       throw new Error('Invalid product ID');
     }
+    // Lọc theo số sao (1-5); giá trị khác bỏ qua.
+    const stars = Number(rating);
+    const ratingFilter = Number.isInteger(stars) && stars >= 1 && stars <= 5 ? { rating: stars } : {};
 
     const pageNum = Math.max(1, page);
     const pageSize = Math.min(Math.max(1, limit), 100); // Limit max 100 per page
     const skip = (pageNum - 1) * pageSize;
 
     // Get total count
-    const total = await Review.countDocuments({ productId, ...VISIBLE });
+    const total = await Review.countDocuments({ productId, ...VISIBLE, ...ratingFilter });
 
     // Aggregation pipeline for reviews with statistics
     const reviews = await Review.aggregate([
-      { $match: { productId, ...VISIBLE } },
+      { $match: { productId, ...VISIBLE, ...ratingFilter } },
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: pageSize },
@@ -305,8 +315,9 @@ const markHelpful = async (reviewId, userId) => {
   }
 
   const voterId = Number(userId);
+  // Chỉ đánh giá đang hiện, không phải của chính người bấm, và người này chưa bấm lần nào.
   const updatedReview = await Review.findOneAndUpdate(
-    { _id: reviewId, helpful_by: { $ne: voterId } },
+    { _id: reviewId, ...VISIBLE, userId: { $ne: voterId }, helpful_by: { $ne: voterId } },
     { $addToSet: { helpful_by: voterId }, $inc: { helpful_count: 1 } },
     { new: true }
   );
@@ -315,9 +326,11 @@ const markHelpful = async (reviewId, userId) => {
     return updatedReview;
   }
 
-  const exists = await Review.exists({ _id: reviewId });
-  const err = new Error(exists ? 'You already marked this review as helpful' : 'Review not found');
-  err.status = exists ? 409 : 404;
+  const existing = await Review.findOne({ _id: reviewId, ...VISIBLE }).select('userId').lean();
+  let err;
+  if (!existing) err = httpError(404, 'Không tìm thấy đánh giá');
+  else if (Number(existing.userId) === voterId) err = httpError(400, 'Bạn không thể bấm hữu ích cho đánh giá của chính mình');
+  else err = httpError(409, 'Bạn đã bấm hữu ích cho đánh giá này rồi');
   throw err;
 };
 
@@ -456,13 +469,6 @@ const HIDE_REASONS = {
 const ADMIN_FILTERS = ['all', 'visible', 'hidden', 'needs_reply'];
 // Đánh giá thấp (1-2 sao) đang hiện mà cửa hàng chưa phản hồi: nên trả lời sớm.
 const NEEDS_REPLY = { ...VISIBLE, rating: { $lte: 2 }, 'storeReply.content': { $exists: false } };
-
-const httpError = (status, message, data = null) => {
-  const err = new Error(message);
-  err.status = status;
-  err.data = data;
-  return err;
-};
 
 const cleanReply = (value) => String(value ?? '').replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 

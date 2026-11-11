@@ -6,7 +6,7 @@ const getProductReviews = async (req, res) => {
     const productId = Number(req.params.productId || req.query.productId);
     const { page = 1, limit = 10 } = req.query;
     const [reviews, statistics] = await Promise.all([
-      reviewService.getProductReviews(productId, Number(page), Number(limit)),
+      reviewService.getProductReviews(productId, Number(page), Number(limit), req.query.rating),
       reviewService.getReviewStatistics(productId),
     ]);
     return success(res, { ...reviews, statistics }, 'Reviews retrieved successfully');
