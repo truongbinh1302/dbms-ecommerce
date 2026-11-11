@@ -6,6 +6,15 @@ import StoreGlyph from './StoreGlyph'
 
 const POLL_MS = 60000
 
+// Nhãn loại thông báo để khách lướt nhanh.
+const TYPE_LABELS = {
+  price_drop: { label: 'Giá giảm', className: 'bg-emerald-50 text-emerald-800' },
+  back_in_stock: { label: 'Có hàng', className: 'bg-sky-50 text-sky-800' },
+  order_status: { label: 'Đơn hàng', className: 'bg-slate-100 text-slate-700' },
+  service_update: { label: 'Dịch vụ', className: 'bg-violet-50 text-violet-800' },
+  question_answered: { label: 'Hỏi đáp', className: 'bg-amber-50 text-amber-900' },
+}
+
 /* Chuông thông báo ở header (khách đã đăng nhập): giá giảm, đơn đổi trạng thái, yêu cầu dịch vụ. */
 export default function NotificationBell({ userId }) {
   const [data, setData] = useState({ userId: null, unread: 0, items: [] })
@@ -102,6 +111,9 @@ export default function NotificationBell({ userId }) {
                     <span className="flex items-start gap-2">
                       {!item.read ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-red-600" aria-label="Chưa đọc" /> : null}
                       <span className="min-w-0">
+                        {TYPE_LABELS[item.type] ? (
+                          <span className={`mb-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${TYPE_LABELS[item.type].className}`}>{TYPE_LABELS[item.type].label}</span>
+                        ) : null}
                         <span className="block text-sm font-bold">{item.title}</span>
                         {item.body ? <span className="block text-xs text-slate-600">{item.body}</span> : null}
                         <span className="block text-[11px] text-slate-600">{formatDateTime(item.createdAt)}</span>
