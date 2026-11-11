@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import OrderReturns from '../components/OrderReturns'
 import PageMessage from '../components/PageMessage'
-import { cancelMyOrder, createVNPayPaymentLink, fetchOrder } from '../api/client'
+import { cancelMyOrder, createVNPayPaymentLink, fetchOrder, fetchProductsByIds } from '../api/client'
+import { mapApiProductToStoreProduct } from '../utils/productMapping'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatCurrency } from '../utils/format'
 import {
@@ -16,7 +17,7 @@ import {
 } from '../utils/orderLabels'
 import { LoginRequired, PaymentResultBanner } from './OrdersPage'
 
-export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, isNew = false, paymentResult = '', showToast }) {
+export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, isNew = false, paymentResult = '', showToast, onAddToCart }) {
   const userId = currentUser?.id
   const [reloadCount, setReloadCount] = useState(0)
   const requestKey = `${userId}:${orderId}:${reloadCount}`
@@ -71,6 +72,33 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
       setReloadCount((count) => count + 1)
     } catch (err) {
       showToast(err.message || 'Không huỷ được đơn hàng')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Mua lại: thêm các sản phẩm còn bán vào giỏ theo giá hiện tại (server tính lại khi thanh toán).
+  async function handleReorder() {
+    setBusy(true)
+    try {
+      const result = await fetchProductsByIds((order.items || []).map((item) => item.ProductID))
+      const current = Array.isArray(result) ? result : result.items || []
+      let added = 0
+      const missing = []
+      for (const item of order.items || []) {
+        const product = current.find((entry) => Number(entry.id) === Number(item.ProductID))
+        if (!product || product.stock <= 0) {
+          missing.push(item.productName)
+          continue
+        }
+        onAddToCart(mapApiProductToStoreProduct(product), Math.min(item.Quantity, product.stock), { openDrawer: false })
+        added += 1
+      }
+      showToast(added
+        ? `Đã thêm ${added} sản phẩm vào giỏ theo giá hiện tại${missing.length ? `; ${missing.length} sản phẩm đã hết hàng` : ''}.`
+        : 'Các sản phẩm trong đơn hiện đã hết hàng.')
+    } catch (err) {
+      showToast(err.message || 'Không thêm được vào giỏ')
     } finally {
       setBusy(false)
     }
@@ -189,7 +217,7 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
           <div className="flex justify-between text-base font-black"><dt>Tổng thanh toán</dt><dd className="text-red-600">{formatCurrency(order.Total)}</dd></div>
         </dl>
 
-        {canPay || canCancel ? (
+        {canPay || canCancel || (onAddToCart && ['delivered', 'cancelled'].includes(order.Status)) ? (
           <div className="mt-6 flex flex-wrap gap-3">
             {canPay ? (
               <button type="button" disabled={busy} onClick={handlePay} className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white disabled:bg-slate-300">
@@ -199,6 +227,11 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
             {canCancel ? (
               <button type="button" disabled={busy} onClick={handleCancel} className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 disabled:text-slate-300">
                 Huỷ đơn
+              </button>
+            ) : null}
+            {onAddToCart && ['delivered', 'cancelled'].includes(order.Status) ? (
+              <button type="button" disabled={busy} onClick={handleReorder} className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 hover:border-red-500 hover:text-red-600 disabled:text-slate-300">
+                Mua lại
               </button>
             ) : null}
           </div>

@@ -13,9 +13,30 @@ const SORT_OPTIONS = [
   { value: 'price_desc', label: 'Giá cao đến thấp' },
 ]
 
-function searchHref(query, sort, page) {
+// Khoảng giá theo triệu đồng: "2-5" là 2–5 triệu, "20-" là từ 20 triệu.
+const PRICE_RANGES = [
+  { value: '', label: 'Mọi mức giá' },
+  { value: '0-2', label: 'Dưới 2 triệu' },
+  { value: '2-5', label: '2 – 5 triệu' },
+  { value: '5-10', label: '5 – 10 triệu' },
+  { value: '10-20', label: '10 – 20 triệu' },
+  { value: '20-', label: 'Trên 20 triệu' },
+]
+
+function priceParams(range) {
+  const match = /^(\d+)-(\d*)$/.exec(range || '')
+  if (!match) return {}
+  const params = {}
+  if (Number(match[1]) > 0) params.minPrice = String(Number(match[1]) * 1000000)
+  if (match[2]) params.maxPrice = String(Number(match[2]) * 1000000)
+  return params
+}
+
+function searchHref(query, sort, page, filters = {}) {
   const params = new URLSearchParams({ q: query })
   if (sort && sort !== 'relevance') params.set('sap-xep', sort)
+  if (filters.price) params.set('gia', filters.price)
+  if (filters.inStock) params.set('con-hang', '1')
   if (page > 1) params.set('trang', String(page))
   return hrefFor(`/tim-kiem?${params}`)
 }
@@ -28,6 +49,8 @@ export default function SearchPage({
   query,
   sort = 'relevance',
   page = 1,
+  price = '',
+  inStock = false,
   favoriteIds,
   onToggleFavorite,
   onAddToCart,
@@ -35,14 +58,23 @@ export default function SearchPage({
   onView,
   onProductsLoaded,
 }) {
-  const requestKey = JSON.stringify({ query, sort, page })
+  const filters = { price: PRICE_RANGES.some((range) => range.value === price) ? price : '', inStock }
+  const requestKey = JSON.stringify({ query, sort, page, ...filters })
   const [state, setState] = useState({ key: null, items: [], total: 0, totalPages: 0, error: '' })
 
   useEffect(() => {
     if (!query) return undefined
 
     let cancelled = false
-    fetchProducts({ q: query, sort, page: String(page), limit: String(PAGE_SIZE) })
+    const filterParams = JSON.parse(requestKey)
+    fetchProducts({
+      q: query,
+      sort,
+      page: String(page),
+      limit: String(PAGE_SIZE),
+      ...priceParams(filterParams.price),
+      ...(filterParams.inStock ? { inStock: 'true' } : {}),
+    })
       .then((result) => {
         if (cancelled) return
         const items = (result.items || []).map(mapApiProductToStoreProduct)
@@ -79,27 +111,53 @@ export default function SearchPage({
             {loading ? `Đang tìm “${query}”...` : `${state.total.toLocaleString('vi-VN')} sản phẩm cho “${query}”`}
           </h1>
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          Sắp xếp
-          <select
-            value={sort}
-            onChange={(event) => {
-              window.location.hash = searchHref(query, event.target.value, 1)
-            }}
-            className="rounded-xl border border-slate-200 px-3 py-2"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <label className="flex items-center gap-2">
+            Mức giá
+            <select
+              value={filters.price}
+              onChange={(event) => {
+                window.location.hash = searchHref(query, sort, 1, { ...filters, price: event.target.value })
+              }}
+              className="rounded-xl border border-slate-200 px-3 py-2"
+            >
+              {PRICE_RANGES.map((range) => <option key={range.value} value={range.value}>{range.label}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={filters.inStock}
+              onChange={(event) => {
+                window.location.hash = searchHref(query, sort, 1, { ...filters, inStock: event.target.checked })
+              }}
+            />
+            Chỉ hàng còn
+          </label>
+          <label className="flex items-center gap-2">
+            Sắp xếp
+            <select
+              value={sort}
+              onChange={(event) => {
+                window.location.hash = searchHref(query, event.target.value, 1, filters)
+              }}
+              className="rounded-xl border border-slate-200 px-3 py-2"
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       {state.error ? <p className="mt-6 text-red-600">{state.error}</p> : null}
 
       {!loading && !state.error && state.items.length === 0 ? (
         <div className="mt-6 rounded-[30px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">
-          Không có sản phẩm khớp. Thử bớt từ khoá hoặc gõ tên hãng, ví dụ “Logitech”, “màn hình 27”.
+          {filters.price || filters.inStock
+            ? 'Không có sản phẩm khớp với bộ lọc. Thử bỏ lọc giá hoặc lọc hàng còn.'
+            : 'Không có sản phẩm khớp. Thử bớt từ khoá hoặc gõ tên hãng, ví dụ “Logitech”, “màn hình 27”.'}
         </div>
       ) : null}
 
@@ -122,13 +180,13 @@ export default function SearchPage({
       {state.totalPages > 1 ? (
         <nav className="mt-8 flex items-center justify-center gap-3 text-sm" aria-label="Phân trang">
           {page > 1 ? (
-            <a href={searchHref(query, sort, page - 1)} className="rounded-xl border border-slate-200 px-4 py-2 font-semibold">
+            <a href={searchHref(query, sort, page - 1, filters)} className="rounded-xl border border-slate-200 px-4 py-2 font-semibold">
               Trang trước
             </a>
           ) : null}
           <span className="text-slate-500">Trang {page}/{state.totalPages}</span>
           {page < state.totalPages ? (
-            <a href={searchHref(query, sort, page + 1)} className="rounded-xl border border-slate-200 px-4 py-2 font-semibold">
+            <a href={searchHref(query, sort, page + 1, filters)} className="rounded-xl border border-slate-200 px-4 py-2 font-semibold">
               Trang sau
             </a>
           ) : null}

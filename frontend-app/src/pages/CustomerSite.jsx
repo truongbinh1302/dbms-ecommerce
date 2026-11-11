@@ -754,6 +754,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         query={(route.query.get('q') || '').trim()}
         sort={route.query.get('sap-xep') || 'relevance'}
         page={routePage}
+        price={route.query.get('gia') || ''}
+        inStock={route.query.get('con-hang') === '1'}
         favoriteIds={favoriteIds}
         onToggleFavorite={toggleFavorite}
         onAddToCart={addToCart}
@@ -784,6 +786,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
       <OrderDetailPage
         key={routeId}
         orderId={routeId}
+        onAddToCart={addToCart}
         currentUser={currentUser}
         onRequireLogin={requireLogin}
         isNew={route.query.get('moi') === '1'}
