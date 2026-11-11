@@ -87,7 +87,8 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState('')
   const [updatingOrderId, setUpdatingOrderId] = useState(null)
-  const [orderFilter, setOrderFilter] = useState({ status: '', q: '', page: 1 })
+  const [orderFilter, setOrderFilter] = useState({ status: '', q: '', page: 1, payment: '' })
+  const [refundRequired, setRefundRequired] = useState(0)
   const [orderSearch, setOrderSearch] = useState('')
   const [ordersTotal, setOrdersTotal] = useState({ items: 0, pages: 0 })
   const [openOrderId, setOpenOrderId] = useState(null)
@@ -146,9 +147,11 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           limit: 20,
           status: orderFilter.status,
           q: orderFilter.q,
+          payment: orderFilter.payment,
         },
         token,
       )
+      setRefundRequired(Number(result.refundRequired || 0))
       setOrders(Array.isArray(result.items) ? result.items : [])
       setOrdersTotal({ items: Number(result.pagination?.totalItems || 0), pages: Number(result.pagination?.totalPages || 0) })
     } catch (err) {
@@ -395,6 +398,16 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                   <option key={status.value} value={status.value}>{status.label}</option>
                 ))}
               </select>
+              {refundRequired > 0 || orderFilter.payment ? (
+                <button
+                  type="button"
+                  aria-pressed={orderFilter.payment === 'refund_required'}
+                  onClick={() => setOrderFilter((current) => ({ ...current, payment: current.payment ? '' : 'refund_required', status: '', page: 1 }))}
+                  className={`rounded-full px-3 py-2 text-sm font-bold ${orderFilter.payment ? 'bg-amber-300 text-slate-950' : 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/25'}`}
+                >
+                  {orderFilter.payment ? 'Bỏ lọc chờ hoàn tiền' : `${refundRequired} đơn chờ hoàn tiền`}
+                </button>
+              ) : null}
             </div>
 
             {ordersError ? (

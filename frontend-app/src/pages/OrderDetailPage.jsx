@@ -150,6 +150,15 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
             <h2 className="font-bold text-slate-900">Thanh toán</h2>
             <p className="mt-2 text-slate-700">{labelOf(PAYMENT_METHOD_LABELS, order.PaymentMethod)}</p>
             <p className="mt-1 text-slate-700">{labelOf(PAYMENT_STATUS_LABELS, order.PaymentStatus)}</p>
+            {order.PaymentStatus === 'refunded' && order.refundAmount ? (
+              <p className="mt-1 text-slate-600">
+                Đã hoàn {formatCurrency(order.refundAmount)} lúc {formatDateTime(order.refundedAt)}
+                {order.refundReference ? <> · mã giao dịch <span className="select-all font-mono">{order.refundReference}</span></> : null}
+              </p>
+            ) : null}
+            {order.PaymentStatus === 'refund_required' ? (
+              <p className="mt-1 text-slate-600">Cửa hàng sẽ hoàn tiền theo phương thức bạn đã thanh toán và báo cho bạn khi xong.</p>
+            ) : null}
           </div>
         </div>
 

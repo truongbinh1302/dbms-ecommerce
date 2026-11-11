@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { fetchOrder, updateAdminOrderStatus } from '../../api/client'
+import { fetchOrder, recordOrderRefund, updateAdminOrderStatus } from '../../api/client'
 import { formatCurrency } from '../../utils/format'
 import { RETURN_KIND_LABELS, RETURN_STATUS_LABELS, formatAddress, formatDateTime } from '../../utils/orderLabels'
 
@@ -19,6 +19,49 @@ const PAYMENT_LABELS = {
   failed: 'Thanh toán lỗi',
   refund_required: 'Cần hoàn tiền',
   refunded: 'Đã hoàn tiền',
+}
+
+/* Đơn đã thanh toán rồi bị huỷ: hoàn tiền ở VNPay/ngân hàng rồi ghi nhận tại đây (khách được báo). */
+function RefundForm({ order, token, onSaved }) {
+  const [form, setForm] = useState({ amount: String(Number(order.Total)), reference: '', note: '' })
+  const [state, setState] = useState({ busy: false, error: '' })
+
+  async function submit(event) {
+    event.preventDefault()
+    setState({ busy: true, error: '' })
+    try {
+      await recordOrderRefund(order.id, { amount: Number(form.amount), reference: form.reference, note: form.note }, token)
+      setState({ busy: false, error: '' })
+      onSaved()
+    } catch (err) {
+      setState({ busy: false, error: err.message || 'Không ghi nhận được' })
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="rounded-2xl border border-amber-300 bg-amber-50 p-3 print:hidden">
+      <h4 className="font-black text-amber-900">Khách đã thanh toán, đơn đã huỷ: cần hoàn tiền</h4>
+      <p className="mt-1 text-xs text-amber-900">Hoàn ở cổng VNPay hoặc chuyển khoản, rồi ghi nhận mã giao dịch để khách đối chiếu.</p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <label className="text-xs font-semibold text-slate-700">
+          Số tiền hoàn (đ)
+          <input type="number" min="1" max={Number(order.Total)} step="any" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
+        </label>
+        <label className="text-xs font-semibold text-slate-700">
+          Mã giao dịch hoàn
+          <input value={form.reference} maxLength={100} onChange={(event) => setForm({ ...form, reference: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm font-normal text-slate-900" />
+        </label>
+      </div>
+      <label className="mt-2 block text-xs font-semibold text-slate-700">
+        Ghi chú gửi khách (không bắt buộc)
+        <input value={form.note} maxLength={200} onChange={(event) => setForm({ ...form, note: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
+      </label>
+      {state.error ? <p className="mt-2 text-xs font-semibold text-red-700" role="alert">{state.error}</p> : null}
+      <button type="submit" disabled={state.busy || !form.reference.trim()} className="mt-2 rounded-xl bg-slate-900 px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50">
+        Ghi nhận đã hoàn tiền
+      </button>
+    </form>
+  )
 }
 
 const CARRIERS = ['Giao Hàng Nhanh (GHN)', 'Giao Hàng Tiết Kiệm (GHTK)', 'Viettel Post', 'J&T Express', 'VNPost', 'Ahamove', 'Cửa hàng tự giao']
@@ -151,6 +194,22 @@ export default function OrderDetailDrawer({ orderId, token, onChanged, onClose }
                 </>
               ) : null}
             </dl>
+
+            {order.PaymentStatus === 'refund_required' && token ? (
+              <RefundForm
+                order={order}
+                token={token}
+                onSaved={() => {
+                  setVersion((value) => value + 1)
+                  onChanged?.()
+                }}
+              />
+            ) : null}
+            {order.PaymentStatus === 'refunded' && order.refundAmount ? (
+              <p className="rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-900">
+                Đã hoàn {formatCurrency(order.refundAmount)} lúc {formatDateTime(order.refundedAt)} · mã {order.refundReference}
+              </p>
+            ) : null}
 
             {SHIPPABLE.includes(order.Status) && token ? (
               <ShipmentForm

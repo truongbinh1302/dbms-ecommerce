@@ -205,6 +205,11 @@ export function updateAdminOrderStatus(orderId, status, note, token, shipment = 
   });
 }
 
+// Ghi nhận đã hoàn tiền cho đơn đã thanh toán rồi bị huỷ: { amount?, reference, note? }.
+export function recordOrderRefund(orderId, payload, token) {
+  return request(`/orders/admin/${orderId}/refund`, { method: 'POST', auth: true, token, body: JSON.stringify(payload) });
+}
+
 // --- Đổi trả ---
 export function createReturnRequest(orderId, payload) {
   return request(`/orders/${orderId}/returns`, { method: 'POST', auth: true, body: JSON.stringify(payload) });

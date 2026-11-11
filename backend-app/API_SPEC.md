@@ -985,6 +985,7 @@ Danh sách đơn cho admin, mới nhất trước.
 **Query:**
 - `status` — một hoặc nhiều trạng thái, cách nhau bằng dấu phẩy (`pending,pending_payment,confirmed,processing` là nhóm "Cần xử lý" trên dashboard). Trạng thái lạ → `400`.
 - `q` — tìm theo mã đơn (`DH000123`), số đơn, tên/email khách, tên hoặc số điện thoại người nhận. Tên tìm không phân biệt dấu (`khach hoa` khớp "Khách Hoá").
+- `payment` — lọc theo trạng thái thanh toán (`refund_required`, `refunded`, `paid`, …). Response có thêm `refundRequired`: số đơn đang chờ hoàn tiền.
 - `page`, `limit` (tối đa 100).
 
 **Response 200:** `data.items[]` gồm `id`, `orderCode`, `status`, `paymentMethod`, `paymentStatus`, `total`, `createdAt`, `customerName`, `customerEmail`, `recipientName`, `recipientPhone`, `province`, `itemCount`, `itemsText`; kèm `data.pagination { page, limit, totalItems, totalPages }`.
@@ -1003,6 +1004,15 @@ Admin cập nhật trạng thái đơn hàng. Không ghi đè ghi chú của kh�
 - `422 has_returns` — đơn đã có yêu cầu đổi trả (chưa bị từ chối/huỷ) thì giữ trạng thái `delivered`.
 
 `GET /orders/:id` trả thêm `shippingCarrier`, `trackingCode`, `shippedAt`, `deliveredAt`, `returns[]` và `returnWindow { days, open, deadline, items[{ productId, remaining }] }`.
+
+---
+
+### POST `/orders/admin/:id/refund`
+
+Ghi nhận đã hoàn tiền cho đơn đã thanh toán rồi bị huỷ (`PaymentStatus = refund_required`). Tiền hoàn ở cổng VNPay hoặc
+chuyển khoản; API chỉ lưu lại. Body `{ reference, amount?, note? }`: `reference` bắt buộc (mã giao dịch hoàn), `amount`
+mặc định và tối đa bằng tổng đơn. Đơn chuyển `refunded` (`RefundAmount`, `RefundReference`, `RefundedAt`), khách nhận
+thông báo; báo cáo ngày cộng vào tiền hoàn. Đơn không chờ hoàn → `422 not_refund_required`.
 
 ---
 

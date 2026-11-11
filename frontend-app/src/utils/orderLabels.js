@@ -15,6 +15,7 @@ export const PAYMENT_STATUS_LABELS = {
   failed: 'Thanh toán không thành công',
   expired: 'Quá hạn thanh toán',
   refund_required: 'Chờ hoàn tiền',
+  refunded: 'Đã hoàn tiền',
 }
 
 export const PAYMENT_METHOD_LABELS = {
