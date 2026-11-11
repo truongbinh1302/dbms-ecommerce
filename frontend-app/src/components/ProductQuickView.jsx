@@ -2,9 +2,11 @@ import { ProductVisual } from './ProductCard'
 import StoreGlyph from './StoreGlyph'
 import { formatCurrency } from '../utils/format'
 import useStoreInfo from '../hooks/useStoreInfo'
+import useDialog from '../hooks/useDialog'
 
 export default function ProductQuickView({ product, open, onClose, onAddToCart, isFavorite, onToggleFavorite }) {
   const storeInfo = useStoreInfo()
+  const dialogRef = useDialog(open && Boolean(product), onClose)
   if (!product) {
     return null
   }
@@ -19,15 +21,16 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
       <div
         className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition duration-300 ${open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`}
       >
-        <div className="custom-scroll max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[36px] bg-white shadow-[0_40px_120px_rgba(15,23,42,0.3)]">
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="quick-view-title" className="custom-scroll max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[36px] bg-white shadow-[0_40px_120px_rgba(15,23,42,0.3)]">
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Chi tiết nhanh</p>
-              <h3 className="mt-1 text-2xl font-black text-slate-900">{product.name}</h3>
+              <h3 id="quick-view-title" className="mt-1 text-2xl font-black text-slate-900">{product.name}</h3>
             </div>
             <button
               type="button"
               onClick={onClose}
+              aria-label="Đóng xem nhanh"
               className="flex size-11 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-red-200 hover:text-red-600"
             >
               <StoreGlyph name="x" className="size-5" />

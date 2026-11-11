@@ -1,6 +1,7 @@
 import StoreGlyph from './StoreGlyph'
 import PriceSummary, { VoucherField } from './PriceSummary'
 import { formatCurrency } from '../utils/format'
+import useDialog from '../hooks/useDialog'
 
 export default function CartDrawer({
   open,
@@ -18,6 +19,7 @@ export default function CartDrawer({
   onOpenProduct,
   onClearPriceLock,
 }) {
+  const dialogRef = useDialog(open, onClose)
   return (
     <>
       <div
@@ -27,6 +29,9 @@ export default function CartDrawer({
 
       {/* Khi đóng, giỏ chỉ trượt ra ngoài màn hình: inert để bàn phím và trình đọc màn hình bỏ qua nó. */}
       <aside
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
         aria-label="Giỏ hàng"
         aria-hidden={!open}
         inert={!open}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import StoreGlyph from './StoreGlyph'
 import { login, register } from '../api/client'
 import { hrefFor } from '../hooks/useHashRoute'
+import useDialog from '../hooks/useDialog'
 
 export default function AuthModal({ isOpen, onClose, onSuccess }) {
   const [isLogin, setIsLogin] = useState(true)
@@ -13,6 +14,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
   const [acceptPrivacy, setAcceptPrivacy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const dialogRef = useDialog(isOpen, onClose)
 
   if (!isOpen) return null
 
@@ -41,9 +43,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
         <div className="mb-8 flex items-center justify-between">
-          <h2 className="text-2xl font-black text-slate-900">
+          <h2 id="auth-title" className="text-2xl font-black text-slate-900">
             {isLogin ? '🔓 Đăng nhập' : '✨ Đăng ký'}
           </h2>
           <button
@@ -59,9 +61,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Họ tên</label>
+              <label htmlFor="auth-name" className="block text-sm font-semibold text-slate-700 mb-2">Họ tên</label>
               <input
+                id="auth-name"
                 type="text"
+                autoComplete="name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Nguyễn Văn A"
@@ -72,9 +76,12 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
           )}
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
+            <label htmlFor="auth-email" className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
             <input
+              id="auth-email"
               type="email"
+              autoComplete="email"
+              data-autofocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="example@email.com"
@@ -84,9 +91,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Mật khẩu</label>
+            <label htmlFor="auth-password" className="block text-sm font-semibold text-slate-700 mb-2">Mật khẩu</label>
             <input
+              id="auth-password"
               type="password"
+              autoComplete={isLogin ? 'current-password' : 'new-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -98,8 +107,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
           {!isLogin && (
             <>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Số điện thoại (không bắt buộc)</label>
+                <label htmlFor="auth-phone" className="block text-sm font-semibold text-slate-700 mb-2">Số điện thoại (không bắt buộc)</label>
                 <input
+                  id="auth-phone"
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -129,7 +139,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
           )}
 
           {error && (
-            <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600 border border-red-200">
+            <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700 border border-red-200">
               {error}
             </div>
           )}
