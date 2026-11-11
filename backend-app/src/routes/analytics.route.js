@@ -8,5 +8,7 @@ const router = express.Router();
 router.get('/dashboard', authenticate, authorize('admin'), analyticsController.getDashboard);
 // Báo cáo theo ngày (giờ Việt Nam): ?from=YYYY-MM-DD&to=YYYY-MM-DD, mặc định 30 ngày gần nhất.
 router.get('/daily', authenticate, authorize('admin'), inventoryController.getDailyReport);
+// Kiểm tra toàn vẹn dữ liệu (chỉ đọc).
+router.get('/integrity', authenticate, authorize('admin'), analyticsController.getIntegrity);
 
 module.exports = router;
