@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchAdminOrders, fetchAdminQuestions, fetchAdminReturns, fetchAdminServiceRequests, fetchLowStock } from '../../api/client'
+import { fetchAdminOrders, fetchAdminQuestions, fetchAdminReturns, fetchAdminReviews, fetchAdminServiceRequests, fetchLowStock } from '../../api/client'
 
 const OPEN_ORDER_STATUSES = 'pending,pending_payment,confirmed,processing'
 
@@ -20,7 +20,8 @@ export default function TodoPanel({ token, version = 0, onOpenOrders }) {
       fetchAdminQuestions({ status: 'pending', limit: 1 }, token),
       fetchAdminServiceRequests({ status: 'open', limit: 200 }, token),
       fetchLowStock({ threshold: 5, limit: 100 }, token),
-    ]).then(([orders, returns, questions, services, lowStock]) => {
+      fetchAdminReviews({ filter: 'needs_reply', limit: 1 }, token),
+    ]).then(([orders, returns, questions, services, lowStock, reviews]) => {
       if (cancelled) return
       setCounts({
         version,
@@ -29,6 +30,7 @@ export default function TodoPanel({ token, version = 0, onOpenOrders }) {
           refunds: valueOf(orders, (value) => Number(value.refundRequired || 0)),
           returns: valueOf(returns, (value) => Number(value.pagination?.totalItems || 0)),
           questions: valueOf(questions, (value) => Number(value.pendingCount || 0)),
+          reviews: valueOf(reviews, (value) => Number(value.needsReply || 0)),
           services: valueOf(services, (value) => (Array.isArray(value) ? value.length : 0)),
           // Sắp hết (≤ 5) mà có bán trong 30 ngày hoặc có khách đang chờ hàng: cần nhập thêm.
           lowStock: valueOf(lowStock, (value) => (value.items || []).filter((item) => item.sold30 > 0 || item.waiting > 0).length),
@@ -46,6 +48,7 @@ export default function TodoPanel({ token, version = 0, onOpenOrders }) {
     { key: 'refunds', label: 'Đơn chờ hoàn tiền', hint: 'khách đã trả, đơn đã huỷ', href: '#admin-orders', onClick: () => onOpenOrders?.({ status: '', payment: 'refund_required' }), urgent: true },
     { key: 'returns', label: 'Yêu cầu đổi trả', hint: 'chờ duyệt, chờ nhận hàng, chờ hoàn tất', href: '#admin-returns' },
     { key: 'questions', label: 'Câu hỏi chờ trả lời', hint: 'ở trang sản phẩm', href: '#admin-questions' },
+    { key: 'reviews', label: 'Đánh giá thấp chưa phản hồi', hint: '1-2 sao, đang hiện', href: '#admin-reviews' },
     { key: 'services', label: 'Yêu cầu dịch vụ đang mở', hint: 'kỹ thuật tại nhà, thu cũ, bảo hành', href: '#admin-services' },
     { key: 'lowStock', label: 'Hàng cần nhập thêm', hint: 'còn ≤ 5, có bán trong 30 ngày hoặc có khách chờ', href: '#admin-stock' },
   ]

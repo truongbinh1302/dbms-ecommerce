@@ -231,6 +231,12 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{review.content}</p>
                 <p className="mt-2 text-xs text-slate-500">{formatDateTime(review.createdAt)}</p>
+                {review.storeReply?.content ? (
+                  <div className="mt-3 rounded-xl border-l-4 border-red-600 bg-slate-50 px-3 py-2 text-sm">
+                    <p className="text-xs font-bold text-slate-900">Phản hồi của BinhTinhStore · <span className="font-normal text-slate-600">{formatDateTime(review.storeReply.repliedAt)}</span></p>
+                    <p className="mt-1 whitespace-pre-line leading-6 text-slate-700">{review.storeReply.content}</p>
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

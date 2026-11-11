@@ -153,6 +153,7 @@ const POLICIES = [
             'Đổi trả, bảo hành, giải quyết khiếu nại theo các chính sách trên website.',
             'Lưu thông tin hợp đồng và đơn hàng trong thời hạn pháp luật yêu cầu (Luật Thương mại điện tử 2025, Điều 16) và bảo vệ dữ liệu cá nhân của khách.',
             'Được từ chối hoặc huỷ đơn có thông tin giao hàng không liên lạc được, có dấu hiệu gian lận, hoặc khi sản phẩm hết hàng (hoàn tiền đầy đủ nếu đã thanh toán).',
+            'Đánh giá sản phẩm chỉ do khách đã nhận hàng viết. Cửa hàng không sửa nội dung và không ẩn đánh giá vì chê sản phẩm; chỉ ẩn đánh giá có quảng cáo, spam, ngôn từ xúc phạm, thông tin cá nhân hoặc không liên quan tới sản phẩm, và báo lý do cho người viết. Cửa hàng có thể phản hồi công khai dưới đánh giá.',
           ]} />
         </Section>
         <Section title="6. Giải quyết tranh chấp">

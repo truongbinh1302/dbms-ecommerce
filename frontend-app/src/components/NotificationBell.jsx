@@ -13,6 +13,7 @@ const TYPE_LABELS = {
   order_status: { label: 'Đơn hàng', className: 'bg-slate-100 text-slate-700' },
   service_update: { label: 'Dịch vụ', className: 'bg-violet-50 text-violet-800' },
   question_answered: { label: 'Hỏi đáp', className: 'bg-amber-50 text-amber-900' },
+  review: { label: 'Đánh giá', className: 'bg-rose-50 text-rose-800' },
 }
 
 /* Chuông thông báo ở header (khách đã đăng nhập): giá giảm, đơn đổi trạng thái, yêu cầu dịch vụ. */

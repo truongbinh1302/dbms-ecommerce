@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import { createReview, fetchReviewEligibility } from '../api/client'
 
+// Lý do cửa hàng ẩn đánh giá (khớp với máy chủ).
+const HIDDEN_REASONS = {
+  spam: 'quảng cáo hoặc spam',
+  offensive: 'ngôn từ xúc phạm',
+  personal_info: 'chứa thông tin cá nhân',
+  off_topic: 'không liên quan tới sản phẩm',
+}
+
 /*
   Viết đánh giá trên trang sản phẩm. Chỉ khách đã nhận hàng sản phẩm này mới viết được
   (server kiểm tra lại); mỗi khách một đánh giá cho mỗi sản phẩm.
@@ -39,6 +47,9 @@ export default function ReviewForm({ productId, currentUser, onRequireLogin, onC
   const value = eligibility.key === key ? eligibility.value : null
   if (state.done) return <p className="mt-4 text-sm text-emerald-700" role="status">Cảm ơn bạn đã đánh giá.</p>
   if (!value) return null
+  if (value.reason === 'already_reviewed' && value.hidden) {
+    return <p className="mt-4 text-sm text-slate-600">Đánh giá của bạn đang bị cửa hàng ẩn ({HIDDEN_REASONS[value.hiddenReason] || 'vi phạm quy định'}). Nếu thấy chưa đúng, hãy liên hệ cửa hàng.</p>
+  }
   if (value.reason === 'already_reviewed') return <p className="mt-4 text-sm text-slate-500">Bạn đã đánh giá sản phẩm này.</p>
   if (!value.canReview) return <p className="mt-4 text-sm text-slate-500">Chỉ khách đã nhận hàng sản phẩm này mới viết được đánh giá.</p>
 

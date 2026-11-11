@@ -541,6 +541,14 @@ export function moderateQuestion(questionId, payload, token) {
   return request(`/products/admin/questions/${encodeURIComponent(questionId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
 }
 
+export function fetchAdminReviews(params, token) {
+  return adminGet('/reviews/admin', params, token);
+}
+
+export function moderateReview(reviewId, payload, token) {
+  return request(`/reviews/admin/${encodeURIComponent(reviewId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
+}
+
 export function fetchReviews(productId) {
   return request(`/reviews/products/${productId}`);
 }
