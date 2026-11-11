@@ -183,6 +183,29 @@ inventory, updates the status, and commits as one transaction. See
 [`backend-app/src/services/order.service.js`](backend-app/src/services/order.service.js)
 for the implementation.
 
+### Concurrency control used across the store
+
+Every operation where two requests could race for the same scarce thing takes
+a lock inside one transaction, and each has an integration test that fires the
+requests at the same time (`npm run test:db`).
+
+| Race | What could go wrong | How it is prevented | Test |
+| --- | --- | --- | --- |
+| Two orders for the last unit | Stock goes negative, both customers charged | `UPDLOCK, ROWLOCK` on product rows in `ProductID` order, `CHECK (Stock >= 0)` | two orders, last unit → one succeeds |
+| Last use of a voucher | Code used beyond its limit | Voucher row locked `UPDLOCK`; usage and `UsedCount` written in the order's transaction | two orders, one use left → one discount |
+| Last Hot Deal units | More units sold at the deal price than offered | `PromotionItems` row locked after the product rows; `SoldCount <= QuantityLimit` constraint | five buyers, two units → exactly two |
+| Technician time slot | More bookings than technicians | Count of the slot read with `UPDLOCK, HOLDLOCK` (key-range lock) before inserting | many bookings for one slot → capped |
+| Return requests | Returning more than was bought | Order row locked `UPDLOCK`; requested quantities summed under the lock | five requests for one item → one accepted |
+| Pending product questions | Flooding past the 5-question cap | Pending count read with `UPDLOCK, HOLDLOCK` in the inserting transaction | eight at once → five |
+| Supplier receipts | Lost stock updates | Products locked in `ProductID` order (same order as checkout, no deadlock); ledger row per change | many receipts for one product → all counted |
+| Account deletion during checkout | An open order on a deleted account | Both lock the `Users` row first | delete and order at once → no open order left |
+| VNPay IPN called twice | Order paid or stock restored twice | Order row locked; amount checked; repeated call answers `02` | wrong amount → 04, retry → 02 |
+| Price and stock alert sweeps | The same alert sent twice | `UPDATE … OUTPUT INTO` / `DELETE … OUTPUT INTO` and the notification insert in one transaction | sweep twice → one notification |
+
+The stock ledger keeps one more invariant: for every product, the sum of
+`StockMovements.Change` equals `Products.Stock`, checked after sales,
+cancellations, receipts, adjustments, returns and exchanges in the tests.
+
 ## Tech stack
 
 | Layer | Technologies |
