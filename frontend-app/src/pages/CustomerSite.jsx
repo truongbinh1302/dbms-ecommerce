@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import heroAsset from '../assets/hero.png'
 import CartDrawer from '../components/CartDrawer'
+import FooterSellerInfo from '../components/FooterSellerInfo'
 import ProductCard, { ProductVisual } from '../components/ProductCard'
 import ProductQuickView from '../components/ProductQuickView'
 import SectionHeader from '../components/SectionHeader'
@@ -13,6 +14,7 @@ import BuildPcPage from './BuildPcPage'
 import CheckoutPage from './CheckoutPage'
 import OrderDetailPage from './OrderDetailPage'
 import OrdersPage from './OrdersPage'
+import PolicyPage from './PolicyPage'
 import PrivacyPolicyPage from './PrivacyPolicyPage'
 import ProductDetailPage from './ProductDetailPage'
 import QuotePage from './QuotePage'
@@ -44,8 +46,13 @@ const QUICK_LINK_ROUTES = {
 }
 // Liên kết chân trang đã có trang riêng; các mục còn lại chưa có nội dung.
 const FOOTER_LINK_ROUTES = {
+  'Giới thiệu': '/chinh-sach/thong-tin',
+  'Hướng dẫn mua hàng': '/chinh-sach/dieu-khoan',
+  'Phương thức thanh toán': '/chinh-sach/thanh-toan',
   'Tra cứu đơn hàng': '/don-hang',
-  'Bảo hành': '/bao-hanh',
+  'Liên hệ chăm sóc': '/chinh-sach/khieu-nai',
+  'Bảo hành': '/chinh-sach/bao-hanh',
+  'Đổi trả': '/chinh-sach/doi-tra',
   'Bảo mật thông tin': '/chinh-sach-bao-mat',
 }
 const SEEDED_VIEWED = []
@@ -735,6 +742,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     routeContent = <AccountPage currentUser={currentUser} onRequireLogin={requireLogin} onAccountDeleted={handleAccountDeleted} />
   } else if (routeSection === 'chinh-sach-bao-mat') {
     routeContent = <PrivacyPolicyPage />
+  } else if (routeSection === 'chinh-sach') {
+    routeContent = <PolicyPage slug={route.segments[1] || 'dieu-khoan'} />
   } else if (routeSection === 'don-hang') {
     routeContent = (
       <OrdersPage
@@ -1403,7 +1412,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                   <div className="text-2xl font-black text-slate-950">BinhTinhStore</div>
                 </div>
               </div>
-              
+              <FooterSellerInfo />
             </div>
 
             <div className="grid gap-6 md:grid-cols-3">

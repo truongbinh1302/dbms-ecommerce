@@ -24,6 +24,7 @@ const analyticsRoutes = require('./routes/analytics.route');
 const locationRoutes = require('./routes/location.routes');
 const builderRoutes = require('./routes/builder.routes');
 const warrantyRoutes = require('./routes/warranty.routes');
+const storeRoutes = require('./routes/store.routes');
 
 const app = express();
 
@@ -91,6 +92,7 @@ app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/locations', locationRoutes);
 app.use('/api/v1/builder', builderRoutes);
 app.use('/api/v1/warranties', warrantyRoutes);
+app.use('/api/v1/store', storeRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });

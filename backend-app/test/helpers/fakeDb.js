@@ -56,6 +56,7 @@ const createFakeDb = () => {
         ShippingAddress: i.shippingAddress,
         Note: i.note,
         QuoteCode: i.quoteCode ?? null,
+        TermsVersion: i.termsVersion ?? null,
         VNPayTxnRef: null,
         CreatedAt: new Date(),
         ageMinutes: 0,

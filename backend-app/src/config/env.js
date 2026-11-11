@@ -58,6 +58,25 @@ module.exports = {
     quoteValidHours: toNumber(process.env.QUOTE_VALID_HOURS, 48),
   },
 
+  // Thông tin người bán và các con số trong chính sách, hiển thị ở trang Chính sách và chân trang.
+  // Thông tin pháp lý để trống cho tới khi cửa hàng đăng ký kinh doanh; trang sẽ ghi "chưa cập nhật".
+  store: {
+    legalName: process.env.STORE_LEGAL_NAME || null,
+    taxCode: process.env.STORE_TAX_CODE || null,
+    address: process.env.STORE_ADDRESS || null,
+    phone: process.env.STORE_PHONE || null,
+    email: process.env.STORE_EMAIL || null,
+    representative: process.env.STORE_REPRESENTATIVE || null,
+    // Đổi khi sửa nội dung điều khoản: đơn ghi lại phiên bản khách đã đồng ý.
+    termsVersion: process.env.STORE_TERMS_VERSION || '2026-11-11',
+    province: process.env.STORE_PROVINCE || 'TP. Hồ Chí Minh',
+    deliveryDaysLocal: process.env.DELIVERY_DAYS_LOCAL || '1–2',
+    deliveryDaysOther: process.env.DELIVERY_DAYS_OTHER || '2–5',
+    returnDays: toNumber(process.env.RETURN_DAYS, 7),
+    complaintResponseDays: toNumber(process.env.COMPLAINT_RESPONSE_DAYS, 3),
+    pricesIncludeTax: process.env.PRICES_INCLUDE_TAX !== 'false',
+  },
+
   payment: {
     // Đơn VNPay chưa thanh toán sau ngần này phút sẽ tự huỷ và hoàn kho.
     expireMinutes: toNumber(process.env.PAYMENT_EXPIRE_MINUTES, 30),

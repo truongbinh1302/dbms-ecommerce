@@ -70,7 +70,10 @@ export default function WarrantyPage({ currentUser }) {
     <div className="space-y-5">
       <section className={CARD}>
         <h1 className="text-2xl font-black text-slate-900">Tra cứu bảo hành</h1>
-        <p className="mt-2 text-sm text-slate-600">Nhập số serial in trên tem sản phẩm hoặc trên hoá đơn.</p>
+        <p className="mt-2 text-sm text-slate-600">
+          Nhập số serial in trên tem sản phẩm hoặc trên hoá đơn. Điều kiện bảo hành xem ở{' '}
+          <a href={hrefFor('/chinh-sach/bao-hanh')} className="font-semibold text-red-600 underline">Chính sách bảo hành</a>.
+        </p>
         <form onSubmit={handleSubmit} className="mt-4 flex max-w-xl gap-2">
           <input
             value={serial}

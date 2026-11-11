@@ -104,3 +104,48 @@ test('đổi mật khẩu: kiểm tra đầu vào, thu hồi refresh token cũ, 
     .query('SELECT Password FROM Users WHERE Email = @email');
   assert.ok(await comparePassword(newPassword, stored.recordset[0].Password));
 });
+
+test('đặt hàng qua API: bắt buộc đồng ý điều khoản, đơn ghi phiên bản điều khoản', async () => {
+  const email = `${tag}-terms@btstore.test`;
+  const registered = await api('POST', '/auth/register', { fullName: 'Terms Test', email, password: 'Terms-password-1', acceptPrivacy: true });
+  assert.equal(registered.status, 201);
+  const userId = registered.body.data.user.id;
+  ctx.userIds.push(userId);
+  const token = registered.body.data.accessToken;
+
+  const category = await new sql.Request(getPool()).query('SELECT TOP 1 CategoryID FROM Categories ORDER BY CategoryID');
+  const product = await new sql.Request(getPool())
+    .input('slug', sql.NVarChar, `${tag}-terms-product`)
+    .input('categoryId', sql.Int, category.recordset[0].CategoryID)
+    .query(`INSERT INTO Products (Name, Slug, Price, Stock, CategoryID) OUTPUT INSERTED.ProductID VALUES (N'Terms test', @slug, 100000, 5, @categoryId)`);
+  const productId = product.recordset[0].ProductID;
+
+  const order = {
+    items: [{ productId, quantity: 1 }],
+    shippingAddress: { recipientName: 'Terms Test', phone: '0901234567', province: 'TP. Hồ Chí Minh', ward: 'Phường Diên Hồng', street: '268 Lý Thường Kiệt' },
+  };
+  try {
+    const refused = await api('POST', '/orders', order, token);
+    assert.equal(refused.status, 400);
+    assert.equal(refused.body.errors.code, 'terms_required');
+
+    const created = await api('POST', '/orders', { ...order, acceptTerms: true }, token);
+    assert.equal(created.status, 201);
+    const info = await api('GET', '/store/info');
+    const stored = await new sql.Request(getPool())
+      .input('orderId', sql.Int, created.body.data.orderId)
+      .query('SELECT TermsVersion FROM Orders WHERE OrderID = @orderId');
+    assert.equal(stored.recordset[0].TermsVersion, info.body.data.termsVersion);
+  } finally {
+    await new sql.Request(getPool())
+      .input('userId', sql.Int, userId)
+      .input('productId', sql.Int, productId)
+      .query(`
+        DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID = @userId;
+        DELETE FROM Orders WHERE UserID = @userId;
+        DELETE FROM CartItems WHERE UserID = @userId;
+        DELETE FROM PriceHistory WHERE ProductID = @productId;
+        DELETE FROM Products WHERE ProductID = @productId;
+      `);
+  }
+});

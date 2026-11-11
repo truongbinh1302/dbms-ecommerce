@@ -102,6 +102,9 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/build-pc` | Build PC: pick parts, compatibility check, suggested builds, upgrade advice, save a quote |
 | `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |
 | `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties |
+| `#/tai-khoan` | Account: change password, download personal data, delete account |
+| `#/chinh-sach/:slug` | Purchase terms, shipping, payment, returns, warranty, complaints, seller information |
+| `#/chinh-sach-bao-mat` | Privacy policy |
 
 Search matches Vietnamese text without accents ("man hinh" finds "Màn hình").
 Each product stores a folded `SearchText` column (migration `006`); the API
@@ -118,6 +121,13 @@ price, and an expired quote is reported to the customer instead of silently
 charging a different amount. Price history is written in the same
 transaction as the product insert or update made through the API; edits made
 directly in SQL bypass it.
+
+Policy pages read their numbers (shipping fee, delivery days, return days,
+VNPay time limit, tier discounts) from `GET /store/info`, which serves the same
+configuration the API uses to price orders. Seller details come from the
+`STORE_*` variables in `backend-app/.env`; until they are set, the footer and
+the seller page show "chưa cập nhật". Checkout requires the customer to accept
+the purchase terms, and each order stores the accepted terms version.
 
 Shipping addresses follow the two-level administrative units in effect since
 1 July 2025 (province/city → ward/commune). The backend validates the address

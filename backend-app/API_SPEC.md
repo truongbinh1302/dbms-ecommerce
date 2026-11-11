@@ -30,6 +30,7 @@
 20. [Cấu trúc project](#20-cấu-trúc-project)
 21. [API tối thiểu để demo](#21-api-tối-thiểu-để-demo)
 22. [Build PC, báo giá, lịch sử giá, bảo hành](#22-build-pc-báo-giá-lịch-sử-giá-bảo-hành)
+23. [Vận hành: điều khoản, chính sách, tài khoản, giám sát](#23-vận-hành-điều-khoản-chính-sách-tài-khoản-giám-sát)
 
 ---
 
@@ -2023,3 +2024,39 @@ Mốc giá được ghi trong cùng transaction với câu `INSERT`/`UPDATE` s�
 Quy tắc đăng ký: đơn phải ở trạng thái `confirmed`, `processing`, `shipped` hoặc `delivered`;
 số serial của một sản phẩm không vượt số lượng đã mua (khoá `UPDLOCK, HOLDLOCK` để hai admin đăng ký cùng lúc không vượt);
 serial trùng trả 409. Ngày hết hạn = ngày bắt đầu + số tháng − 1 ngày.
+
+---
+
+## 23. Vận hành: điều khoản, chính sách, tài khoản, giám sát
+
+Thêm ở giai đoạn 3 (migration `008_account_deletion.sql`, `009_order_terms.sql`).
+
+### Đặt hàng phải đồng ý điều khoản
+
+`POST /orders` cần thêm `"acceptTerms": true` (Luật Thương mại điện tử 122/2025/QH15, Điều 12).
+Thiếu thì trả **400** `{ errors: { code: "terms_required" } }`. Đơn lưu phiên bản điều khoản khách đã đồng ý
+ở `Orders.TermsVersion` (lấy từ `STORE_TERMS_VERSION`), trả về trong chi tiết đơn là `termsVersion`.
+
+### Thông tin cửa hàng — `GET /store/info` (công khai)
+
+Thông tin người bán (`STORE_LEGAL_NAME`, `STORE_TAX_CODE`, `STORE_ADDRESS`, `STORE_PHONE`, `STORE_EMAIL`,
+`STORE_REPRESENTATIVE`; `null` khi chưa cấu hình), phiên bản điều khoản, phí ship và mốc miễn phí, thời gian giao
+(`DELIVERY_DAYS_LOCAL` cho `STORE_PROVINCE`, `DELIVERY_DAYS_OTHER` cho tỉnh khác), ưu đãi theo giá trị đơn,
+thời hạn thanh toán VNPay, số ngày đổi trả (`RETURN_DAYS`), số ngày phản hồi khiếu nại (`COMPLAINT_RESPONSE_DAYS`).
+Giao diện dùng endpoint này cho trang `#/chinh-sach/:slug`, chân trang và trang thanh toán, nên chính sách công bố
+luôn khớp với cách hệ thống tính tiền.
+
+### Tài khoản
+
+| Method | Path | Mô tả |
+| --- | --- | --- |
+| POST | `/auth/register` | Cần `"acceptPrivacy": true`; lưu `Users.PrivacyConsentAt`. Mật khẩu từ 8 ký tự; `phone` không bắt buộc |
+| PATCH | `/users/me/password` | `{ oldPassword, newPassword }`; mật khẩu mới từ 8 ký tự và khác mật khẩu cũ; thu hồi refresh token (máy khác phải đăng nhập lại) |
+| GET | `/users/me/export` | Toàn bộ dữ liệu cá nhân dạng JSON (hồ sơ, đơn, giỏ, báo giá, bảo hành, voucher đã dùng, đánh giá); không có mật khẩu, token |
+| DELETE | `/users/me` | `{ password }`. Ẩn danh hồ sơ, khoá tài khoản, xoá giỏ và đánh giá, giữ đơn. 409 `open_orders` khi còn đơn chưa xong; 403 với admin |
+
+### Giám sát
+
+- `GET /health`: tiến trình còn chạy.
+- `GET /health/ready`: kiểm tra SQL Server và MongoDB, trả 503 `DEGRADED` khi một trong hai lỗi.
+- Lỗi 5xx ghi một dòng JSON vào log, có `errorId`. Ở production khách chỉ nhận thông báo chung kèm `errorId`.

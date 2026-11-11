@@ -257,6 +257,11 @@ export function cancelMyOrder(orderId, reason) {
   });
 }
 
+// Thông tin người bán và số liệu chính sách (phí ship, thời gian giao, số ngày đổi trả...).
+export function fetchStoreInfo() {
+  return request('/store/info');
+}
+
 export function fetchPriceHistory(productId, days = 180) {
   return request(`/products/${productId}/price-history?${new URLSearchParams({ days: String(days) })}`);
 }

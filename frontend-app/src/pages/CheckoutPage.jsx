@@ -9,6 +9,7 @@ import {
   saveDefaultAddress,
 } from '../api/client'
 import { hrefFor, navigate } from '../hooks/useHashRoute'
+import useStoreInfo, { deliveryDays } from '../hooks/useStoreInfo'
 import { formatCurrency } from '../utils/format'
 
 const EMPTY_ADDRESS = { recipientName: '', phone: '', province: '', ward: '', street: '' }
@@ -55,6 +56,10 @@ export default function CheckoutPage({
   const [fieldErrors, setFieldErrors] = useState({})
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Luật TMĐT 2025, Điều 12: khách xem và đồng ý điều khoản trước khi đặt. Không tích sẵn.
+  const [acceptTerms, setAcceptTerms] = useState(false)
+  const storeInfo = useStoreInfo()
+  const days = deliveryDays(storeInfo, address.province)
 
   useEffect(() => {
     let cancelled = false
@@ -133,6 +138,11 @@ export default function CheckoutPage({
       return
     }
 
+    if (!acceptTerms) {
+      setFormError('Vui lòng đọc và đồng ý với điều khoản mua hàng trước khi đặt.')
+      return
+    }
+
     setSubmitting(true)
     try {
       const order = await createOrder({
@@ -143,6 +153,7 @@ export default function CheckoutPage({
         quoteCode: priceLockCode && quote?.priceLock ? priceLockCode : undefined,
         shippingAddress: address,
         note: note.trim() || undefined,
+        acceptTerms: true,
       })
 
       if (saveAsDefault) {
@@ -227,6 +238,12 @@ export default function CheckoutPage({
           <p className="mt-3 text-xs text-slate-500">
             Địa chỉ theo đơn vị hành chính mới từ 01/7/2025 (tỉnh/thành → phường/xã, không còn quận/huyện).
           </p>
+          {days ? (
+            <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              Giao hàng dự kiến <strong>{days} ngày làm việc</strong> sau khi cửa hàng xác nhận đơn.{' '}
+              <a href={hrefFor('/chinh-sach/van-chuyen')} target="_blank" rel="noreferrer" className="font-semibold text-red-600 underline">Chính sách giao hàng</a>
+            </p>
+          ) : null}
 
           {currentUser ? (
             <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">
@@ -284,6 +301,25 @@ export default function CheckoutPage({
         </div>
 
         <PriceSummary subtotal={subtotal} quote={quote} quoteError={quoteError} onClearPriceLock={onClearPriceLock} />
+        {storeInfo?.pricesIncludeTax ? <p className="mt-2 text-xs text-slate-500">Giá đã bao gồm thuế.</p> : null}
+
+        <label className="mt-5 flex items-start gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={acceptTerms}
+            onChange={(event) => {
+              setAcceptTerms(event.target.checked)
+              if (event.target.checked) setFormError('')
+            }}
+            className="mt-1"
+          />
+          <span>
+            Tôi đã đọc và đồng ý với{' '}
+            <a href={hrefFor('/chinh-sach/dieu-khoan')} target="_blank" rel="noreferrer" className="font-semibold text-red-600 underline">điều khoản mua hàng</a>,{' '}
+            <a href={hrefFor('/chinh-sach/doi-tra')} target="_blank" rel="noreferrer" className="font-semibold text-red-600 underline">chính sách đổi trả</a> và{' '}
+            <a href={hrefFor('/chinh-sach/thanh-toan')} target="_blank" rel="noreferrer" className="font-semibold text-red-600 underline">thanh toán</a>.
+          </span>
+        </label>
 
         {formError ? <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{formError}</p> : null}
 

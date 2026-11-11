@@ -1,10 +1,15 @@
+const config = require('../config/env');
 const orderService = require('../services/order.service');
 const { success, error } = require('../utils/response');
 
 const createOrder = async (req, res) => {
+  // Luật TMĐT 2025, Điều 12: người mua phải đồng ý điều khoản trước khi đặt; đơn ghi phiên bản điều khoản.
+  if (!req.body || req.body.acceptTerms !== true) {
+    return error(res, 'Vui lòng đồng ý với điều khoản mua hàng trước khi đặt hàng', 400, { code: 'terms_required' });
+  }
   try {
     const userId = req.user.id;
-    const result = await orderService.createOrder(userId, req.body);
+    const result = await orderService.createOrder(userId, { ...req.body, termsVersion: config.store.termsVersion });
     return success(res, result, 'Order created successfully', 201);
   } catch (err) {
     if (err.status) return error(res, err.message, err.status, err.data);
