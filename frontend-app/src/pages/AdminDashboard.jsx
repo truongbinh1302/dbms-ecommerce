@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import heroAsset from '../assets/hero.png'
 import StoreGlyph from '../components/StoreGlyph'
-import { fetchAdminOrders, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
-import { adminCategoryPerformance, adminInventoryAlerts, adminSummary, allProducts } from '../data/storeData'
+import DailyReport from '../components/admin/DailyReport'
+import InventoryPanel from '../components/admin/InventoryPanel'
+import PromotionsPanel from '../components/admin/PromotionsPanel'
+import ServiceRequestsPanel from '../components/admin/ServiceRequestsPanel'
+import ReturnsPanel from '../components/admin/ReturnsPanel'
+import VouchersPanel from '../components/admin/VouchersPanel'
+import QuestionsPanel from '../components/admin/QuestionsPanel'
+import ReviewsPanel from '../components/admin/ReviewsPanel'
+import IntegrityPanel from '../components/admin/IntegrityPanel'
+import TodoPanel from '../components/admin/TodoPanel'
+import useDocumentTitle from '../hooks/useDocumentTitle'
+import OrderDetailDrawer from '../components/admin/OrderDetailDrawer'
+import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
 import { formatCurrency, formatCompactNumber } from '../utils/format'
+import { downloadCsv } from '../utils/csv'
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDateTime } from '../utils/orderLabels'
 
 const toneClasses = {
   emerald: 'from-emerald-500 to-teal-500 text-emerald-50',
@@ -12,7 +24,25 @@ const toneClasses = {
   rose: 'from-rose-500 to-orange-500 text-rose-50',
 }
 
-const topProducts = allProducts.slice(0, 6)
+// Ngày theo giờ Việt Nam (UTC+7), dạng YYYY-MM-DD; offsetDays = -1 là hôm qua.
+function vietnamDate(offsetDays = 0) {
+  return new Date(Date.now() + 7 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10)
+}
+
+function formatClock(date) {
+  return date ? date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '--:--'
+}
+
+// Thẻ số liệu nhanh: số thật từ /analytics/dashboard và báo cáo ngày hôm nay / hôm qua.
+function buildSummaryCards(summary, today, yesterday) {
+  if (!summary || !today) return []
+  return [
+    { id: 'today-sales', label: 'Doanh số hôm nay', value: formatCurrency(today.netSales), delta: `Hôm qua ${formatCompactNumber(yesterday?.netSales || 0)}`, tone: 'emerald' },
+    { id: 'today-orders', label: 'Đơn hôm nay', value: today.orders.toLocaleString('vi-VN'), delta: `${today.cancelledOrders} huỷ`, tone: 'sky' },
+    { id: 'delivered', label: 'Doanh thu đã giao', value: formatCompactNumber(Number(summary.deliveredRevenue || 0)), delta: `${formatCompactNumber(Number(summary.totalOrders || 0))} đơn`, tone: 'violet' },
+    { id: 'low-stock', label: 'Sắp hết hàng', value: Number(summary.lowStockProducts || 0).toLocaleString('vi-VN'), delta: 'tồn ≤ 5', tone: 'rose' },
+  ]
+}
 
 const orderStatusOptions = [
   { value: 'pending', label: 'Chờ xử lý' },
@@ -49,14 +79,62 @@ function normalizeAdminOrder(order) {
     statusRaw: rawStatus,
     status: orderStatusLabels[rawStatus] ?? rawStatus,
     createdAt: order.createdAt ?? order.CreatedAt,
+    code: order.orderCode || `#${id}`,
+    recipient: [order.recipientName, order.recipientPhone].filter(Boolean).join(' · '),
+    paymentStatus: order.paymentStatus || '',
   }
 }
 
 export default function AdminDashboard({ onBackToStore, onGoToProductManagement, token }) {
+  useDocumentTitle('Quản trị')
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState('')
   const [updatingOrderId, setUpdatingOrderId] = useState(null)
+  const [orderFilter, setOrderFilter] = useState({ status: '', q: '', page: 1, payment: '', from: '', to: '' })
+  const [exportState, setExportState] = useState({ busy: false, error: '' })
+  const [refundRequired, setRefundRequired] = useState(0)
+  const [orderSearch, setOrderSearch] = useState('')
+  const [ordersTotal, setOrdersTotal] = useState({ items: 0, pages: 0 })
+  const [openOrderId, setOpenOrderId] = useState(null)
+  const [overview, setOverview] = useState({ dashboard: null, today: null, yesterday: null, error: '', updatedAt: null })
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const loadOverview = useCallback(async () => {
+    if (!token) return
+    try {
+      const [dashboard, report] = await Promise.all([
+        fetchAdminDashboard(token),
+        fetchDailyReport({ from: vietnamDate(-1), to: vietnamDate(0) }, token),
+      ])
+      const days = Array.isArray(report?.days) ? report.days : []
+      setOverview({ dashboard, yesterday: days[0] || null, today: days[1] || null, error: '', updatedAt: new Date() })
+    } catch (err) {
+      setOverview((current) => ({ ...current, error: err.message || 'Không tải được số liệu tổng quan.' }))
+    }
+  }, [token])
+
+  useEffect(() => {
+    loadOverview()
+  }, [loadOverview, refreshKey])
+
+  const summaryCards = useMemo(
+    () => buildSummaryCards(overview.dashboard?.summary, overview.today, overview.yesterday),
+    [overview],
+  )
+  const categories = useMemo(() => {
+    const rows = Array.isArray(overview.dashboard?.revenueByCategory) ? overview.dashboard.revenueByCategory : []
+    const max = Math.max(...rows.map((row) => Number(row.totalRevenue || 0)), 0)
+    const total = rows.reduce((sum, row) => sum + Number(row.totalRevenue || 0), 0)
+    return rows.map((row) => ({
+      label: row.categoryName,
+      revenue: Number(row.totalRevenue || 0),
+      quantity: Number(row.totalQuantity || 0),
+      width: max > 0 ? (Number(row.totalRevenue || 0) / max) * 100 : 0,
+      share: total > 0 ? Math.round((Number(row.totalRevenue || 0) / total) * 100) : 0,
+    }))
+  }, [overview.dashboard])
+  const topProducts = Array.isArray(overview.dashboard?.topProducts) ? overview.dashboard.topProducts.slice(0, 6) : []
 
   const loadOrders = useCallback(async () => {
     if (!token) {
@@ -70,18 +148,68 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
       setOrdersError('')
       const result = await fetchAdminOrders(
         {
-          page: 1,
+          page: orderFilter.page,
           limit: 20,
+          status: orderFilter.status,
+          q: orderFilter.q,
+          payment: orderFilter.payment,
+          from: orderFilter.from,
+          to: orderFilter.to,
         },
         token,
       )
+      setRefundRequired(Number(result.refundRequired || 0))
       setOrders(Array.isArray(result.items) ? result.items : [])
+      setOrdersTotal({ items: Number(result.pagination?.totalItems || 0), pages: Number(result.pagination?.totalPages || 0) })
     } catch (err) {
       setOrdersError(err.message || 'Không tải được danh sách đơn hàng.')
     } finally {
       setOrdersLoading(false)
     }
-  }, [token])
+  }, [token, orderFilter])
+
+  // Tải CSV đúng bộ lọc đang chọn: lấy lần lượt từng trang 100 đơn (tối đa 5.000 đơn).
+  async function exportOrders() {
+    setExportState({ busy: true, error: '' })
+    try {
+      const params = { limit: 100, status: orderFilter.status, q: orderFilter.q, payment: orderFilter.payment, from: orderFilter.from, to: orderFilter.to }
+      const rows = []
+      for (let page = 1; page <= 50; page += 1) {
+        const result = await fetchAdminOrders({ ...params, page }, token)
+        rows.push(...(result.items || []))
+        if (page >= Number(result.pagination?.totalPages || 0)) break
+      }
+      const header = ['Mã đơn', 'Đặt lúc', 'Khách', 'Email', 'Người nhận', 'SĐT nhận', 'Tỉnh/thành', 'Sản phẩm', 'Số dòng', 'Tổng tiền', 'Thanh toán', 'Trạng thái thanh toán', 'Trạng thái đơn']
+      const body = rows.map((order) => [
+        order.orderCode || `#${order.id}`,
+        formatDateTime(order.createdAt),
+        order.customerName || '',
+        order.customerEmail || '',
+        order.recipientName || '',
+        order.recipientPhone || '',
+        order.province || '',
+        order.itemsText || '',
+        Number(order.itemCount || 0),
+        Number(order.total || 0),
+        PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod || '',
+        PAYMENT_STATUS_LABELS[order.paymentStatus] || order.paymentStatus || '',
+        orderStatusLabels[order.status] || order.status || '',
+      ])
+      const range = orderFilter.from || orderFilter.to ? `_${orderFilter.from || 'dau'}_${orderFilter.to || 'nay'}` : ''
+      downloadCsv(`don-hang${range}.csv`, header, body)
+      setExportState({ busy: false, error: '' })
+    } catch (err) {
+      setExportState({ busy: false, error: err.message || 'Không tải được CSV' })
+    }
+  }
+
+  // Gõ tìm kiếm: chờ 350ms sau lần gõ cuối rồi mới lọc lại (về trang 1).
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setOrderFilter((current) => (current.q === orderSearch.trim() ? current : { ...current, q: orderSearch.trim(), page: 1 }))
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [orderSearch])
 
   useEffect(() => {
     loadOrders()
@@ -97,10 +225,11 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
     try {
       setUpdatingOrderId(orderId)
       setOrdersError('')
+      // Ghi chú gửi kèm chỉ dùng khi huỷ (lý do huỷ, hiện cho khách); các trạng thái khác không cần.
       await updateAdminOrderStatus(
         orderId,
         nextStatus,
-        `Admin cập nhật trạng thái sang ${nextStatus}`,
+        nextStatus === 'cancelled' ? 'Cửa hàng huỷ đơn' : undefined,
         token,
       )
       setOrders((currentOrders) =>
@@ -126,7 +255,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="absolute inset-x-0 top-0 h-[360px] bg-[radial-gradient(circle_at_top,_rgba(96,165,250,0.28),_transparent_45%)]" />
       <div className="relative mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
-        <header className="sticky top-4 z-30 rounded-[32px] border border-white/10 bg-white/5 px-5 py-4 backdrop-blur-xl">
+        <header className="z-30 rounded-[32px] lg:sticky lg:top-4 border border-white/10 bg-white/5 px-5 py-4 backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-orange-400 text-xl font-black text-white shadow-lg shadow-red-500/30">
@@ -139,9 +268,26 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300">
-                Cập nhật lần cuối: 08:45 • Hệ thống ổn định
-              </div>
+              <nav aria-label="Mục quản trị" className="flex flex-wrap gap-1 rounded-[24px] border border-white/10 bg-white/5 p-1 text-sm font-semibold">
+                <a href="#admin-overview" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Tổng quan</a>
+                <a href="#admin-report" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Báo cáo</a>
+                <a href="#admin-stock" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Kho hàng</a>
+                <a href="#admin-promotions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Hot Deal</a>
+                <a href="#admin-vouchers" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Mã giảm giá</a>
+                <a href="#admin-services" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Dịch vụ</a>
+                <a href="#admin-returns" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Đổi trả</a>
+                <a href="#admin-questions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Hỏi đáp</a>
+                <a href="#admin-reviews" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Đánh giá</a>
+                <a href="#admin-integrity" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Kiểm tra dữ liệu</a>
+              </nav>
+              <button
+                type="button"
+                onClick={() => setRefreshKey((key) => key + 1)}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 hover:bg-white/10"
+                title="Tải lại số liệu"
+              >
+                Cập nhật lúc {formatClock(overview.updatedAt)}
+              </button>
               {onGoToProductManagement && (
                 <button
                   type="button"
@@ -164,102 +310,80 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
           </div>
         </header>
 
-        <section className="mt-8 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        {overview.error ? (
+          <div className="mt-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">{overview.error}</div>
+        ) : null}
+
+        <section id="admin-overview" className="mt-8 grid scroll-mt-4 lg:scroll-mt-44 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <div className="overflow-hidden rounded-[36px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
-            <div className="grid gap-8 lg:grid-cols-[1fr_280px] lg:items-center">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-300">Tổng quan nhanh</p>
-                <h2 className="mt-3 max-w-2xl text-4xl font-black leading-tight">
-                  Theo dõi đơn hàng, sản phẩm và doanh thu cửa hàng.
-                </h2>
-                <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-                  Trang quản trị giúp admin theo dõi đơn hàng mới, cập nhật trạng thái giao hàng,
-                  quản lý sản phẩm, tồn kho và tình hình kinh doanh của cửa hàng.
-                </p>
-
-                <div className="mt-6 flex flex-wrap gap-3 text-sm">
-                  <span className="rounded-full bg-white/10 px-4 py-2 font-medium text-slate-100">Quản lý đơn hàng</span>
-                  <span className="rounded-full bg-white/10 px-4 py-2 font-medium text-slate-100">Theo dõi tồn kho</span>
-                  <span className="rounded-full bg-white/10 px-4 py-2 font-medium text-slate-100">Phân tích danh mục</span>
-                  <span className="rounded-full bg-white/10 px-4 py-2 font-medium text-slate-100">Giao diện responsive</span>
-                </div>
-              </div>
-
-              <div className="relative flex items-center justify-center">
-                <div className="absolute size-52 rounded-full bg-sky-500/20 blur-3xl" />
-                <img src={heroAsset} alt="Admin decoration" className="relative w-60 drop-shadow-[0_22px_32px_rgba(96,165,250,0.35)]" />
-              </div>
-            </div>
+            <TodoPanel
+              token={token}
+              version={refreshKey}
+              onOpenOrders={({ status, payment }) => setOrderFilter((current) => ({ ...current, status, payment, page: 1 }))}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-            {adminSummary.map((item) => (
+            {summaryCards.length === 0 ? (
+              <div className="rounded-[32px] border border-white/10 bg-white/5 p-5 text-sm text-slate-300 sm:col-span-2">Đang tải số liệu...</div>
+            ) : null}
+            {summaryCards.map((item) => (
               <div
                 key={item.id}
                 className={`rounded-[32px] bg-gradient-to-br p-5 shadow-[0_22px_60px_rgba(0,0,0,0.3)] ${toneClasses[item.tone]}`}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold opacity-90">{item.label}</p>
-                    <div className="mt-2 text-3xl font-black">{item.value}</div>
-                  </div>
-                  <div className="rounded-2xl bg-white/15 px-3 py-2 text-sm font-bold">{item.delta}</div>
-                </div>
+                <p className="text-sm font-semibold opacity-90">{item.label}</p>
+                <div className="mt-2 break-words text-3xl font-black">{item.value}</div>
+                <div className="mt-3 inline-block rounded-2xl bg-white/15 px-3 py-1.5 text-sm font-bold">{item.delta}</div>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="mt-6 grid gap-6 2xl:grid-cols-[0.95fr_1.05fr_0.85fr]">
+        <section className="mt-6 grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,0.85fr)]">
           <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
             <div className="flex items-center gap-3">
               <div className="flex size-12 items-center justify-center rounded-2xl bg-white/10 text-sky-300">
                 <StoreGlyph name="chart" className="size-6" />
               </div>
               <div>
-                <h3 className="text-2xl font-black">Hiệu suất danh mục</h3>
-                <p className="text-sm text-slate-400">Điểm hiệu suất nội bộ theo doanh số và chuyển đổi</p>
+                <h3 className="text-2xl font-black">Doanh thu theo danh mục</h3>
+                <p className="text-sm text-slate-400">Đơn đã giao hoặc hoàn tất, cộng dồn từ trước đến nay</p>
               </div>
             </div>
 
             <div className="mt-6 space-y-4">
-              {adminCategoryPerformance.map((item) => (
+              {categories.length === 0 ? <p className="text-sm text-slate-400">Chưa có đơn đã giao.</p> : null}
+              {categories.map((item) => (
                 <div key={item.label}>
-                  <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
-                    <span>{item.label}</span>
-                    <strong className="text-white">{item.value}%</strong>
+                  <div className="mb-2 flex items-center justify-between gap-3 text-sm text-slate-300">
+                    <span className="min-w-0 truncate">{item.label}</span>
+                    <strong className="shrink-0 text-white">{formatCompactNumber(item.revenue)} · {item.share}%</strong>
                   </div>
-                  <div className="h-3 rounded-full bg-white/10">
-                    <div
-                      className="h-3 rounded-full bg-gradient-to-r from-sky-400 via-cyan-400 to-emerald-400"
-                      style={{ width: `${item.value}%` }}
-                    />
+                  <div className="h-2 rounded-full bg-white/10" title={`${item.label}: ${formatCurrency(item.revenue)}, ${item.quantity} sản phẩm`}>
+                    <div className="h-2 rounded-full" style={{ width: `${item.width}%`, backgroundColor: '#3987e5' }} />
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="mt-8 rounded-[28px] border border-white/10 bg-slate-900/70 p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Insight nhanh</p>
-                  <h4 className="mt-2 text-xl font-black">Laptop gaming vẫn đang dẫn tốt</h4>
-                </div>
-                <div className="rounded-2xl bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-300">+12.4%</div>
+            {categories[0] ? (
+              <div className="mt-8 rounded-[28px] border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Dẫn đầu</p>
+                <h4 className="mt-2 text-xl font-black">{categories[0].label}</h4>
+                <p className="mt-3 text-sm leading-7 text-slate-300">
+                  Chiếm {categories[0].share}% doanh thu đã giao ({formatCurrency(categories[0].revenue)}, {categories[0].quantity.toLocaleString('vi-VN')} sản phẩm).
+                </p>
               </div>
-              <p className="mt-3 text-sm leading-7 text-slate-300">
-                Nhóm laptop gaming và PC đang kéo doanh thu chính. Nhóm màn hình tăng tốt sau khi gắn kèm combo bàn
-                phím + chuột trên trang chủ.
-              </p>
-            </div>
+            ) : null}
           </div>
 
-          <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+          <div id="admin-orders" className="scroll-mt-4 rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl lg:scroll-mt-44">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-2xl font-black">Đơn hàng gần đây</h3>
+                <h3 className="text-2xl font-black">Đơn hàng</h3>
                 <p className="text-sm text-slate-400">
-                  Dữ liệu lấy trực tiếp từ bảng Orders trong SQL Server
+                  Bấm vào một đơn để xem địa chỉ giao, sản phẩm và in phiếu giao hàng
                 </p>
               </div>
 
@@ -273,9 +397,80 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                   {ordersLoading ? 'Đang tải...' : 'Làm mới'}
                 </button>
                 <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200">
-                  {formatCompactNumber(displayOrders.length)} đơn hiển thị
+                  {ordersTotal.items.toLocaleString('vi-VN')} đơn
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <input
+                type="search"
+                value={orderSearch}
+                onChange={(event) => setOrderSearch(event.target.value)}
+                placeholder="Tìm mã đơn, tên, email, số điện thoại"
+                aria-label="Tìm đơn hàng"
+                className="min-w-0 flex-1 rounded-full border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none focus:border-white/40"
+              />
+              <select
+                value={orderFilter.status}
+                onChange={(event) => setOrderFilter((current) => ({ ...current, status: event.target.value, page: 1 }))}
+                aria-label="Lọc theo trạng thái"
+                className="rounded-full border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white"
+              >
+                <option value="">Mọi trạng thái</option>
+                <option value="pending,pending_payment,confirmed,processing">Cần xử lý</option>
+                {orderStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>{status.label}</option>
+                ))}
+              </select>
+              {refundRequired > 0 || orderFilter.payment ? (
+                <button
+                  type="button"
+                  aria-pressed={orderFilter.payment === 'refund_required'}
+                  onClick={() => setOrderFilter((current) => ({ ...current, payment: current.payment ? '' : 'refund_required', status: '', page: 1 }))}
+                  className={`rounded-full px-3 py-2 text-sm font-bold ${orderFilter.payment ? 'bg-amber-300 text-slate-950' : 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/25'}`}
+                >
+                  {orderFilter.payment ? 'Bỏ lọc chờ hoàn tiền' : `${refundRequired} đơn chờ hoàn tiền`}
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-slate-300">
+                Từ ngày
+                <input
+                  type="date"
+                  aria-label="Đơn đặt từ ngày"
+                  value={orderFilter.from}
+                  max={orderFilter.to || undefined}
+                  onChange={(event) => setOrderFilter((current) => ({ ...current, from: event.target.value, page: 1 }))}
+                  className="rounded-full border border-white/10 bg-slate-900 px-3 py-1.5 text-white [color-scheme:dark]"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-slate-300">
+                đến
+                <input
+                  type="date"
+                  aria-label="Đơn đặt đến ngày"
+                  value={orderFilter.to}
+                  min={orderFilter.from || undefined}
+                  onChange={(event) => setOrderFilter((current) => ({ ...current, to: event.target.value, page: 1 }))}
+                  className="rounded-full border border-white/10 bg-slate-900 px-3 py-1.5 text-white [color-scheme:dark]"
+                />
+              </label>
+              {orderFilter.from || orderFilter.to ? (
+                <button type="button" onClick={() => setOrderFilter((current) => ({ ...current, from: '', to: '', page: 1 }))} className="rounded-full bg-white/10 px-3 py-1.5 font-semibold text-white hover:bg-white/20">
+                  Mọi ngày
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={exportOrders}
+                disabled={exportState.busy || ordersTotal.items === 0}
+                className="ml-auto rounded-full border border-white/20 px-4 py-1.5 font-bold text-white hover:bg-white/10 disabled:opacity-40"
+              >
+                {exportState.busy ? 'Đang tạo CSV...' : `Tải CSV (${Math.min(ordersTotal.items, 5000).toLocaleString('vi-VN')} đơn)`}
+              </button>
+              {exportState.error ? <span className="w-full text-sm font-semibold text-red-300" role="alert">{exportState.error}</span> : null}
             </div>
 
             {ordersError ? (
@@ -312,8 +507,16 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                     className="grid gap-3 px-4 py-4 lg:grid-cols-[1.1fr_1.3fr_0.8fr_0.7fr_0.9fr] lg:items-center"
                   >
                     <div>
-                      <p className="font-bold text-white">{order.customer}</p>
-                      <p className="text-sm text-slate-400">#{order.id}</p>
+                      <button
+                        type="button"
+                        onClick={() => setOpenOrderId(order.id)}
+                        className="text-left font-bold text-white underline-offset-2 hover:underline"
+                        aria-label={`Xem chi tiết đơn ${order.code}`}
+                      >
+                        {order.customer}
+                      </button>
+                      <p className="text-sm text-slate-400">{order.code}</p>
+                      {order.recipient ? <p className="text-xs text-slate-400">{order.recipient}</p> : null}
                     </div>
                     <div className="text-sm leading-6 text-slate-300">
                       {order.item}
@@ -326,6 +529,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                     </div>
                     <div>
                       <select
+                        aria-label={`Trạng thái đơn #${order.id}`}
                         value={order.statusRaw}
                         disabled={updatingOrderId === order.id}
                         onChange={(event) => handleStatusChange(order.id, event.target.value)}
@@ -342,42 +546,40 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                 ))}
               </div>
             </div>
+
+            {ordersTotal.pages > 1 ? (
+              <div className="mt-4 flex items-center justify-between text-sm text-slate-300">
+                <button
+                  type="button"
+                  disabled={orderFilter.page <= 1}
+                  onClick={() => setOrderFilter((current) => ({ ...current, page: current.page - 1 }))}
+                  className="rounded-full bg-white/10 px-4 py-2 font-bold text-white hover:bg-white/20 disabled:opacity-40"
+                >
+                  Trang trước
+                </button>
+                <span>Trang {orderFilter.page}/{ordersTotal.pages}</span>
+                <button
+                  type="button"
+                  disabled={orderFilter.page >= ordersTotal.pages}
+                  onClick={() => setOrderFilter((current) => ({ ...current, page: current.page + 1 }))}
+                  className="rounded-full bg-white/10 px-4 py-2 font-bold text-white hover:bg-white/20 disabled:opacity-40"
+                >
+                  Trang sau
+                </button>
+              </div>
+            ) : null}
+            {openOrderId ? <OrderDetailDrawer orderId={openOrderId} token={token} onChanged={loadOrders} onClose={() => setOpenOrderId(null)} /> : null}
           </div>
 
           <div className="space-y-6">
-            <WarrantyRegistration token={token} orders={displayOrders} />
+            <WarrantyRegistration token={token} />
 
             <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-              <div className="flex items-center gap-3">
-                <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-300">
-                  <StoreGlyph name="alert" className="size-6" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black">Cảnh báo tồn kho</h3>
-                  <p className="text-sm text-slate-400">Các SKU cần theo dõi hoặc nhập thêm</p>
-                </div>
-              </div>
+              <h3 className="text-2xl font-black">Bán chạy nhất</h3>
+              <p className="mt-1 text-sm text-slate-400">Theo số lượng trong đơn đã giao hoặc hoàn tất</p>
 
               <div className="mt-5 space-y-4">
-                {adminInventoryAlerts.map((item) => (
-                  <div key={item.id} className="rounded-[28px] border border-white/10 bg-slate-900/70 p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <h4 className="text-base font-black text-white">{item.name}</h4>
-                      <span className="rounded-full bg-rose-500/10 px-3 py-1.5 text-sm font-bold text-rose-300">
-                        Còn {item.remaining}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm leading-7 text-slate-300">{item.recommendation}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[36px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-              <h3 className="text-2xl font-black">Top sản phẩm nổi bật</h3>
-              <p className="mt-1 text-sm text-slate-400">Tham chiếu nhanh cho block đề xuất và upsell</p>
-
-              <div className="mt-5 space-y-4">
+                {topProducts.length === 0 ? <p className="text-sm text-slate-400">Chưa có đơn đã giao.</p> : null}
                 {topProducts.map((product, index) => (
                   <div key={product.id} className="flex items-center gap-4 rounded-[28px] border border-white/10 bg-slate-900/70 p-4">
                     <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-orange-400 text-lg font-black text-white">
@@ -385,11 +587,11 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                     </div>
                     <div className="min-w-0 flex-1">
                       <h4 className="truncate text-base font-bold text-white">{product.name}</h4>
-                      <p className="text-sm text-slate-400">{product.brand}</p>
+                      <p className="text-sm text-slate-400">{product.brand || 'Không rõ hãng'}</p>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-emerald-300">{formatCurrency(product.price)}</div>
-                      <div className="text-xs text-slate-500">{product.reviews} đánh giá</div>
+                      <div className="text-sm font-bold text-white">{Number(product.totalQuantity || 0).toLocaleString('vi-VN')} sp</div>
+                      <div className="text-xs text-slate-400">{formatCompactNumber(Number(product.totalRevenue || 0))}</div>
                     </div>
                   </div>
                 ))}
@@ -397,6 +599,42 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
             </div>
           </div>
         </section>
+
+        <div id="admin-report" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <DailyReport token={token} refreshKey={refreshKey} />
+        </div>
+
+        <div id="admin-stock" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <InventoryPanel token={token} onChanged={() => setRefreshKey((key) => key + 1)} />
+        </div>
+
+        <div id="admin-promotions" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <PromotionsPanel token={token} />
+        </div>
+
+        <div id="admin-vouchers" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <VouchersPanel token={token} />
+        </div>
+
+        <div id="admin-services" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <ServiceRequestsPanel token={token} />
+        </div>
+
+        <div id="admin-returns" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <ReturnsPanel token={token} />
+        </div>
+
+        <div id="admin-questions" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <QuestionsPanel token={token} />
+        </div>
+
+        <div id="admin-reviews" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <ReviewsPanel token={token} />
+        </div>
+
+        <div id="admin-integrity" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <IntegrityPanel token={token} />
+        </div>
       </div>
     </div>
   )
@@ -406,8 +644,20 @@ const WARRANTY_STATUSES = ['confirmed', 'processing', 'shipped', 'delivered']
 const FIELD = 'w-full rounded-2xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-white/40'
 
 // Đăng ký số serial bảo hành cho sản phẩm trong đơn đã xác nhận (server kiểm tra lại toàn bộ).
-function WarrantyRegistration({ token, orders }) {
-  const eligible = orders.filter((order) => WARRANTY_STATUSES.includes(order.statusRaw))
+// Tự tải các đơn đủ điều kiện đăng ký bảo hành (không phụ thuộc bộ lọc của danh sách đơn).
+function WarrantyRegistration({ token }) {
+  const [eligibleState, setEligibleState] = useState([])
+  useEffect(() => {
+    if (!token) return undefined
+    let cancelled = false
+    fetchAdminOrders({ status: WARRANTY_STATUSES.join(','), limit: 50 }, token)
+      .then((result) => !cancelled && setEligibleState((result.items || []).map(normalizeAdminOrder)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+  const eligible = eligibleState
   const [orderId, setOrderId] = useState('')
   const [detail, setDetail] = useState({ orderId: null, items: [], error: '' })
   const [form, setForm] = useState({ productId: '', serialNumber: '', months: '36' })

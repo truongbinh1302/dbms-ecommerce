@@ -69,6 +69,48 @@ function contactLine(info) {
 
 const POLICIES = [
   {
+    slug: 'huong-dan',
+    title: 'Hướng dẫn mua hàng',
+    render: (info) => (
+      <>
+        <Section title="1. Tìm sản phẩm">
+          <Bullets items={[
+            'Gõ tên, hãng hoặc thông số vào ô tìm kiếm, có dấu hay không dấu đều được; lọc theo khoảng giá và chỉ hiện hàng còn.',
+            'Bấm “+ So sánh” ở tối đa 3 sản phẩm để xem giá, tồn kho và thông số cạnh nhau.',
+            `Build PC: tự chọn linh kiện (hệ thống kiểm tra tương thích), chọn theo phần mềm cần dùng, hoặc mô tả nhu cầu và ngân sách bằng lời. Lưu báo giá để giữ giá ${info.quoteValidHours} giờ.`,
+            'Chưa chắc? Đặt câu hỏi ở cuối trang sản phẩm, cửa hàng trả lời ngay dưới câu hỏi.',
+          ]} />
+        </Section>
+        <Section title="2. Đặt hàng">
+          <Bullets items={[
+            'Thêm vào giỏ hàng. Khi đăng nhập, giỏ được lưu trên tài khoản nên đổi máy vẫn còn.',
+            `Nhập địa chỉ giao hàng và mã giảm giá (nếu có). Phí giao ${formatCurrency(info.shipping.fee)}, miễn phí cho đơn có tạm tính từ ${formatCurrency(info.shipping.freeThreshold)}.`,
+            'Trang thanh toán hiện đủ giá, ưu đãi, phí giao và tổng tiền trước khi bạn đồng ý điều khoản và bấm Đặt hàng. Nếu giá đổi trong lúc bạn xem, trang báo để bạn xem lại.',
+          ]} />
+        </Section>
+        <Section title="3. Thanh toán">
+          <Bullets items={[
+            'Thanh toán khi nhận hàng (COD).',
+            `VNPay: thanh toán trong ${info.payment.vnpayExpireMinutes} phút sau khi đặt; quá hạn đơn tự huỷ, hàng trả về kho.`,
+          ]} />
+        </Section>
+        <Section title="4. Theo dõi đơn">
+          <p>
+            Xem ở <a href={hrefFor('/don-hang')} className="font-semibold text-red-600 underline">Đơn hàng của tôi</a>. Mỗi lần đơn đổi trạng thái bạn nhận thông báo
+            ở biểu tượng chuông; khi giao cho đơn vị vận chuyển, trang đơn có tên đơn vị và mã vận đơn để tra cứu.
+          </p>
+        </Section>
+        <Section title="5. Sau khi nhận hàng">
+          <Bullets items={[
+            `Đổi hoặc trả trong ${info.returnDays} ngày: bấm “Yêu cầu đổi trả” ở trang đơn hàng.`,
+            'Bảo hành theo số serial ở trang Tra cứu bảo hành; đặt kỹ thuật viên tới nhà hoặc định giá thu cũ ở mục Dịch vụ.',
+            'Muốn mua lại: bấm “Mua lại” ở đơn cũ. Chờ giá giảm hoặc chờ có hàng: bấm theo dõi ở trang sản phẩm.',
+          ]} />
+        </Section>
+      </>
+    ),
+  },
+  {
     slug: 'dieu-khoan',
     title: 'Điều khoản mua hàng',
     render: (info) => (
@@ -111,6 +153,7 @@ const POLICIES = [
             'Đổi trả, bảo hành, giải quyết khiếu nại theo các chính sách trên website.',
             'Lưu thông tin hợp đồng và đơn hàng trong thời hạn pháp luật yêu cầu (Luật Thương mại điện tử 2025, Điều 16) và bảo vệ dữ liệu cá nhân của khách.',
             'Được từ chối hoặc huỷ đơn có thông tin giao hàng không liên lạc được, có dấu hiệu gian lận, hoặc khi sản phẩm hết hàng (hoàn tiền đầy đủ nếu đã thanh toán).',
+            'Đánh giá sản phẩm chỉ do khách đã nhận hàng viết. Cửa hàng không sửa nội dung và không ẩn đánh giá vì chê sản phẩm; chỉ ẩn đánh giá có quảng cáo, spam, ngôn từ xúc phạm, thông tin cá nhân hoặc không liên quan tới sản phẩm, và báo lý do cho người viết. Cửa hàng có thể phản hồi công khai dưới đánh giá.',
           ]} />
         </Section>
         <Section title="6. Giải quyết tranh chấp">
@@ -201,8 +244,14 @@ const POLICIES = [
         </Section>
         <Section title="Cách yêu cầu">
           <p>
-            Liên hệ cửa hàng ({contactLine(info)}) và cho biết mã đơn, sản phẩm, mô tả lỗi kèm ảnh hoặc video nếu có.
-            Cửa hàng phản hồi trong {info.complaintResponseDays} ngày làm việc. Tiền được hoàn theo Chính sách thanh toán.
+            Mở đơn hàng trong mục{' '}
+            <a href={hrefFor('/don-hang')} className="font-semibold text-red-600 underline">Đơn hàng của tôi</a>, bấm
+            “Yêu cầu đổi trả”, chọn sản phẩm, lý do và mô tả tình trạng. Bạn theo dõi được từng bước (duyệt, cửa hàng nhận hàng, hoàn tất)
+            ngay trên trang đơn và trong thông báo tài khoản. Có thể liên hệ trực tiếp ({contactLine(info)}) nếu cần gửi ảnh hoặc video.
+          </p>
+          <p>
+            Cửa hàng phản hồi trong {info.complaintResponseDays} ngày làm việc. Tiền được hoàn theo Chính sách thanh toán,
+            không vượt số tiền bạn đã trả cho đơn. Quá {info.returnDays} ngày, sản phẩm lỗi vẫn được bảo hành theo serial.
           </p>
         </Section>
       </>
@@ -264,7 +313,8 @@ const POLICIES = [
 
 export default function PolicyPage({ slug }) {
   const info = useStoreInfo()
-  const policy = POLICIES.find((item) => item.slug === slug) || POLICIES[0]
+  // Slug lạ thì mở Điều khoản mua hàng (trang mặc định trước khi có Hướng dẫn).
+  const policy = POLICIES.find((item) => item.slug === slug) || POLICIES.find((item) => item.slug === 'dieu-khoan')
 
   return (
     <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">

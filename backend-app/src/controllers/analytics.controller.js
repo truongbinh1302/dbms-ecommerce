@@ -1,5 +1,6 @@
 const { getPool, sql } = require('../config/db.sql');
 const { success, error } = require('../utils/response');
+const integrityService = require('../services/integrity.service');
 
 const getDashboard = async (req, res) => {
   try {
@@ -51,4 +52,13 @@ const getDashboard = async (req, res) => {
   }
 };
 
-module.exports = { getDashboard };
+// Kiểm tra toàn vẹn dữ liệu (chỉ đọc): tồn kho/sổ kho, tổng tiền đơn, lượt dùng voucher, lịch sử trạng thái.
+const getIntegrity = async (req, res) => {
+  try {
+    return success(res, await integrityService.runChecks(), 'Integrity checks completed');
+  } catch (err) {
+    return error(res, err.message);
+  }
+};
+
+module.exports = { getDashboard, getIntegrity };

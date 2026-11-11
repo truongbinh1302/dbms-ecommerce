@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import OrderReturns from '../components/OrderReturns'
 import PageMessage from '../components/PageMessage'
-import { cancelMyOrder, createVNPayPaymentLink, fetchOrder } from '../api/client'
+import { cancelMyOrder, createVNPayPaymentLink, fetchOrder, fetchProductsByIds } from '../api/client'
+import { mapApiProductToStoreProduct } from '../utils/productMapping'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatCurrency } from '../utils/format'
 import {
@@ -14,8 +16,9 @@ import {
   statusTone,
 } from '../utils/orderLabels'
 import { LoginRequired, PaymentResultBanner } from './OrdersPage'
+import OrderTimeline from '../components/OrderTimeline'
 
-export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, isNew = false, paymentResult = '', showToast }) {
+export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, isNew = false, paymentResult = '', showToast, onAddToCart }) {
   const userId = currentUser?.id
   const [reloadCount, setReloadCount] = useState(0)
   const requestKey = `${userId}:${orderId}:${reloadCount}`
@@ -75,6 +78,33 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
     }
   }
 
+  // Mua lại: thêm các sản phẩm còn bán vào giỏ theo giá hiện tại (server tính lại khi thanh toán).
+  async function handleReorder() {
+    setBusy(true)
+    try {
+      const result = await fetchProductsByIds((order.items || []).map((item) => item.ProductID))
+      const current = Array.isArray(result) ? result : result.items || []
+      let added = 0
+      const missing = []
+      for (const item of order.items || []) {
+        const product = current.find((entry) => Number(entry.id) === Number(item.ProductID))
+        if (!product || product.stock <= 0) {
+          missing.push(item.productName)
+          continue
+        }
+        onAddToCart(mapApiProductToStoreProduct(product), Math.min(item.Quantity, product.stock), { openDrawer: false })
+        added += 1
+      }
+      showToast(added
+        ? `Đã thêm ${added} sản phẩm vào giỏ theo giá hiện tại${missing.length ? `; ${missing.length} sản phẩm đã hết hàng` : ''}.`
+        : 'Các sản phẩm trong đơn hiện đã hết hàng.')
+    } catch (err) {
+      showToast(err.message || 'Không thêm được vào giỏ')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handlePay() {
     setBusy(true)
     try {
@@ -88,7 +118,7 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
 
   return (
     <div className="space-y-5">
-      <nav className="text-sm text-slate-500">
+      <nav className="text-sm text-slate-600">
         <a href={hrefFor('/don-hang')} className="hover:text-red-600">Đơn hàng của tôi</a> / {order.orderCode || `#${order.id}`}
       </nav>
 
@@ -120,6 +150,10 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
           <p className="mt-3 text-sm text-slate-500">Lý do huỷ: {order.CancelReason}</p>
         ) : null}
 
+        <div className="mt-6">
+          <OrderTimeline order={order} audience="customer" />
+        </div>
+
         <div className="mt-6 grid gap-5 md:grid-cols-2">
           <div className="rounded-2xl bg-slate-50 p-4 text-sm">
             <h2 className="font-bold text-slate-900">Giao đến</h2>
@@ -132,6 +166,13 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
               <p className="mt-2 text-slate-500">Đơn cũ không có địa chỉ chi tiết.</p>
             )}
             {order.Note ? <p className="mt-2 text-slate-500">Ghi chú: {order.Note}</p> : null}
+            {order.shippingCarrier ? (
+              <p className="mt-2 text-slate-700">
+                Vận chuyển: <strong>{order.shippingCarrier}</strong>
+                {order.trackingCode ? <> · mã vận đơn <strong className="select-all font-mono">{order.trackingCode}</strong></> : null}
+              </p>
+            ) : null}
+            {order.deliveredAt ? <p className="mt-1 text-slate-500">Đã giao lúc {formatDateTime(order.deliveredAt)}</p> : null}
             {order.quoteCode ? (
               <p className="mt-2 text-slate-500">
                 Giá theo báo giá <a href={hrefFor(`/bao-gia/${order.quoteCode}`)} className="font-semibold text-slate-700 hover:text-red-600">{order.quoteCode}</a>
@@ -142,6 +183,15 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
             <h2 className="font-bold text-slate-900">Thanh toán</h2>
             <p className="mt-2 text-slate-700">{labelOf(PAYMENT_METHOD_LABELS, order.PaymentMethod)}</p>
             <p className="mt-1 text-slate-700">{labelOf(PAYMENT_STATUS_LABELS, order.PaymentStatus)}</p>
+            {order.PaymentStatus === 'refunded' && order.refundAmount ? (
+              <p className="mt-1 text-slate-600">
+                Đã hoàn {formatCurrency(order.refundAmount)} lúc {formatDateTime(order.refundedAt)}
+                {order.refundReference ? <> · mã giao dịch <span className="select-all font-mono">{order.refundReference}</span></> : null}
+              </p>
+            ) : null}
+            {order.PaymentStatus === 'refund_required' ? (
+              <p className="mt-1 text-slate-600">Cửa hàng sẽ hoàn tiền theo phương thức bạn đã thanh toán và báo cho bạn khi xong.</p>
+            ) : null}
           </div>
         </div>
 
@@ -150,7 +200,8 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
             <li key={item.ProductID} className="flex justify-between gap-3 py-3 text-sm">
               <span>
                 <a href={hrefFor(`/san-pham/${item.ProductID}`)} className="font-semibold text-slate-900 hover:text-red-600">{item.productName}</a>
-                <span className="text-slate-400"> × {item.Quantity}</span>
+                {item.promotionName ? <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">Giá Hot Deal: {item.promotionName}</span> : null}
+                <span className="text-slate-500"> × {item.Quantity}</span>
                 {(order.warranties || []).filter((warranty) => warranty.productId === item.ProductID).map((warranty) => (
                   <span key={warranty.serialNumber} className="block text-xs text-slate-500">
                     Serial {warranty.serialNumber} · bảo hành đến hết {warranty.endDate.split('-').reverse().join('/')}
@@ -171,7 +222,7 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
           <div className="flex justify-between text-base font-black"><dt>Tổng thanh toán</dt><dd className="text-red-600">{formatCurrency(order.Total)}</dd></div>
         </dl>
 
-        {canPay || canCancel ? (
+        {canPay || canCancel || (onAddToCart && ['delivered', 'cancelled'].includes(order.Status)) ? (
           <div className="mt-6 flex flex-wrap gap-3">
             {canPay ? (
               <button type="button" disabled={busy} onClick={handlePay} className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white disabled:bg-slate-300">
@@ -183,7 +234,21 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
                 Huỷ đơn
               </button>
             ) : null}
+            {onAddToCart && ['delivered', 'cancelled'].includes(order.Status) ? (
+              <button type="button" disabled={busy} onClick={handleReorder} className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 hover:border-red-500 hover:text-red-600 disabled:text-slate-300">
+                Mua lại
+              </button>
+            ) : null}
           </div>
+        ) : null}
+
+        <OrderReturns order={order} showToast={showToast} onChanged={() => setReloadCount((count) => count + 1)} />
+
+        {['shipped', 'delivered'].includes(order.Status) ? (
+          <p className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Cần lắp ráp, lắp đặt hoặc cài đặt?{' '}
+            <a href={hrefFor(`/dich-vu/tai-nha?don=${order.OrderID ?? order.id}`)} className="font-bold text-red-600 underline">Đặt lịch kỹ thuật viên tới nhà</a>
+          </p>
         ) : null}
       </section>
     </div>

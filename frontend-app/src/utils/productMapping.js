@@ -42,10 +42,19 @@ export function mapApiProductToStoreProduct(product) {
   const id = Number(product.id || product.ProductID || product.productId)
   const categorySlug = product.category?.slug || product.CategorySlug || product.categorySlug || ''
   const brand = product.brand || product.Brand || ''
-  const price = Number(product.price ?? product.Price ?? 0)
+  const listPrice = Number(product.price ?? product.Price ?? 0)
+  // Hot Deal đang chạy và còn suất: hiển thị giá khuyến mãi, gạch giá niêm yết hiện tại
+  // (không gạch "giá gốc" cũ để mức giảm hiển thị đúng số tiền khách thật sự được bớt).
+  const promotion = product.promotion || null
+  const promoActive = Boolean(promotion)
+    && promotion.status !== 'upcoming'
+    && promotion.remaining !== 0
+    && Number(promotion.salePrice) > 0
+    && Number(promotion.salePrice) < listPrice
+  const price = promoActive ? Number(promotion.salePrice) : listPrice
   // Chỉ hiện giá gốc khi DB có giá gốc thật và cao hơn giá bán; không tự bịa giá gốc.
   const rawOldPrice = Number(product.oldPrice ?? product.OldPrice ?? 0)
-  const oldPrice = rawOldPrice > price ? rawOldPrice : null
+  const oldPrice = promoActive ? listPrice : rawOldPrice > price ? rawOldPrice : null
   const specs = Array.isArray(product.specs) ? product.specs.map(String) : []
 
   return {
@@ -53,12 +62,17 @@ export function mapApiProductToStoreProduct(product) {
     name: product.name || product.Name || `Sản phẩm #${id}`,
     brand,
     price,
+    listPrice,
     oldPrice,
+    promotion: promotion ? { ...promotion, active: promoActive } : null,
     stock: Number(product.stock ?? product.Stock ?? 0),
     specs,
     description: product.description || '',
     images: Array.isArray(product.images) ? product.images : [],
-    badge: product.isFeatured ? 'Nổi bật' : '',
+    badge: promoActive ? 'Hot Deal' : product.isFeatured ? 'Nổi bật' : '',
+    // Điểm sao tính từ đánh giá thật của người đã mua (0 khi chưa có đánh giá).
+    rating: Number(product.rating ?? product.Rating ?? 0),
+    reviews: Number(product.reviewsCount ?? product.ReviewsCount ?? 0),
     visual: { kind: getDemoVisualKind(id, categorySlug, brand) },
     categorySlug,
     categoryName: product.category?.name || '',

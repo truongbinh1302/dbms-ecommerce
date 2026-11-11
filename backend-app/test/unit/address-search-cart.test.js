@@ -49,6 +49,22 @@ test('SearchText có thêm từ khoá tiếng Việt theo danh mục', () => {
   }
 });
 
+test('từ khoá theo loại linh kiện: "card màn hình" ra card đồ hoạ, không ra CPU', () => {
+  const gpu = buildSearchText({ name: 'MSI GeForce RTX 4060 Ventus 2X 8G', brand: 'MSI', specs: ['8GB GDDR6'], categorySlug: 'components', categoryName: 'Components', partType: 'gpu' });
+  const cpu = buildSearchText({ name: 'AMD Ryzen 5 7600', brand: 'AMD', specs: ['AM5', '6 nhân'], categorySlug: 'components', categoryName: 'Components', partType: 'cpu' });
+  const psu = buildSearchText({ name: 'Corsair RM750e', brand: 'Corsair', specs: ['750W'], categorySlug: 'components', categoryName: 'Components', partType: 'psu' });
+  const matches = (text, query) => tokenizeQuery(query).every((token) => text.includes(token));
+  for (const query of ['card màn hình', 'card đồ hoạ', 'VGA rtx 4060']) {
+    assert.ok(matches(gpu, query), query);
+    assert.ok(!matches(cpu, query), `${query} không khớp CPU`);
+  }
+  const monitor = buildSearchText({ name: 'Odyssey 27 240Hz', brand: 'Samsung', specs: ['27 inch'], categorySlug: 'monitors', categoryName: 'Monitors' });
+  assert.ok(matches(monitor, 'màn hình') && !matches(gpu, 'màn hình'), '"màn hình" chỉ ra màn hình');
+  assert.ok(!matches(monitor, 'card màn hình'));
+  assert.ok(matches(cpu, 'bộ vi xử lý AM5'));
+  assert.ok(matches(psu, 'nguồn 750W') && !matches(gpu, 'nguồn'));
+});
+
 const setupCart = () => {
   const { services, db } = loadServicesWithFakeDb(['cart.service']);
   db.store.users.push({ UserID: 2, IsActive: true });

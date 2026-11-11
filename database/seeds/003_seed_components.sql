@@ -198,7 +198,7 @@ INSERT INTO @Seed (Slug, Name, Brand, Description, Price, OldPrice, Stock, Categ
 INSERT INTO dbo.Products (Name, Slug, Brand, Description, Price, OldPrice, Stock, CategoryID, Specs, Images, IsFeatured, Rating, ReviewsCount)
 SELECT s.Name, s.Slug, s.Brand, s.Description, s.Price, s.OldPrice, s.Stock,
        CASE WHEN s.CategorySlug = N'storage' THEN @StorageCat ELSE @ComponentsCat END,
-       s.Specs, N'[]', 0, 4.60, 0
+       s.Specs, N'[]', 0, 0, 0
 FROM @Seed s
 WHERE NOT EXISTS (SELECT 1 FROM dbo.Products p WHERE p.Slug = s.Slug);
 
@@ -252,6 +252,13 @@ INSERT INTO dbo.PriceHistory (ProductID, Price, OldPrice, ChangedAt)
 SELECT p.ProductID, p.Price, p.OldPrice, p.CreatedAt
 FROM dbo.Products p
 WHERE NOT EXISTS (SELECT 1 FROM dbo.PriceHistory h WHERE h.ProductID = p.ProductID);
+
+-- Tồn đầu kỳ trong sổ kho (010_inventory.sql) cho sản phẩm vừa nạp.
+IF OBJECT_ID(N'dbo.StockMovements', N'U') IS NOT NULL
+INSERT INTO dbo.StockMovements (ProductID, Change, StockAfter, Reason, Note, CreatedAt)
+SELECT p.ProductID, p.Stock, p.Stock, N'opening', N'Tồn đầu kỳ khi nạp dữ liệu mẫu', p.CreatedAt
+FROM dbo.Products p
+WHERE NOT EXISTS (SELECT 1 FROM dbo.StockMovements m WHERE m.ProductID = p.ProductID);
 
 SELECT COUNT(*) AS ComponentSpecs FROM dbo.ComponentSpecs;
 GO

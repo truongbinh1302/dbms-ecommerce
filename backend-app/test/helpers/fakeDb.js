@@ -19,6 +19,12 @@ const createStore = () => ({
   voucherUsages: [],
   cartItems: [],
   buildQuotes: [],
+  stockMovements: [],
+  // Dòng PromotionItems kèm thông tin chương trình: { PromotionID, ProductID, SalePrice, QuantityLimit,
+  // SoldCount, PerOrderLimit, Name, EndsAt, running } (running = đang trong khung giờ và IsActive).
+  promotionItems: [],
+  notifications: [],
+  statusHistory: [],
   nextOrderId: 1,
 });
 
@@ -70,26 +76,64 @@ const createFakeDb = () => {
         .filter((q) => q.Code === code)
         .map((q) => ({ ...q, IsExpired: q.expired ? 1 : 0 }))],
 
+    [/^INSERT INTO OrderStatusHistory \(OrderID, FromStatus, ToStatus, ChangedBy, Note\) VALUES \(@orderId, @from, @to, @by, @note\)$/, (i, s) => {
+      s.statusHistory.push({ OrderID: i.orderId, FromStatus: i.from, ToStatus: i.to, ChangedBy: i.by, Note: i.note });
+      return [];
+    }],
+
     [/^UPDATE Orders SET OrderCode = @orderCode/, ({ orderId, orderCode }, s) => {
       s.orders.find((o) => o.OrderID === orderId).OrderCode = orderCode;
       return [];
     }],
 
     [/^INSERT INTO OrderItems/, (i, s) => {
-      s.orderItems.push({ OrderID: i.orderId, ProductID: i.productId, Quantity: i.quantity, UnitPrice: i.unitPrice });
+      s.orderItems.push({ OrderID: i.orderId, ProductID: i.productId, Quantity: i.quantity, UnitPrice: i.unitPrice, PromotionID: i.promotionId ?? null });
       return [];
     }],
 
-    [/^UPDATE Products SET Stock = Stock - @quantity/, ({ productId, quantity }, s) => {
-      const p = s.products.find((x) => x.ProductID === productId);
-      if (p.Stock - quantity < 0) throw new Error('CHECK constraint CK_Products_Stock');
-      p.Stock -= quantity;
+    // promotion.service.loadForProducts: chương trình đang chạy của các sản phẩm, giá thấp trước.
+    [/^SELECT pi.PromotionID, pi.ProductID, pi.SalePrice, pi.QuantityLimit, pi.SoldCount, pi.PerOrderLimit, pr.Name, pr.EndsAt FROM PromotionItems pi (WITH \(UPDLOCK, ROWLOCK\) )?JOIN Promotions pr/, ({ ids }, s) => {
+      const wanted = JSON.parse(ids);
+      return s.promotionItems
+        .filter((item) => item.running && wanted.includes(item.ProductID))
+        .sort((a, b) => a.ProductID - b.ProductID || a.SalePrice - b.SalePrice)
+        .map((item) => ({ ...item }));
+    }],
+
+    [/^UPDATE PromotionItems SET SoldCount = SoldCount \+ @quantity WHERE PromotionID = @promotionId AND ProductID = @productId$/, (i, s) => {
+      const item = s.promotionItems.find((x) => x.PromotionID === i.promotionId && x.ProductID === i.productId);
+      if (item.QuantityLimit !== null && item.SoldCount + i.quantity > item.QuantityLimit) {
+        throw new Error('CHECK constraint CK_PromotionItems_SoldCount');
+      }
+      item.SoldCount += i.quantity;
       return [];
     }],
 
-    [/^UPDATE Products SET Stock = Stock \+ @quantity/, ({ productId, quantity }, s) => {
-      s.products.find((x) => x.ProductID === productId).Stock += quantity;
+    [/^UPDATE PromotionItems SET SoldCount = CASE WHEN SoldCount >= @quantity THEN SoldCount - @quantity ELSE 0 END WHERE PromotionID = @promotionId AND ProductID = @productId$/, (i, s) => {
+      const item = s.promotionItems.find((x) => x.PromotionID === i.promotionId && x.ProductID === i.productId);
+      if (item) item.SoldCount = Math.max(item.SoldCount - i.quantity, 0);
       return [];
+    }],
+
+    [/^INSERT INTO Notifications \(UserID, Type, Title, Body, Link\) VALUES/, (i, s) => {
+      s.notifications.push({ UserID: i.userId, Type: i.type, Title: i.title, Body: i.body, Link: i.link });
+      return [];
+    }],
+
+    // notification.service: quét theo dõi giá / chờ có hàng (chạy nền sau khi giá hoặc tồn đổi). Không có lượt chờ nào.
+    [/^SET XACT_ABORT ON; BEGIN TRANSACTION; DECLARE @hits TABLE/, () => [{ Sent: 0 }]],
+
+    // inventory.service.changeStock: đổi tồn + ghi StockMovements trong một câu lệnh.
+    [/^DECLARE @after TABLE \(Stock INT\); UPDATE Products SET Stock = Stock \+ @change/, (i, s) => {
+      const p = s.products.find((x) => x.ProductID === i.productId);
+      if (!p) return [];
+      if (p.Stock + i.change < 0) throw new Error('CHECK constraint CK_Products_Stock');
+      p.Stock += i.change;
+      s.stockMovements.push({
+        ProductID: i.productId, Change: i.change, StockAfter: p.Stock, Reason: i.reason,
+        OrderID: i.orderId, ReceiptID: i.receiptId, Note: i.note, CreatedBy: i.userId,
+      });
+      return [{ Stock: p.Stock }];
     }],
 
     [/^UPDATE Vouchers SET UsedCount = UsedCount \+ 1 WHERE VoucherID = @voucherId$/, ({ voucherId }, s) => {
@@ -107,7 +151,7 @@ const createFakeDb = () => {
         .filter((o) => o.OrderID === orderId && (userId === undefined || o.UserID === userId))
         .map((o) => ({ ...o }))],
 
-    [/^SELECT ProductID, Quantity FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID$/, ({ orderId }, s) =>
+    [/^SELECT ProductID, Quantity, PromotionID FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID$/, ({ orderId }, s) =>
       s.orderItems.filter((it) => it.OrderID === orderId).sort((a, b) => a.ProductID - b.ProductID)],
 
     [/^DELETE FROM VoucherUsages OUTPUT DELETED.VoucherID WHERE OrderID = @orderId$/, ({ orderId }, s) => {
@@ -167,7 +211,7 @@ const createFakeDb = () => {
       return [];
     }],
 
-    [/^SELECT ci.ProductID AS id, ci.Quantity AS cartQuantity, .* FROM CartItems ci JOIN Products p ON p.ProductID = ci.ProductID LEFT JOIN Categories c ON c.CategoryID = p.CategoryID WHERE ci.UserID = @userId AND p.IsDeleted = 0 ORDER BY ci.UpdatedAt DESC, ci.ProductID$/,
+    [/^SELECT ci.ProductID AS id, ci.Quantity AS cartQuantity, .* FROM CartItems ci JOIN Products p ON p.ProductID = ci.ProductID LEFT JOIN Categories c ON c.CategoryID = p.CategoryID OUTER APPLY \(.*\) promo WHERE ci.UserID = @userId AND p.IsDeleted = 0 ORDER BY ci.UpdatedAt DESC, ci.ProductID$/,
       ({ userId }, s) => s.cartItems
         .filter((c) => c.UserID === userId)
         .map((c) => ({ c, p: s.products.find((p) => p.ProductID === c.ProductID) }))
@@ -256,6 +300,10 @@ const SERVICES_USING_DB = [
   'cart.service',
   'priceQuote.service',
   'builder.service',
+  'inventory.service',
+  'promotion.service',
+  'notification.service',
+  'return.service',
 ];
 
 /**

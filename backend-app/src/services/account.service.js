@@ -40,7 +40,8 @@ const exportMyData = async (userId) => {
       FROM Users WHERE UserID = @userId AND IsActive = 1;
 
       SELECT o.OrderID, o.OrderCode, o.Status, o.PaymentMethod, o.PaymentStatus, o.Subtotal, o.Discount,
-             o.ShippingFee, o.Total, o.ShippingAddress, o.Note, o.QuoteCode, o.CreatedAt
+             o.ShippingFee, o.Total, o.ShippingAddress, o.Note, o.QuoteCode, o.CreatedAt,
+             o.ShippingCarrier, o.TrackingCode, o.DeliveredAt, o.RefundAmount, o.RefundedAt
       FROM Orders o WHERE o.UserID = @userId ORDER BY o.CreatedAt;
 
       SELECT oi.OrderID, oi.ProductID, p.Name AS ProductName, oi.Quantity, oi.UnitPrice
@@ -64,15 +65,48 @@ const exportMyData = async (userId) => {
       SELECT vu.OrderID, v.Code AS VoucherCode, vu.UsedAt
       FROM VoucherUsages vu JOIN Vouchers v ON v.VoucherID = vu.VoucherID
       WHERE vu.UserID = @userId;
+
+      SELECT Code, Type, Status, ServiceKind, OrderID, SerialNumber, ScheduledDate, TimeSlot, Address, ContactPhone,
+             Description, DeviceInfo, EstimateLow, EstimateHigh, FinalPrice, CreatedAt, UpdatedAt
+      FROM ServiceRequests WHERE UserID = @userId ORDER BY CreatedAt;
+
+      SELECT w.ProductID, p.Name AS ProductName, w.PriceAtWatch, w.TargetPrice, w.CreatedAt
+      FROM PriceWatches w JOIN Products p ON p.ProductID = w.ProductID WHERE w.UserID = @userId;
+
+      SELECT w.ProductID, p.Name AS ProductName, w.CreatedAt
+      FROM StockWatches w JOIN Products p ON p.ProductID = w.ProductID WHERE w.UserID = @userId;
+
+      SELECT q.ProductID, p.Name AS ProductName, q.Question, q.Answer, q.Status, q.CreatedAt, q.AnsweredAt
+      FROM ProductQuestions q JOIN Products p ON p.ProductID = q.ProductID WHERE q.UserID = @userId ORDER BY q.QuestionID;
+
+      SELECT Type, Title, Body, Link, IsRead, CreatedAt FROM Notifications WHERE UserID = @userId ORDER BY NotificationID;
+
+      SELECT r.ReturnID, r.ReturnCode, r.OrderID, r.Kind, r.Reason, r.Description, r.Status, r.RefundAmount, r.AdminNote,
+             r.CreatedAt, r.UpdatedAt, r.ResolvedAt
+      FROM ReturnRequests r WHERE r.UserID = @userId ORDER BY r.ReturnID;
+
+      SELECT ri.ReturnID, ri.ProductID, p.Name AS ProductName, ri.Quantity, ri.UnitPrice
+      FROM ReturnRequestItems ri
+      JOIN ReturnRequests r ON r.ReturnID = ri.ReturnID
+      JOIN Products p ON p.ProductID = ri.ProductID
+      WHERE r.UserID = @userId;
+
+      SELECT h.OrderID, h.FromStatus, h.ToStatus, h.ChangedBy, h.Note, h.ChangedAt
+      FROM OrderStatusHistory h JOIN Orders o ON o.OrderID = h.OrderID
+      WHERE o.UserID = @userId ORDER BY h.HistoryID;
     `);
 
-  const [users, orders, orderItems, cart, quotes, warranties, vouchers] = result.recordsets;
+  const [
+    users, orders, orderItems, cart, quotes, warranties, vouchers,
+    serviceRequests = [], priceWatches = [], stockWatches = [], questions = [], notifications = [], returns = [], returnItems = [],
+    statusHistory = [],
+  ] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
 
   let reviews = [];
   try {
-    reviews = await Review.find({ userId: id }).select('productId rating title content createdAt').lean();
+    reviews = await Review.find({ userId: id }).select('productId rating title content createdAt hidden hiddenReason storeReply').lean();
   } catch {
     reviews = null; // MongoDB không sẵn sàng: báo rõ trong file thay vì bỏ trống im lặng
   }
@@ -93,11 +127,27 @@ const exportMyData = async (userId) => {
       ...order,
       ShippingAddress: parseJson(order.ShippingAddress),
       items: orderItems.filter((item) => item.OrderID === order.OrderID),
+      statusHistory: statusHistory.filter((item) => item.OrderID === order.OrderID).map(({ OrderID, ...item }) => item),
     })),
     cart,
     buildQuotes: quotes.map((quote) => ({ ...quote, ItemsJson: undefined, items: parseJson(quote.ItemsJson) })),
     warranties,
     voucherUsages: vouchers,
+    serviceRequests: serviceRequests.map((request) => ({
+      ...request,
+      Address: parseJson(request.Address),
+      DeviceInfo: parseJson(request.DeviceInfo),
+    })),
+    priceWatches,
+    stockWatches,
+    productQuestions: questions,
+    notifications,
+    returnRequests: returns.map(({ ReturnID, ...request }) => ({
+      ...request,
+      items: returnItems.filter((item) => item.ReturnID === ReturnID).map((item) => ({
+        ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, UnitPrice: item.UnitPrice,
+      })),
+    })),
     reviews: reviews === null ? 'Không đọc được đánh giá lúc xuất dữ liệu, vui lòng thử lại sau' : reviews,
   };
 };
@@ -141,6 +191,8 @@ const deleteAccount = async (userId, password) => {
           SUM(CASE WHEN Status IN (${OPEN_ORDER_STATUSES.map((status) => `'${status}'`).join(', ')}) THEN 1 ELSE 0 END) AS OpenOrders,
           COUNT(*) AS AllOrders
         FROM Orders WHERE UserID = @userId;
+        SELECT COUNT(*) AS OpenReturns FROM ReturnRequests
+        WHERE UserID = @userId AND Status IN (N'pending', N'approved', N'received');
       `);
     if (!locked.recordsets[0][0]) throw createHttpError(404, 'Không tìm thấy tài khoản');
     const counts = locked.recordsets[1][0];
@@ -149,6 +201,14 @@ const deleteAccount = async (userId, password) => {
         409,
         `Bạn còn ${counts.OpenOrders} đơn hàng chưa hoàn tất. Hãy chờ giao xong hoặc huỷ đơn trước khi xoá tài khoản.`,
         { code: 'open_orders', openOrders: Number(counts.OpenOrders) },
+      );
+    }
+    const openReturns = Number(locked.recordsets[2][0].OpenReturns);
+    if (openReturns > 0) {
+      throw createHttpError(
+        409,
+        `Bạn còn ${openReturns} yêu cầu đổi trả đang xử lý. Hãy chờ cửa hàng xử lý xong (để hoàn tiền hoặc gửi hàng đổi) rồi xoá tài khoản.`,
+        { code: 'open_returns', openReturns },
       );
     }
     retainedOrders = Number(counts.AllOrders);
@@ -160,7 +220,21 @@ const deleteAccount = async (userId, password) => {
       .input('password', sql.NVarChar(255), unusableHash)
       .query(`
         DELETE FROM CartItems WHERE UserID = @userId;
+        DELETE FROM PriceWatches WHERE UserID = @userId;
+        DELETE FROM StockWatches WHERE UserID = @userId;
+        -- Hỏi đáp: câu chưa trả lời bị xoá; câu đã trả lời giữ lại cho người mua sau nhưng không còn gắn với tài khoản.
+        DELETE FROM ProductQuestions WHERE UserID = @userId AND Status <> N'answered';
+        UPDATE ProductQuestions SET UserID = NULL, AskerName = N'Khách hàng' WHERE UserID = @userId;
+        DELETE FROM Notifications WHERE UserID = @userId;
         UPDATE BuildQuotes SET UserID = NULL WHERE UserID = @userId;
+        -- Yêu cầu dịch vụ: huỷ yêu cầu đang mở, xoá địa chỉ, số điện thoại và mô tả (giữ mã và ngày để đối soát).
+        INSERT INTO ServiceRequestEvents (RequestID, Status, Note, CreatedBy)
+        SELECT RequestID, N'cancelled', N'Khách xoá tài khoản', @userId
+        FROM ServiceRequests WHERE UserID = @userId AND Status IN (N'new', N'confirmed', N'in_progress');
+        UPDATE ServiceRequests
+        SET Status = CASE WHEN Status IN (N'new', N'confirmed', N'in_progress') THEN N'cancelled' ELSE Status END,
+            Address = NULL, ContactPhone = NULL, Description = NULL, DeviceInfo = NULL, UpdatedAt = SYSDATETIME()
+        WHERE UserID = @userId;
         UPDATE Users
         SET FullName = @name,
             Email = @email,

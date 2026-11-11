@@ -1,4 +1,5 @@
 import StoreGlyph from './StoreGlyph'
+import { toggleCompare, useCompareItems } from '../hooks/useCompare'
 import { classNames, formatCurrency } from '../utils/format'
 
 function getVisualIcon(kind) {
@@ -58,6 +59,8 @@ export function ProductVisual({ product, className = '' }) {
             <img
               src={productImage}
               alt={product.name}
+              loading="lazy"
+              decoding="async"
               className="max-w-28 max-h-28 object-contain rounded-[2rem] shadow-2xl"
             />
           ) : (
@@ -89,24 +92,23 @@ export default function ProductCard({
   onQuickView,
   onView,
 }) {
+  const comparing = useCompareItems().some((item) => item.id === Number(product.id))
   return (
     <article
       className="group flex h-full cursor-pointer flex-col rounded-[30px] bg-white p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_30px_70px_rgba(15,23,42,0.14)]"
       onClick={() => onView(product)}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">
-          <span>{product.badge}</span>
-          {product.featured ? (
-            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-red-500">
-              Best seller
-            </span>
-          ) : null}
-        </div>
+        {product.badge ? (
+          <div className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
+            <span>{product.badge}</span>
+          </div>
+        ) : <span />}
 
         <button
           type="button"
-          aria-label="Yêu thích"
+          aria-label={`Yêu thích ${product.name}`}
+          aria-pressed={Boolean(isFavorite)}
           onClick={(event) => {
             event.stopPropagation()
             onToggleFavorite(product.id)
@@ -130,10 +132,16 @@ export default function ProductCard({
         <div className="space-y-3">
           <div>
             <h3 className="line-clamp-2 text-lg font-extrabold leading-snug text-slate-900">{product.name}</h3>
-            <div className="mt-2 flex items-center gap-2 text-sm text-amber-500">
-              <StoreGlyph name="star" className="size-4" />
-              <span className="font-bold">{product.rating}</span>
-              <span className="text-slate-400">({product.reviews} đánh giá)</span>
+            <div className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+              {product.reviews > 0 ? (
+                <>
+                  <StoreGlyph name="star" className="size-4 text-amber-500" />
+                  <span className="font-bold">{product.rating.toFixed(1)}</span>
+                  <span className="text-slate-500">({product.reviews} đánh giá)</span>
+                </>
+              ) : (
+                <span className="text-slate-500">Chưa có đánh giá</span>
+              )}
             </div>
           </div>
 
@@ -152,7 +160,7 @@ export default function ProductCard({
             <div className="flex items-end justify-between gap-3">
               <div>
                 {product.oldPrice > product.price ? (
-                  <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
+                  <div className="text-sm text-slate-500 line-through">{formatCurrency(product.oldPrice)}</div>
                 ) : null}
                 <div className="text-2xl font-black text-red-600">{formatCurrency(product.price)}</div>
               </div>
@@ -161,10 +169,31 @@ export default function ProductCard({
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
-              <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.installment}</span>
-              <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.shipping}</span>
-            </div>
+            {product.promotion?.active ? (
+              <p className="mt-2 text-xs font-bold text-red-600">
+                Hot Deal{product.promotion.remaining !== null && product.promotion.remaining !== undefined ? ` · còn ${product.promotion.remaining} suất` : ''}
+                {product.promotion.perOrderLimit ? ` · tối đa ${product.promotion.perOrderLimit}/đơn` : ''}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              aria-pressed={comparing}
+              onClick={(event) => {
+                event.stopPropagation()
+                toggleCompare(product)
+              }}
+              className={classNames('mt-3 text-xs font-bold', comparing ? 'text-emerald-700' : 'text-slate-600 hover:text-red-600')}
+            >
+              {comparing ? '✓ Đang so sánh' : '+ So sánh'}
+            </button>
+
+            {product.installment || product.shipping ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+                {product.installment ? <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.installment}</span> : null}
+                {product.shipping ? <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.shipping}</span> : null}
+              </div>
+            ) : null}
           </div>
         </div>
 

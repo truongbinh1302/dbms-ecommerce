@@ -25,6 +25,10 @@ const locationRoutes = require('./routes/location.routes');
 const builderRoutes = require('./routes/builder.routes');
 const warrantyRoutes = require('./routes/warranty.routes');
 const storeRoutes = require('./routes/store.routes');
+const inventoryRoutes = require('./routes/inventory.routes');
+const promotionRoutes = require('./routes/promotion.routes');
+const afterSalesRoutes = require('./routes/afterSales.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 const app = express();
 
@@ -35,7 +39,9 @@ if (config.trustProxy !== false) {
 }
 
 app.use(helmet());
-app.use(cors());
+// Mặc định (frontend cùng origin qua proxy/nginx) giữ cors() như cũ. Frontend khác origin cần gửi cookie
+// refresh token thì khai báo CORS_ORIGINS để bật credentials cho đúng các origin đó.
+app.use(config.auth.corsOrigins.length ? cors({ origin: config.auth.corsOrigins, credentials: true }) : cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
@@ -93,6 +99,10 @@ app.use('/api/v1/locations', locationRoutes);
 app.use('/api/v1/builder', builderRoutes);
 app.use('/api/v1/warranties', warrantyRoutes);
 app.use('/api/v1/store', storeRoutes);
+app.use('/api/v1/inventory', inventoryRoutes);
+app.use('/api/v1/promotions', promotionRoutes);
+app.use('/api/v1/services', afterSalesRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
@@ -116,6 +126,24 @@ const startPaymentExpirySweeper = () => {
   timer.unref();
 };
 
+// Định kỳ so giá với các lượt theo dõi giá (bắt cả Hot Deal hẹn giờ bắt đầu) và báo khi có hàng lại.
+const startPriceWatchSweeper = () => {
+  const notificationService = require('./services/notification.service');
+  const run = async () => {
+    try {
+      const sent = await notificationService.sweepPriceWatches();
+      if (sent > 0) console.log(`[price-watch] Sent ${sent} price drop notification(s)`);
+      const restocked = await notificationService.sweepStockWatches();
+      if (restocked > 0) console.log(`[stock-watch] Sent ${restocked} back-in-stock notification(s)`);
+    } catch (err) {
+      console.error('[price-watch] Sweep failed:', err.message);
+    }
+  };
+  const timer = setInterval(run, config.priceWatch.sweepIntervalMs);
+  timer.unref();
+  run();
+};
+
 // Điền SearchText cho sản phẩm chưa có (dữ liệu seed). Chạy nền, lỗi chỉ ghi log.
 const backfillSearchIndex = async () => {
   try {
@@ -127,6 +155,17 @@ const backfillSearchIndex = async () => {
     }
   } catch (err) {
     console.error('[search] Backfill failed (did you run migration 006?):', err.message);
+  }
+};
+
+// Điểm sao lấy từ review thật trong MongoDB, không dùng số seed.
+const syncRatings = async () => {
+  try {
+    const { syncAllProductRatings } = require('./services/review.service');
+    const changed = await syncAllProductRatings();
+    if (changed > 0) console.log(`[reviews] Synced rating for ${changed} product(s)`);
+  } catch (err) {
+    console.warn('[reviews] Could not sync ratings:', err.message);
   }
 };
 
@@ -155,7 +194,9 @@ const startServer = async () => {
     await connectMongo();
 
     startPaymentExpirySweeper();
+    startPriceWatchSweeper();
     backfillSearchIndex();
+    syncRatings();
     warnDemoAdminPassword();
 
     app.listen(config.port, () => {

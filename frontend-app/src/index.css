@@ -109,8 +109,9 @@ svg {
 }
 
 @media (min-width: 1280px) {
+  /* Cột logo và cột nút lấy đúng bề rộng nội dung; ô tìm kiếm nhận phần còn lại (không đè lên nút Danh mục). */
   .storefront-header-grid {
-    grid-template-columns: 290px 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
   }
 
@@ -125,18 +126,22 @@ svg {
   }
 }
 
-@media (min-width: 1280px) and (max-width: 1535.98px) {
+/* Header không rộng quá 1480px nên từ 1280px trở lên không đủ chỗ cho hotline/showroom cạnh ô tìm kiếm:
+   ẩn ở header, hotline vẫn hiện trên thanh trên cùng. */
+@media (min-width: 1280px) {
   .header-action-wide {
     display: none;
   }
 }
 
 @media (min-width: 1536px) {
-  .storefront-header-grid {
-    grid-template-columns: 310px minmax(520px, 1fr) auto;
-  }
-
   .storefront-search-slot {
     width: min(100%, 700px);
+  }
+}
+/* In phiếu giao hàng từ trang quản trị: chỉ in khung chi tiết đơn (OrderDetailDrawer). */
+@media print {
+  body.print-order-slip #root {
+    display: none;
   }
 }

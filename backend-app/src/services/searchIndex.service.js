@@ -10,9 +10,10 @@ const { buildSearchText } = require('../utils/searchText');
 
 const SELECT_SOURCE = `
   SELECT p.ProductID, p.Name, p.Brand, p.Specs,
-         c.Slug AS CategorySlug, c.Name AS CategoryName
+         c.Slug AS CategorySlug, c.Name AS CategoryName, cs.ComponentType
   FROM Products p
   LEFT JOIN Categories c ON c.CategoryID = p.CategoryID
+  LEFT JOIN ComponentSpecs cs ON cs.ProductID = p.ProductID
 `;
 
 const writeSearchText = async (executor, rows) => {
@@ -26,6 +27,7 @@ const writeSearchText = async (executor, rows) => {
       specs: parseJson(row.Specs, []),
       categorySlug: row.CategorySlug,
       categoryName: row.CategoryName,
+      partType: row.ComponentType,
     }),
   })));
 

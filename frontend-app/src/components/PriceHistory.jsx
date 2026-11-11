@@ -139,7 +139,7 @@ export default function PriceHistory({ productId }) {
               </div>
             </>
           ) : null}
-          <div className="mt-1 flex justify-between text-xs text-slate-400">
+          <div className="mt-1 flex justify-between text-xs text-slate-500">
             <span>{chart.startLabel}</span>
             <span>Hôm nay</span>
           </div>

@@ -14,7 +14,7 @@ const CATEGORY_KEYWORDS = {
   keyboards: 'ban phim',
   mice: 'chuot',
   headsets: 'tai nghe',
-  components: 'linh kien cpu vga card do hoa mainboard',
+  components: 'linh kien',
   storage: 'o cung ssd luu tru',
   networking: 'thiet bi mang router wifi',
   cameras: 'camera webcam',
@@ -23,6 +23,26 @@ const CATEGORY_KEYWORDS = {
   'smart-devices': 'thiet bi thong minh',
   accessories: 'phu kien',
 };
+
+// Linh kiện có loại trong ComponentSpecs: thêm tên gọi quen thuộc của từng loại, để "card đồ hoạ"
+// hay "card màn hình" chỉ ra card đồ hoạ, "nguồn" chỉ ra bộ nguồn (không ra mọi linh kiện như trước).
+const PART_KEYWORDS = {
+  cpu: 'cpu bo vi xu ly chip',
+  mainboard: 'mainboard bo mach chu main',
+  ram: 'ram bo nho',
+  gpu: 'vga gpu card do hoa',
+  storage: 'o cung ssd luu tru',
+  psu: 'nguon psu bo nguon',
+  case: 'vo case thung may',
+  cooler: 'tan nhiet tan cpu',
+};
+
+// Cách gọi khác của cùng một thứ, đổi trong từ khoá khách gõ trước khi tách token.
+// "card màn hình" là card đồ hoạ; không thêm "man hinh" vào card để tìm "màn hình" không ra card.
+const QUERY_ALIASES = [
+  [/\bcard man hinh\b/g, 'card do hoa'],
+  [/\bcard roi\b/g, 'card do hoa'],
+];
 
 const MAX_SEARCH_TEXT = 600;
 const MAX_TOKENS = 6;
@@ -36,11 +56,12 @@ const foldText = (value) => String(value === undefined || value === null ? '' : 
   .replace(/[^a-z0-9]+/g, ' ')
   .trim();
 
-const buildSearchText = ({ name, brand, specs, categorySlug, categoryName } = {}) => {
+const buildSearchText = ({ name, brand, specs, categorySlug, categoryName, partType } = {}) => {
   const specList = Array.isArray(specs) ? specs : [];
   return foldText([
     name,
     brand,
+    PART_KEYWORDS[partType] || '',
     ...specList,
     categoryName,
     CATEGORY_KEYWORDS[categorySlug] || '',
@@ -48,10 +69,14 @@ const buildSearchText = ({ name, brand, specs, categorySlug, categoryName } = {}
 };
 
 /** Tách từ khoá thành các token đã bỏ dấu (tối đa 6, không trùng). Token chỉ gồm a-z0-9 nên an toàn khi ghép LIKE. */
-const tokenizeQuery = (query) => [...new Set(foldText(query).split(' ').filter(Boolean))].slice(0, MAX_TOKENS);
+const tokenizeQuery = (query) => {
+  const folded = QUERY_ALIASES.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), foldText(query));
+  return [...new Set(folded.split(' ').filter(Boolean))].slice(0, MAX_TOKENS);
+};
 
 module.exports = {
   CATEGORY_KEYWORDS,
+  PART_KEYWORDS,
   foldText,
   buildSearchText,
   tokenizeQuery,

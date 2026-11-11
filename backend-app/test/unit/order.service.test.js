@@ -64,6 +64,11 @@ test('createOrder bỏ qua discount/shippingFee/total do client gửi lên', asy
   assert.equal(order.Discount, 0);
   assert.equal(order.Total, 2030000);
   assert.equal(db.store.products[0].Stock, 3);
+  // Sổ kho ghi một dòng bán hàng gắn với đơn, kèm tồn sau khi trừ.
+  assert.deepEqual(
+    db.store.stockMovements.map((m) => [m.ProductID, m.Change, m.StockAfter, m.Reason, m.OrderID]),
+    [[10, -2, 3, 'sale', result.orderId]],
+  );
 });
 
 test('createOrder áp voucher, tăng UsedCount và ghi VoucherUsages trong cùng transaction', async () => {
@@ -94,6 +99,7 @@ test('voucher hết lượt thì rollback: không tạo đơn, không trừ kho'
 
   assert.equal(db.store.orders.length, 0);
   assert.equal(db.store.products[0].Stock, 5);
+  assert.equal(db.store.stockMovements.length, 0, 'rollback cũng bỏ dòng sổ kho');
 });
 
 test('hết hàng trả 409 và không ghi gì', async () => {
@@ -129,6 +135,15 @@ test('huỷ đơn hoàn kho và trả lại lượt voucher', async () => {
   assert.equal(db.store.products[1].Stock, 1);
   assert.equal(db.store.vouchers[0].UsedCount, 0);
   assert.equal(db.store.voucherUsages.length, 0);
+  assert.deepEqual(
+    db.store.stockMovements.map((m) => [m.ProductID, m.Change, m.StockAfter, m.Reason, m.Note]),
+    [[20, -1, 0, 'sale', null], [20, 1, 1, 'cancel', 'đổi ý']],
+  );
+  assert.deepEqual(
+    db.store.statusHistory.map((h) => [h.FromStatus, h.ToStatus, h.ChangedBy, h.Note]),
+    [[null, 'pending', 'customer', null], ['pending', 'cancelled', 'customer', 'đổi ý']],
+    'lịch sử trạng thái ghi lúc đặt và lúc huỷ, cùng transaction',
+  );
 });
 
 test('admin chuyển đơn sang cancelled cũng hoàn kho', async () => {
@@ -137,6 +152,7 @@ test('admin chuyển đơn sang cancelled cũng hoàn kho', async () => {
     shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 4 }] });
   await orderService.updateOrderStatus(created.orderId, 'cancelled', 'hết hàng nhà cung cấp');
   assert.equal(db.store.products[0].Stock, 5);
+  assert.deepEqual(db.store.statusHistory.at(-1), { OrderID: created.orderId, FromStatus: 'pending', ToStatus: 'cancelled', ChangedBy: 'admin', Note: 'hết hàng nhà cung cấp' });
 });
 
 test('quoteCart dùng cùng quy tắc và báo lỗi voucher mà không ném lỗi', async () => {
@@ -178,6 +194,11 @@ test('VNPay: thành công xác nhận đơn, callback lặp lại trả 02', asy
 
   const again = await orderService.applyVNPayResult({ txnRef, responseCode: '00', transactionStatus: '00', amount });
   assert.equal(again.code, '02');
+  assert.deepEqual(
+    db.store.statusHistory.map((h) => [h.FromStatus, h.ToStatus, h.ChangedBy]),
+    [[null, 'pending_payment', 'customer'], ['pending_payment', 'confirmed', 'payment']],
+    'callback lặp lại không ghi thêm lịch sử',
+  );
 });
 
 test('VNPay: thất bại ở lần thanh toán mới nhất thì huỷ đơn và hoàn kho', async () => {
@@ -189,6 +210,7 @@ test('VNPay: thất bại ở lần thanh toán mới nhất thì huỷ đơn v�
   assert.equal(db.store.orders[0].Status, 'cancelled');
   assert.equal(db.store.orders[0].PaymentStatus, 'failed');
   assert.equal(db.store.products[0].Stock, 5);
+  assert.deepEqual(db.store.statusHistory.at(-1).ChangedBy, 'payment');
 });
 
 test('VNPay: thất bại từ link cũ thì bỏ qua, đơn vẫn chờ thanh toán', async () => {
@@ -360,4 +382,79 @@ test('quoteCart: giỏ không có sản phẩm nào của báo giá thì không 
   assert.equal(result.priceLock, null);
   assert.equal(result.priceLockError, null);
   assert.equal(result.subtotal, 9000000);
+});
+
+// ---------- Hot Deal ----------
+
+const addPromotion = (db, overrides = {}) => {
+  const item = {
+    PromotionID: 3, ProductID: 10, SalePrice: 800000, QuantityLimit: 3, SoldCount: 0, PerOrderLimit: 2,
+    Name: 'Hot Deal 12.12', EndsAt: new Date(Date.now() + 3600000), running: true, ...overrides,
+  };
+  db.store.promotionItems.push(item);
+  return item;
+};
+
+test('Hot Deal: báo giá và đơn dùng giá khuyến mãi, trừ suất, ghi PromotionID', async () => {
+  const { orderService, db } = setup();
+  const promo = addPromotion(db);
+
+  const quote = await orderService.quoteCart([{ productId: 10, quantity: 2 }]);
+  assert.equal(quote.items[0].unitPrice, 800000);
+  assert.equal(quote.items[0].listPrice, 1000000);
+  assert.equal(quote.items[0].promotion.name, 'Hot Deal 12.12');
+  assert.equal(quote.subtotal, 1600000);
+
+  const order = await orderService.createOrder(1, { shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 2 }], expectedTotal: quote.total });
+  assert.equal(order.subtotal, 1600000);
+  assert.equal(promo.SoldCount, 2);
+  assert.equal(db.store.orderItems[0].PromotionID, 3);
+  assert.equal(db.store.orderItems[0].UnitPrice, 800000);
+
+  // Huỷ đơn trả lại suất.
+  await orderService.cancelOrder(order.orderId, 1, 'đổi ý');
+  assert.equal(promo.SoldCount, 0);
+});
+
+test('Hot Deal: vượt giới hạn mỗi đơn hoặc hết suất thì cả dòng tính giá niêm yết, kèm lý do', async () => {
+  const { orderService, db } = setup();
+  const promo = addPromotion(db, { QuantityLimit: 3, SoldCount: 2 });
+
+  const tooMany = await orderService.quoteCart([{ productId: 10, quantity: 3 }]);
+  assert.equal(tooMany.items[0].unitPrice, 1000000);
+  assert.match(tooMany.items[0].promotionNote, /tối đa 2 sản phẩm/);
+
+  const notEnough = await orderService.quoteCart([{ productId: 10, quantity: 2 }]);
+  assert.equal(notEnough.items[0].unitPrice, 1000000);
+  assert.match(notEnough.items[0].promotionNote, /còn 1 suất/);
+
+  const lastOne = await orderService.createOrder(1, { shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 1 }] });
+  assert.equal(lastOne.subtotal, 800000);
+  assert.equal(promo.SoldCount, 3);
+
+  const soldOut = await orderService.quoteCart([{ productId: 10, quantity: 1 }]);
+  assert.equal(soldOut.items[0].unitPrice, 1000000);
+  assert.match(soldOut.items[0].promotionNote, /hết suất/);
+});
+
+test('đặt hàng với tổng tiền đã thấy khác tổng mới (Hot Deal vừa hết suất) → 409, không tạo đơn', async () => {
+  const { orderService, db } = setup();
+  const promo = addPromotion(db, { QuantityLimit: 1 });
+  const quote = await orderService.quoteCart([{ productId: 10, quantity: 1 }]);
+  promo.SoldCount = 1; // khách khác vừa mua suất cuối
+
+  await assert.rejects(
+    orderService.createOrder(1, { shippingAddress: ADDRESS, items: [{ productId: 10, quantity: 1 }], expectedTotal: quote.total }),
+    (err) => err.status === 409 && err.data.code === 'price_changed' && err.data.total === 1000000 + 30000,
+  );
+  assert.equal(db.store.orders.length, 0);
+  assert.equal(db.store.products[0].Stock, 5);
+});
+
+test('Hot Deal hết giờ hoặc giá KM không thấp hơn giá niêm yết thì không áp dụng', async () => {
+  const { orderService, db } = setup();
+  addPromotion(db, { running: false });
+  addPromotion(db, { PromotionID: 4, ProductID: 20, SalePrice: 9500000 });
+  const quote = await orderService.quoteCart([{ productId: 10, quantity: 1 }, { productId: 20, quantity: 1 }]);
+  assert.deepEqual(quote.items.map((line) => [line.unitPrice, line.promotionId]), [[1000000, null], [9000000, null]]);
 });

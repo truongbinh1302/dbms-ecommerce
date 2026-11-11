@@ -17,6 +17,28 @@ IF OBJECT_ID(N'dbo.Customers', N'V') IS NOT NULL DROP VIEW dbo.Customers;
 -- Bảng thêm ở 006_cart_and_search.sql tham chiếu Users/Products nên phải xoá trước.
 IF OBJECT_ID(N'dbo.CartItems', N'U') IS NOT NULL DROP TABLE dbo.CartItems;
 -- Bảng của 007_build_pc.sql
+-- Bảng của 020_order_status_history.sql
+IF OBJECT_ID(N'dbo.OrderStatusHistory', N'U') IS NOT NULL DROP TABLE dbo.OrderStatusHistory;
+-- Bảng của 017_product_questions.sql
+IF OBJECT_ID(N'dbo.ProductQuestions', N'U') IS NOT NULL DROP TABLE dbo.ProductQuestions;
+-- Bảng của 016_stock_watches.sql
+IF OBJECT_ID(N'dbo.StockWatches', N'U') IS NOT NULL DROP TABLE dbo.StockWatches;
+-- Bảng của 014_returns_shipping.sql
+IF OBJECT_ID(N'dbo.ReturnRequestItems', N'U') IS NOT NULL DROP TABLE dbo.ReturnRequestItems;
+IF OBJECT_ID(N'dbo.ReturnRequests', N'U') IS NOT NULL DROP TABLE dbo.ReturnRequests;
+-- Bảng của 013_notifications.sql
+IF OBJECT_ID(N'dbo.PriceWatches', N'U') IS NOT NULL DROP TABLE dbo.PriceWatches;
+IF OBJECT_ID(N'dbo.Notifications', N'U') IS NOT NULL DROP TABLE dbo.Notifications;
+-- Bảng của 012_service_requests.sql
+IF OBJECT_ID(N'dbo.ServiceRequestEvents', N'U') IS NOT NULL DROP TABLE dbo.ServiceRequestEvents;
+IF OBJECT_ID(N'dbo.ServiceRequests', N'U') IS NOT NULL DROP TABLE dbo.ServiceRequests;
+-- Bảng của 011_promotions.sql
+IF OBJECT_ID(N'dbo.PromotionItems', N'U') IS NOT NULL DROP TABLE dbo.PromotionItems;
+IF OBJECT_ID(N'dbo.Promotions', N'U') IS NOT NULL DROP TABLE dbo.Promotions;
+-- Bảng của 010_inventory.sql
+IF OBJECT_ID(N'dbo.StockMovements', N'U') IS NOT NULL DROP TABLE dbo.StockMovements;
+IF OBJECT_ID(N'dbo.StockReceiptItems', N'U') IS NOT NULL DROP TABLE dbo.StockReceiptItems;
+IF OBJECT_ID(N'dbo.StockReceipts', N'U') IS NOT NULL DROP TABLE dbo.StockReceipts;
 IF OBJECT_ID(N'dbo.Warranties', N'U') IS NOT NULL DROP TABLE dbo.Warranties;
 IF OBJECT_ID(N'dbo.BuildQuotes', N'U') IS NOT NULL DROP TABLE dbo.BuildQuotes;
 IF OBJECT_ID(N'dbo.PriceHistory', N'U') IS NOT NULL DROP TABLE dbo.PriceHistory;

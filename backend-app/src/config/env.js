@@ -77,6 +77,17 @@ module.exports = {
     pricesIncludeTax: process.env.PRICES_INCLUDE_TAX !== 'false',
   },
 
+  services: {
+    // Dịch vụ tại nhà: số lịch tối đa mỗi khung giờ (số kỹ thuật viên) và số ngày mở đặt lịch.
+    slotCapacity: toNumber(process.env.SERVICE_SLOT_CAPACITY, 2),
+    bookingDays: toNumber(process.env.SERVICE_BOOKING_DAYS, 14),
+  },
+
+  priceWatch: {
+    // Chu kỳ so giá với các lượt "theo dõi giá" (mili giây).
+    sweepIntervalMs: toNumber(process.env.PRICE_WATCH_SWEEP_MS, 5 * 60 * 1000),
+  },
+
   payment: {
     // Đơn VNPay chưa thanh toán sau ngần này phút sẽ tự huỷ và hoàn kho.
     expireMinutes: toNumber(process.env.PAYMENT_EXPIRE_MINUTES, 30),
@@ -101,6 +112,13 @@ module.exports = {
   },
 
   mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/ecommerce_mongo',
+
+  auth: {
+    // Cookie refresh token chỉ gửi qua HTTPS khi chạy production; đặt COOKIE_SECURE=false nếu thử production qua http.
+    cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : nodeEnv === 'production',
+    // Danh sách origin được gọi API kèm cookie khi frontend chạy khác origin (vd. http://localhost:5173), cách nhau bằng dấu phẩy.
+    corsOrigins: String(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+  },
 
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET || 'replace_me_access_secret_for_dev_only',

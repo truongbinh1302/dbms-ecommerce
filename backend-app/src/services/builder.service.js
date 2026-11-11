@@ -2,6 +2,7 @@ const { getPool, sql } = require('../config/db.sql');
 const { parseJson } = require('../utils/productFormat');
 const { SLOT_ORDER, SLOT_LABELS, checkBuild } = require('../utils/compatibility');
 const { PRESETS, autoBuild, upgradeOptions } = require('../utils/buildAdvisor');
+const { matchPreset, mentionsGaming, parseBudget } = require('../utils/needParser');
 
 /*
   Build PC: đọc linh kiện kèm thông số (ComponentSpecs) rồi gọi các hàm thuần
@@ -166,6 +167,39 @@ const autoBuildPreset = async (presetId) => {
   };
 };
 
+/**
+ * Tư vấn từ câu khách gõ: dò nhu cầu và ngân sách (utils/needParser), ráp cấu hình rẻ nhất cho nhu cầu đó
+ * rồi so với ngân sách. Không nhận ra nhu cầu thì nói rõ và để khách chọn, không đoán.
+ */
+const adviseFromText = async (rawText) => {
+  const text = String(rawText || '').trim().slice(0, 500);
+  if (text.length < 3) throw createHttpError(400, 'Hãy mô tả bạn cần máy để làm gì');
+  const match = matchPreset(text);
+  const budget = parseBudget(text);
+  const notes = [];
+  if (mentionsGaming(text)) {
+    notes.push('Cửa hàng gợi ý cấu hình theo phần mềm làm việc. Máy chơi game cần biết game và độ phân giải cụ thể, hãy liên hệ cửa hàng để được tư vấn riêng.');
+  }
+  if (!match) {
+    return {
+      preset: null,
+      advice: { matched: [], budget, notes },
+      message: 'Chưa nhận ra nhu cầu từ mô tả. Hãy ghi phần mềm bạn dùng (ví dụ Docker, Android Studio, Blender, Stable Diffusion, Office) hoặc chọn một nhu cầu bên dưới.',
+    };
+  }
+
+  const result = await autoBuildPreset(match.presetId);
+  const advice = { matched: match.matched, budget, notes, withinBudget: null, difference: null };
+  if (result.parts && budget) {
+    advice.withinBudget = result.subtotal <= budget;
+    advice.difference = Math.abs(budget - result.subtotal);
+    if (!advice.withinBudget) {
+      notes.push('Cấu hình này đã là rẻ nhất còn hàng đạt ngưỡng cho nhu cầu. Nếu đang có máy, hãy thử "Nâng cấp máy đang có" để chỉ mua phần cần thiết.');
+    }
+  }
+  return { ...result, advice };
+};
+
 const SOCKETS = ['AM4', 'AM5', 'LGA1700'];
 const MEMORY_TYPES = ['DDR4', 'DDR5'];
 const UPGRADE_LIMIT = 6;
@@ -213,5 +247,6 @@ module.exports = {
   listComponents,
   listPresets,
   autoBuildPreset,
+  adviseFromText,
   suggestUpgrades,
 };

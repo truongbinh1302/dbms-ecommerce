@@ -1,6 +1,7 @@
 const express = require('express');
 const productController = require('../controllers/product.controller');
-const { authenticate, authorize } = require('../middlewares/auth');
+const { authenticate, authorize, optionalAuthenticate } = require('../middlewares/auth');
+const questionController = require('../controllers/question.controller');
 const upload = require('../middlewares/upload');
 
 const router = express.Router();
@@ -8,6 +9,11 @@ const router = express.Router();
 // Public routes
 router.get('/', productController.getProducts);
 router.get('/suggestions', productController.getProductSuggestions);
+// Hỏi đáp: route admin khai báo trước /:id/questions để "admin" không bị hiểu là mã sản phẩm.
+router.get('/admin/questions', authenticate, authorize('admin'), questionController.listForAdmin);
+router.patch('/admin/questions/:questionId', authenticate, authorize('admin'), questionController.moderate);
+router.get('/:id/questions', optionalAuthenticate, questionController.listForProduct);
+router.post('/:id/questions', authenticate, questionController.ask);
 router.get('/:id/price-history', productController.getPriceHistory);
 router.get('/:id', productController.getProductById);
 

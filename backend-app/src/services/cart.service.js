@@ -1,5 +1,6 @@
 const { getPool, sql } = require('../config/db.sql');
 const { formatProduct } = require('../utils/productFormat');
+const { promoApply, PROMO_COLUMNS } = require('./promotionSql');
 
 /*
   Giỏ hàng lưu ở server (bảng CartItems) cho khách đã đăng nhập.
@@ -47,10 +48,12 @@ const getCart = async (userId, executor = getPool()) => {
       SELECT ci.ProductID AS id, ci.Quantity AS cartQuantity, ci.UpdatedAt AS cartUpdatedAt,
              p.Name, p.Slug, p.Brand, p.Description, p.Price, p.OldPrice, p.Stock, p.Specs, p.Images,
              p.IsFeatured, p.Rating, p.ReviewsCount, p.CreatedAt, p.UpdatedAt,
-             c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug
+             c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug,
+             ${PROMO_COLUMNS}
       FROM CartItems ci
       JOIN Products p ON p.ProductID = ci.ProductID
       LEFT JOIN Categories c ON c.CategoryID = p.CategoryID
+      ${promoApply('p')}
       WHERE ci.UserID = @userId AND p.IsDeleted = 0
       ORDER BY ci.UpdatedAt DESC, ci.ProductID
     `);

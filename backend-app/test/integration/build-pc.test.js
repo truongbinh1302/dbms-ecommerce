@@ -86,6 +86,7 @@ test.after(async () => {
     DELETE FROM ComponentSpecs WHERE ProductID IN (${ids});
     DELETE FROM PriceHistory WHERE ProductID IN (${ids});
     DELETE FROM CartItems WHERE ProductID IN (${ids});
+    DELETE FROM StockMovements WHERE ProductID IN (${ids});
     DELETE FROM Products WHERE ProductID IN (${ids});
     DELETE FROM Users WHERE UserID = @userId;
   `, { userId: [sql.Int, ctx.userId], codes: [sql.NVarChar, ctx.quoteCodes.join(',')] });
@@ -120,6 +121,28 @@ test('Build PC: kiểm tra cấu hình đọc thông số từ DB, linh kiện �
   ]);
   assert.equal(result.subtotal, 5000000);
   assert.ok(result.check.errors.some((error) => error.code === 'socket_mismatch'));
+});
+
+test('tư vấn bằng lời: nhận nhu cầu và ngân sách, linh kiện và giá lấy từ kho', async () => {
+  const advice = await builderService.adviseFromText('Sinh viên CNTT, code web và chạy Docker, tầm 200 triệu');
+  assert.equal(advice.preset.id, 'lap-trinh-web');
+  assert.ok(advice.parts && advice.parts.length >= 6, 'ráp đủ cấu hình từ linh kiện mẫu');
+  assert.equal(advice.subtotal, advice.parts.reduce((sum, part) => sum + part.price, 0));
+  assert.deepEqual([advice.advice.budget, advice.advice.withinBudget], [200000000, true]);
+  assert.equal(advice.advice.difference, 200000000 - advice.subtotal);
+
+  const tight = await builderService.adviseFromText('chạy Stable Diffusion, 5 triệu');
+  assert.equal(tight.preset.id, 'ai-local');
+  if (tight.parts) {
+    assert.equal(tight.advice.withinBudget, false);
+    assert.ok(tight.advice.notes.some((note) => /Nâng cấp máy đang có/.test(note)));
+  }
+
+  const unknown = await builderService.adviseFromText('máy đẹp, chơi game mượt');
+  assert.equal(unknown.preset, null);
+  assert.match(unknown.message, /Chưa nhận ra nhu cầu/);
+  assert.ok(unknown.advice.notes.some((note) => /chơi game/.test(note)));
+  await assert.rejects(builderService.adviseFromText(' '), (err) => err.status === 400);
 });
 
 test('báo giá giữ giá: tăng giá sau khi báo giá vẫn đặt được theo giá cũ trong thời hạn', async () => {

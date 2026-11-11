@@ -9,6 +9,7 @@ router.get('/components', builderController.listComponents);
 router.get('/presets', builderController.listPresets);
 router.post('/check', builderController.checkBuild);
 router.post('/auto', builderController.autoBuild);
+router.post('/advise', builderController.advise);
 router.post('/upgrade', builderController.suggestUpgrades);
 router.post('/quotes', optionalAuthenticate, builderController.createQuote);
 router.get('/quotes/:code', builderController.getQuote);

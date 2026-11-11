@@ -231,3 +231,16 @@ test('upgradeOptions: CPU không kèm tản có ghi chú cần mua tản', () =>
   assert.match(r9.note, /tản/);
   assert.equal(result.cpu.find((item) => item.productId === catalog.r5_7600.productId).note, null);
 });
+
+test('giá giữ theo báo giá thấp hơn giá Hot Deal thì dùng giá giữ và không tốn suất khuyến mãi', () => {
+  const { applyPromotions } = require('../../src/services/pricing.service');
+  const promotions = new Map([[1, [{ PromotionID: 9, SalePrice: 950, QuantityLimit: null, SoldCount: 0, PerOrderLimit: null, Name: 'KM', EndsAt: null }]]]);
+  const withPromo = applyPromotions([{ productId: 1, quantity: 1, unitPrice: 1000 }], promotions);
+  assert.equal(withPromo[0].unitPrice, 950);
+
+  const lockedLower = applyLockedPrices(withPromo, new Map([[1, { unitPrice: 900, quantity: 1 }]]));
+  assert.deepEqual([lockedLower[0].unitPrice, lockedLower[0].listPrice, lockedLower[0].priceLocked, lockedLower[0].promotionId], [900, 1000, true, null]);
+
+  const lockedHigher = applyLockedPrices(withPromo, new Map([[1, { unitPrice: 980, quantity: 1 }]]));
+  assert.deepEqual([lockedHigher[0].unitPrice, lockedHigher[0].priceLocked, lockedHigher[0].promotionId], [950, false, 9]);
+});

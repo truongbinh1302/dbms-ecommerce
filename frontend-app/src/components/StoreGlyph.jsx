@@ -203,6 +203,13 @@ export default function StoreGlyph({ name, className = 'size-5' }) {
           <path d="M12 5v14M5 12h14" />
         </BaseIcon>
       )
+    case 'bell':
+      return (
+        <BaseIcon className={className}>
+          <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" />
+          <path d="M10 20a2 2 0 0 0 4 0" />
+        </BaseIcon>
+      )
     case 'clock':
       return (
         <BaseIcon className={className}>

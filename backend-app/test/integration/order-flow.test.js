@@ -114,9 +114,11 @@ test.after(async () => {
       DELETE FROM CartItems WHERE UserID = @userId;
       DELETE ci FROM CartItems ci JOIN Products p ON p.ProductID = ci.ProductID WHERE p.Slug LIKE @slugLike;
       DELETE vu FROM VoucherUsages vu JOIN Orders o ON o.OrderID = vu.OrderID WHERE o.UserID = @userId;
+      DELETE FROM Notifications WHERE UserID = @userId;
       DELETE oi FROM OrderItems oi JOIN Orders o ON o.OrderID = oi.OrderID WHERE o.UserID = @userId;
       DELETE FROM Orders WHERE UserID = @userId;
       DELETE ph FROM PriceHistory ph JOIN Products p ON p.ProductID = ph.ProductID WHERE p.Slug LIKE @slugLike;
+      DELETE sm FROM StockMovements sm JOIN Products p ON p.ProductID = sm.ProductID WHERE p.Slug LIKE @slugLike;
       DELETE FROM Products WHERE Slug LIKE @slugLike;
       DELETE FROM Vouchers WHERE Code LIKE @codeLike;
       DELETE FROM Users WHERE UserID = @userId;
@@ -186,6 +188,55 @@ test('huỷ đơn hoàn kho và trả lượt voucher', async () => {
   assert.equal(await readStock(productId), 3);
   assert.deepEqual(await readVoucherUsage(voucherId), { UsedCount: 0, Usages: 0 });
   assert.equal((await readOrder(created.orderId)).Status, 'cancelled');
+});
+
+test('lịch sử trạng thái: đủ các bước theo thứ tự, ai đổi; ghi chú nội bộ chỉ admin thấy, lý do huỷ khách thấy', async () => {
+  const productId = await createProduct({ stock: 5, price: 1000000 });
+  const created = await orderService.createOrder(ctx.userId, { shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
+  await orderService.updateOrderStatus(created.orderId, 'confirmed', 'Đã gọi khách xác nhận');
+  await orderService.updateOrderStatus(created.orderId, 'confirmed', 'Bấm lại lần nữa');
+  await orderService.updateOrderStatus(created.orderId, 'shipped', null, { carrier: 'GHN', trackingCode: 'GHN123456' });
+  await orderService.updateOrderStatus(created.orderId, 'delivered');
+
+  const asAdmin = await orderService.getOrderById(created.orderId);
+  assert.deepEqual(
+    asAdmin.history.map((item) => [item.from, item.status, item.by]),
+    [[null, 'pending', 'customer'], ['pending', 'confirmed', 'admin'], ['confirmed', 'shipped', 'admin'], ['shipped', 'delivered', 'admin']],
+    'bấm lại cùng trạng thái không ghi thêm dòng',
+  );
+  assert.equal(asAdmin.history[1].note, 'Đã gọi khách xác nhận');
+  assert.ok(asAdmin.history.every((item, index, list) => index === 0 || new Date(item.at) >= new Date(list[index - 1].at)));
+  const asCustomer = await orderService.getOrderById(created.orderId, ctx.userId);
+  assert.equal(asCustomer.history.length, 4);
+  assert.equal(asCustomer.history[1].note, null, 'ghi chú nội bộ của admin không lộ cho khách');
+
+  const other = await orderService.createOrder(ctx.userId, { shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
+  await orderService.cancelOrder(other.orderId, ctx.userId, 'Đặt nhầm');
+  const last = (await orderService.getOrderById(other.orderId, ctx.userId)).history.at(-1);
+  assert.deepEqual([last.from, last.status, last.by, last.note], ['pending', 'cancelled', 'customer', 'Đặt nhầm']);
+  await assert.rejects(orderService.updateOrderStatus(other.orderId, 'confirmed', 'thử mở lại'), (err) => err.status === 422);
+  assert.equal((await orderService.getOrderById(other.orderId)).history.length, 2, 'đổi trạng thái bị từ chối thì không ghi lịch sử');
+});
+
+test('admin lọc đơn theo khoảng ngày (giờ Việt Nam)', async () => {
+  const productId = await createProduct({ stock: 5, price: 500000 });
+  const recent = await orderService.createOrder(ctx.userId, { shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
+  const old = await orderService.createOrder(ctx.userId, { shippingAddress: ADDRESS, items: [{ productId, quantity: 1 }] });
+  await new sql.Request(getPool()).input('id', sql.Int, old.orderId)
+    .query('UPDATE Orders SET CreatedAt = DATEADD(DAY, -3, CreatedAt) WHERE OrderID = @id');
+  const vnDay = (offsetDays = 0) => new Date(Date.now() + 7 * 3600e3 + offsetDays * 864e5).toISOString().slice(0, 10);
+  const email = `${tag}@btstore.test`;
+
+  const today = await orderService.getAdminOrders('', 1, 100, email, '', vnDay(), vnDay());
+  const ids = today.items.map((item) => item.id);
+  assert.ok(ids.includes(recent.orderId) && !ids.includes(old.orderId), 'chỉ đơn hôm nay');
+  assert.equal(today.pagination.totalItems, today.items.length);
+  const span = await orderService.getAdminOrders('', 1, 100, email, '', vnDay(-3), vnDay());
+  assert.ok(span.items.some((item) => item.id === old.orderId) && span.items.some((item) => item.id === recent.orderId));
+  const before = await orderService.getAdminOrders('', 1, 100, email, '', '', vnDay(-1));
+  assert.ok(before.items.some((item) => item.id === old.orderId) && !before.items.some((item) => item.id === recent.orderId), 'chỉ có "đến ngày"');
+  await assert.rejects(orderService.getAdminOrders('', 1, 20, '', '', '2026-02-30', ''), (err) => err.status === 400);
+  await assert.rejects(orderService.getAdminOrders('', 1, 20, '', '', vnDay(), vnDay(-1)), (err) => err.status === 400);
 });
 
 test('VNPay: sai số tiền → 04; đúng → 00; gọi lại → 02', async () => {
@@ -326,4 +377,21 @@ test('tìm kiếm không dấu trên toàn catalog', async () => {
 
   const byIds = await productService.getProducts({ ids: String(productId), limit: 5 });
   assert.deepEqual(byIds.items.map((p) => p.id), [productId]);
+});
+
+test('đơn của tôi: lọc nhiều trạng thái, đếm theo từng trạng thái cho các tab', async () => {
+  const all = await orderService.getUserOrders(ctx.userId, '', 1, 100);
+  const counted = Object.values(all.counts).reduce((sum, value) => sum + value, 0);
+  assert.equal(counted, all.pagination.totalItems, 'tổng các tab bằng tổng số đơn');
+  assert.ok(all.counts.cancelled >= 1, 'các test trước đã có đơn huỷ');
+
+  const open = await orderService.getUserOrders(ctx.userId, 'pending,pending_payment,confirmed,processing', 1, 100);
+  assert.ok(open.items.every((item) => ['pending', 'pending_payment', 'confirmed', 'processing'].includes(item.Status)));
+  const expected = ['pending', 'pending_payment', 'confirmed', 'processing'].reduce((sum, key) => sum + (all.counts[key] || 0), 0);
+  assert.equal(open.pagination.totalItems, expected);
+  assert.deepEqual(open.counts, all.counts, 'số đếm không phụ thuộc bộ lọc');
+
+  const cancelled = await orderService.getUserOrders(ctx.userId, 'cancelled', 1, 100);
+  assert.equal(cancelled.items.length, all.counts.cancelled);
+  await assert.rejects(orderService.getUserOrders(ctx.userId, 'pending,lost', 1, 10), (err) => err.status === 400);
 });

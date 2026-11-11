@@ -64,6 +64,7 @@ test.after(async () => {
     DELETE FROM Orders WHERE UserID IN (${ids});
     DELETE FROM Users WHERE UserID IN (${ids});
     DELETE FROM PriceHistory WHERE ProductID = @productId;
+    DELETE FROM StockMovements WHERE ProductID = @productId;
     DELETE FROM Products WHERE ProductID = @productId;
   `, { productId: [sql.Int, ctx.productId] });
   await Review.deleteMany({ userId: { $in: ctx.userIds } });
@@ -83,6 +84,7 @@ test('tải dữ liệu cá nhân: có hồ sơ, đơn, giỏ, đánh giá; khô
   assert.equal(data.orders[0].OrderID, order.orderId);
   assert.equal(data.orders[0].ShippingAddress.recipientName, ADDRESS.recipientName);
   assert.equal(data.orders[0].items.length, 1);
+  assert.deepEqual(data.orders[0].statusHistory.map((item) => [item.FromStatus, item.ToStatus, item.ChangedBy]), [[null, 'pending', 'customer']], 'dữ liệu tải về có lịch sử trạng thái đơn');
   assert.equal(data.reviews.length, 1);
   const text = JSON.stringify(data);
   assert.ok(!/Password|RefreshToken|\$2[aby]\$/.test(text), 'không có mật khẩu hay token trong file tải về');

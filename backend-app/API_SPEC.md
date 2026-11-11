@@ -23,7 +23,7 @@
 13. [Voucher APIs](#13-voucher-apis)
 14. [Admin Dashboard APIs](#14-admin-dashboard-apis)
 15. [Inventory APIs](#15-inventory-apis)
-16. [Analytics APIs](#16-analytics-apis)
+16. [Analytics & Inventory APIs](#16-analytics--inventory-apis-admin)
 17. [Race Condition — Xử lý tồn kho đồng thời](#17-race-condition--xử-lý-tồn-kho-đồng-thời)
 18. [Order Status Flow](#18-order-status-flow)
 19. [Data Model](#19-data-model)
@@ -233,11 +233,12 @@ Tạo tài khoản mới.
       "email": "shopper@example.com",
       "role": "customer"
     },
-    "accessToken": "eyJhbGci...",
-    "refreshToken": "eyJhbGci..."
+    "accessToken": "eyJhbGci..."
   }
 }
 ```
+Refresh token không nằm trong body: server đặt cookie `bt_refresh` (`HttpOnly; SameSite=Strict; Path=/api/v1/auth`,
+`Secure` khi production hoặc `COOKIE_SECURE=true`, hết hạn theo `JWT_REFRESH_EXPIRES`). JavaScript trên trang không đọc được cookie này.
 
 **Errors:**
 - `409` — Email đã tồn tại
@@ -260,11 +261,11 @@ Tạo tài khoản mới.
   "success": true,
   "data": {
     "user": { "id": 1, "fullName": "Nguyen Van A", "role": "customer" },
-    "accessToken": "eyJhbGci...",
-    "refreshToken": "eyJhbGci..."
+    "accessToken": "eyJhbGci..."
   }
 }
 ```
+Kèm cookie `bt_refresh` như khi đăng ký.
 
 **Errors:**
 - `401` — Sai email hoặc mật khẩu
@@ -273,28 +274,23 @@ Tạo tài khoản mới.
 
 ### POST `/auth/refresh`
 
-Dùng refresh token để lấy access token mới — **không cần đăng nhập lại**.
+Lấy access token mới bằng cookie `bt_refresh` (trình duyệt tự gửi; gọi `fetch` với `credentials: 'include'`) — **không cần đăng nhập lại**.
+Mỗi lần dùng, refresh token được đổi mới (có `jti` ngẫu nhiên) và token cũ hết hiệu lực.
 
-**Request:**
-```json
-{
-  "refreshToken": "eyJhbGci..."
-}
-```
+**Request:** body rỗng. Phiên đăng nhập từ trước khi chuyển sang cookie có thể gửi `{ "refreshToken": "..." }` một lần;
+server đặt cookie và từ đó dùng cookie.
 
 **Response 200:**
 ```json
 {
   "success": true,
-  "data": {
-    "accessToken": "eyJhbGci...(mới)...",
-    "refreshToken": "eyJhbGci...(mới)..."
-  }
+  "data": { "accessToken": "eyJhbGci...(mới)..." }
 }
 ```
+Kèm cookie `bt_refresh` mới.
 
 **Errors:**
-- `401` — Refresh token hết hạn hoặc không hợp lệ
+- `401` — Thiếu cookie, refresh token hết hạn, đã dùng hoặc đã bị thu hồi (cookie bị xoá)
 
 ---
 
@@ -302,7 +298,7 @@ Dùng refresh token để lấy access token mới — **không cần đăng nh�
 
 **Headers:** `Authorization: Bearer <token>`
 
-Invalidate refresh token.
+Thu hồi refresh token trong DB và xoá cookie `bt_refresh`.
 
 **Response 200:**
 ```json
@@ -879,8 +875,11 @@ async function createOrder(userId, orderData) {
 
 **Query:**
 ```http
-/orders/my-orders?page=1&limit=10&status=pending
+/orders/my-orders?page=1&limit=10&status=pending,pending_payment,confirmed,processing
 ```
+
+`status` nhận một hoặc nhiều trạng thái cách nhau bằng dấu phẩy (trạng thái lạ → `400`). `counts` là số đơn của khách
+theo từng trạng thái (không phụ thuộc bộ lọc), dùng cho các tab ở trang "Đơn hàng của tôi".
 
 **Response 200:**
 ```json
@@ -897,6 +896,7 @@ async function createOrder(userId, orderData) {
         "createdAt": "2026-04-04T10:30:00Z"
       }
     ],
+    "counts": { "pending": 1, "delivered": 3, "cancelled": 1 },
     "pagination": { "page": 1, "limit": 10, "totalItems": 5, "totalPages": 1 }
   }
 }
@@ -938,13 +938,18 @@ Chi tiết đơn hàng.
         "unitPrice": 52990000
       }
     ],
-    "timeline": [
-      { "status": "pending", "timestamp": "2026-04-04T10:30:00Z", "note": "Đơn hàng được tạo" }
+    "history": [
+      { "from": null, "status": "pending", "by": "customer", "note": null, "at": "2026-04-04T10:30:00Z" },
+      { "from": "pending", "status": "confirmed", "by": "admin", "note": null, "at": "2026-04-04T11:02:00Z" }
     ],
     "createdAt": "2026-04-04T10:30:00Z"
   }
 }
 ```
+
+`history` lấy từ bảng `OrderStatusHistory` (migration `020`): mỗi lần đơn đổi trạng thái có một dòng, ghi trong cùng
+transaction với lệnh đổi trạng thái. `by` là `customer`, `admin`, `payment` (VNPay) hoặc `system` (quá hạn thanh toán).
+Khách chỉ thấy `note` của lần huỷ (lý do huỷ); admin thấy mọi ghi chú. Đơn có trước migration có một dòng trạng thái hiện tại.
 
 ---
 
@@ -980,9 +985,66 @@ const CANCELLABLE_STATUSES = ['pending', 'pending_payment', 'confirmed']
 
 ---
 
-### PATCH `/admin/orders/:id/status`
+### GET `/orders/admin`
 
-Admin cập nhật trạng thái đơn hàng.
+Danh sách đơn cho admin, mới nhất trước.
+
+**Auth:** admin
+
+**Query:**
+- `status` — một hoặc nhiều trạng thái, cách nhau bằng dấu phẩy (`pending,pending_payment,confirmed,processing` là nhóm "Cần xử lý" trên dashboard). Trạng thái lạ → `400`.
+- `q` — tìm theo mã đơn (`DH000123`), số đơn, tên/email khách, tên hoặc số điện thoại người nhận. Tên tìm không phân biệt dấu (`khach hoa` khớp "Khách Hoá").
+- `payment` — lọc theo trạng thái thanh toán (`refund_required`, `refunded`, `paid`, …). Response có thêm `refundRequired`: số đơn đang chờ hoàn tiền.
+- `from`, `to` — khoảng ngày đặt hàng `YYYY-MM-DD` theo lịch Việt Nam (gồm cả hai đầu; đổi sang giờ của máy chủ SQL như báo cáo ngày). Sai định dạng hoặc `from` sau `to` → `400`.
+- `page`, `limit` (tối đa 100). Dashboard tải CSV bằng cách đọc lần lượt các trang 100 đơn (tối đa 5.000 đơn).
+
+**Response 200:** `data.items[]` gồm `id`, `orderCode`, `status`, `paymentMethod`, `paymentStatus`, `total`, `createdAt`, `customerName`, `customerEmail`, `recipientName`, `recipientPhone`, `province`, `itemCount`, `itemsText`; kèm `data.pagination { page, limit, totalItems, totalPages }`.
+
+Chi tiết một đơn (địa chỉ giao, ghi chú khách, sản phẩm, serial bảo hành) dùng chung `GET /orders/:id` — admin xem được mọi đơn. Dashboard có nút "In phiếu giao hàng" in từ dữ liệu này.
+
+---
+
+### PATCH `/orders/admin/:id/status`
+
+Admin cập nhật trạng thái đơn hàng. Không ghi đè ghi chú của khách; khách nhận thông báo trong tài khoản.
+
+**Request:** `{ "status": "shipped", "carrier": "Giao Hàng Nhanh (GHN)", "trackingCode": "GHN123456" }` — `carrier` (≤ 50 ký tự) và `trackingCode` (chữ, số, `.`, `-`, `_`, 3–60 ký tự) chỉ dùng khi `status = shipped`; gửi lại với mã mới để sửa mã vận đơn (khách được báo lại).
+
+- Lần đầu sang `shipped` ghi `ShippedAt`; sang `delivered` ghi `DeliveredAt` — mốc tính hạn đổi trả. Chuyển đơn ra khỏi `delivered` thì xoá `DeliveredAt`.
+- `422 has_returns` — đơn đã có yêu cầu đổi trả (chưa bị từ chối/huỷ) thì giữ trạng thái `delivered`.
+- Đổi trạng thái và ghi `OrderStatusHistory` (người đổi `admin`, ghi chú `note` nếu có) trong một transaction; gửi lại cùng trạng thái không ghi thêm dòng.
+
+`GET /orders/:id` trả thêm `shippingCarrier`, `trackingCode`, `shippedAt`, `deliveredAt`, `returns[]` và `returnWindow { days, open, deadline, items[{ productId, remaining }] }`.
+
+---
+
+### POST `/orders/admin/:id/refund`
+
+Ghi nhận đã hoàn tiền cho đơn đã thanh toán rồi bị huỷ (`PaymentStatus = refund_required`). Tiền hoàn ở cổng VNPay hoặc
+chuyển khoản; API chỉ lưu lại. Body `{ reference, amount?, note? }`: `reference` bắt buộc (mã giao dịch hoàn), `amount`
+mặc định và tối đa bằng tổng đơn. Đơn chuyển `refunded` (`RefundAmount`, `RefundReference`, `RefundedAt`), khách nhận
+thông báo; báo cáo ngày cộng vào tiền hoàn. Đơn không chờ hoàn → `422 not_refund_required`.
+
+---
+
+### Đổi trả
+
+Theo Chính sách đổi trả: trong `RETURN_DAYS` ngày (mặc định 7) kể từ `DeliveredAt`, lý do `defective` (lỗi nhà sản xuất), `wrong_item` (giao sai, thiếu phụ kiện), `not_as_described` (khác mô tả).
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/orders/:id/returns` | Khách (đơn của mình) | Body `{ kind: "exchange" \| "refund", reason, description (≥ 10 ký tự), items: [{ productId, quantity }] }` → `201` yêu cầu `TH000001…` trạng thái `pending` |
+| PATCH | `/orders/returns/:returnId/cancel` | Khách | Huỷ yêu cầu còn `pending` |
+| GET | `/orders/admin/returns?status=pending,approved&page=&limit=` | Admin | Danh sách, yêu cầu đang mở lên đầu |
+| PATCH | `/orders/admin/returns/:returnId` | Admin | Body `{ status, adminNote?, restock?, refundAmount? }` |
+
+Các bước: `pending → approved | rejected`, `approved → received | rejected`, `received → completed`; khách tự huỷ → `cancelled`.
+- `rejected` cần `adminNote` (lý do gửi khách).
+- `received` với `restock: true`: cộng lại kho, sổ kho ghi lý do `return`.
+- `completed` với `kind = refund`: `refundAmount` mặc định bằng giá trị hàng trả, không vượt số khách đã trả cho đơn trừ các lần hoàn trước (`400 refund_too_large`). Với `kind = exchange`: trừ kho hàng mới gửi khách, sổ kho ghi `exchange`; hết hàng → `409 out_of_stock`.
+- Mỗi bước gửi thông báo cho khách.
+
+Lỗi khi khách gửi: `422 not_delivered`, `422 return_window_closed` (gợi ý bảo hành theo serial), `409 return_quantity_exceeded` (`data.available` = số còn yêu cầu được). Tạo yêu cầu khoá dòng đơn hàng (`UPDLOCK`) nên nhiều yêu cầu gửi cùng lúc không vượt số đã mua.
 
 **Auth:** admin
 
@@ -1175,81 +1237,96 @@ FE polling để kiểm tra trạng thái thanh toán.
 
 ## 12. Review APIs
 
-### GET `/products/:id/reviews`
+Đánh giá lưu ở MongoDB (collection `reviews`); điểm sao và số đánh giá trong bảng `Products` được tính lại từ
+các đánh giá **đang hiện** mỗi khi đánh giá được thêm, sửa, xoá, ẩn hoặc hiện lại (và đồng bộ toàn bộ khi API khởi động).
 
-**Query:**
-```http
-/products/1/reviews?page=1&limit=10&rating=5
-```
+### GET `/reviews/products/:productId?page=1&limit=10`
 
-**Response 200** (từ MongoDB):
+Công khai. Chỉ trả đánh giá đang hiện, mới nhất trước, kèm phản hồi của cửa hàng nếu có. Không trả thông tin kiểm duyệt.
+
 ```json
 {
   "success": true,
   "data": {
-    "items": [
+    "reviews": [
       {
-        "id": "rev_001",
-        "rating": 5,
-        "comment": "Máy đẹp, màn hình ngon",
-        "userName": "Nguyen Van A",
-        "userAvatar": "https://...",
-        "createdAt": "2026-04-04T11:00:00Z"
+        "_id": "6731…",
+        "productId": 1,
+        "userId": 7,
+        "rating": 1,
+        "title": "Quạt kêu to",
+        "content": "Card chạy được nhưng quạt kêu to khi chơi game.",
+        "helpful_count": 3,
+        "storeReply": { "content": "Cửa hàng sẽ gọi để đổi quạt cho bạn.", "repliedAt": "2026-11-12T04:21:00Z" },
+        "createdAt": "2026-11-10T08:00:00Z"
       }
     ],
-    "summary": {
-      "avgRating": 4.9,
-      "totalReviews": 27,
-      "breakdown": { "5": 20, "4": 5, "3": 2, "2": 0, "1": 0 }
-    },
-    "pagination": { "page": 1, "limit": 10, "totalItems": 27, "totalPages": 3 }
+    "total": 1, "page": 1, "pages": 1,
+    "statistics": { "overall_rating": 1, "total_reviews": 1, "rating_breakdown": { "1": 1, "2": 0, "3": 0, "4": 0, "5": 0 } }
   }
 }
 ```
 
----
+### GET `/reviews/products/:productId/eligibility`
 
-### POST `/products/:id/reviews`
+**Auth:** customer. `{ canReview, reason }` với `reason` là `null`, `not_purchased` hoặc `already_reviewed`.
+Nếu đánh giá của chính khách đang bị ẩn: thêm `hidden: true` và `hiddenReason`.
 
-**Auth:** customer
+### POST `/reviews/products/:productId`
 
-**Business rule — kiểm tra bằng Subquery:**
+**Auth:** customer. Body `{ rating: 1..5, title, content (≥ 10 ký tự) }`. Chỉ khách có đơn chứa sản phẩm ở trạng thái
+`delivered` hoặc `completed` mới đánh giá được (truy vấn SQL Server), mỗi khách một đánh giá cho mỗi sản phẩm.
+
 ```sql
--- Chỉ cho review nếu đã mua và đơn ở trạng thái 'delivered' hoặc 'completed'
-SELECT COUNT(*) AS purchased
-FROM Orders o
-JOIN OrderItems oi ON o.OrderID = oi.OrderID
-WHERE o.UserID = @userId
-  AND oi.ProductID = @productId
-  AND o.Status IN ('delivered', 'completed')
+SELECT COUNT(*) AS purchase_count
+FROM Orders o JOIN OrderItems oi ON o.OrderID = oi.OrderID
+WHERE o.UserID = @userId AND oi.ProductID = @productId AND o.Status IN ('delivered', 'completed')
 ```
 
-**Request:**
+### PATCH `/reviews/:reviewId`, DELETE `/reviews/:reviewId`
+
+**Auth:** người viết. Sửa hoặc xoá đánh giá của mình.
+
+### PATCH `/reviews/:reviewId/helpful`
+
+**Auth:** customer. Mỗi người tính một lần (`409` nếu bấm lại); điều kiện và cập nhật nằm trong một lệnh `findOneAndUpdate`.
+
+### GET `/reviews/my`
+
+**Auth:** customer. Đánh giá của chính khách (kể cả đang bị ẩn).
+
+### GET `/reviews/admin?filter=needs_reply&page=1&limit=20`
+
+**Auth:** admin. `filter`: `all`, `visible`, `hidden`, `needs_reply` (1-2 sao, đang hiện, chưa phản hồi).
+
 ```json
 {
-  "rating": 5,
-  "comment": "Máy đẹp, màn hình ngon"
+  "items": [
+    {
+      "id": "6731…", "productId": 1, "productName": "MSI RTX 4060 Ventus",
+      "userId": 7, "author": { "fullName": "Nguyễn Văn Khách", "email": "khach@btstore.test" },
+      "rating": 1, "title": "Quạt kêu to", "content": "…", "helpfulCount": 3,
+      "hidden": false, "hiddenReason": null, "hiddenAt": null, "storeReply": null,
+      "createdAt": "2026-11-10T08:00:00Z"
+    }
+  ],
+  "total": 1, "page": 1, "pages": 1, "needsReply": 1
 }
 ```
 
-**Response 201** (lưu vào MongoDB):
-```json
-{
-  "success": true,
-  "message": "Review submitted",
-  "data": {
-    "id": "rev_001",
-    "rating": 5,
-    "comment": "Máy đẹp, màn hình ngon",
-    "userName": "Nguyen Van A",
-    "createdAt": "2026-04-04T11:00:00Z"
-  }
-}
-```
+### PATCH `/reviews/admin/:reviewId`
 
-**Errors:**
-- `422` — Chưa mua sản phẩm này
-- `409` — Đã review sản phẩm này rồi
+**Auth:** admin. Body gồm một hoặc nhiều trường:
+
+| Trường | Ý nghĩa |
+| --- | --- |
+| `hidden: true` + `reason` | Ẩn đánh giá. `reason` bắt buộc: `spam`, `offensive`, `personal_info`, `off_topic`. Người viết nhận thông báo (loại `review`) kèm lý do. |
+| `hidden: false` | Hiện lại. |
+| `reply: "…"` | Đăng hoặc sửa phản hồi công khai (2–1000 ký tự). Người viết được báo ở lần phản hồi đầu tiên; sửa phản hồi không báo lại. |
+| `reply: ""` hoặc `null` | Gỡ phản hồi. |
+
+Ẩn hoặc hiện lại thì điểm sao của sản phẩm được tính lại. Lỗi: `400` (thiếu lý do, phản hồi quá ngắn/dài,
+không có thay đổi, mã sai), `404` (không tìm thấy).
 
 ---
 
@@ -1291,35 +1368,24 @@ Kiểm tra mã giảm giá — gọi khi user nhập voucher ở checkout.
 
 ---
 
-### GET `/admin/vouchers`
+### GET `/vouchers/admin?state=`
 
-**Auth:** admin
+**Auth:** admin. `state` (tuỳ chọn): `active`, `scheduled`, `expired`, `used_up`, `disabled`.
 
-**Response 200:**
+**Response 200:** mảng mã, mới nhất trước:
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "code": "SALE10",
-      "discountType": "percent",
-      "discountValue": 10,
-      "minOrderAmount": 1000000,
-      "maxDiscount": 5000000,
-      "usageLimit": 100,
-      "usedCount": 23,
-      "startDate": "2026-04-01T00:00:00Z",
-      "endDate": "2026-04-30T23:59:59Z",
-      "isActive": true
-    }
-  ]
+  "id": 1, "code": "DBMS10", "discountType": "percent", "discountValue": 10,
+  "minOrderAmount": 1000000, "maxDiscount": 500000, "usageLimit": 100, "usedCount": 23,
+  "isActive": true, "startsAt": "2026-11-01T00:00:00.000Z", "endsAt": "2026-12-31T00:00:00.000Z",
+  "state": "active", "orders": 23, "revenue": 104000000
 }
 ```
+`orders`/`revenue`: số đơn chưa huỷ có dùng mã và tổng tiền các đơn đó.
 
 ---
 
-### POST `/admin/vouchers`
+### POST `/vouchers`
 
 **Auth:** admin
 
@@ -1330,20 +1396,24 @@ Kiểm tra mã giảm giá — gọi khi user nhập voucher ở checkout.
   "discountType": "percent",
   "discountValue": 10,
   "minOrderAmount": 1000000,
-  "maxDiscount": 5000000,
+  "maxDiscount": 500000,
   "usageLimit": 100,
-  "startDate": "2026-04-01T00:00:00Z",
-  "endDate": "2026-04-30T23:59:59Z"
+  "startDate": "2026-11-20T08:00:00+07:00",
+  "endDate": "2026-11-30T23:59:00+07:00"
 }
 ```
+- `code`: 3–30 ký tự chữ không dấu, số, `-`, `_` (lưu chữ hoa). Trùng mã → `409 voucher_exists`.
+- `discountType`: `amount` (từ 1.000đ, không lớn hơn `minOrderAmount` nếu có) hoặc `percent` (1–90, `maxDiscount` tuỳ chọn).
+- `usageLimit` trống = không giới hạn. `startDate`/`endDate` là thời điểm có múi giờ; server đổi sang giờ máy chủ SQL (giờ mà lúc đặt hàng dùng để so).
+- Vẫn nhận tên trường cũ `discount`, `quantity`.
+
+**Response 201:** mã vừa tạo, cùng dạng với danh sách.
 
 ---
 
-### PATCH `/admin/vouchers/:id`
+### PATCH `/vouchers/admin/:id`
 
----
-
-### DELETE `/admin/vouchers/:id`
+**Auth:** admin. Body `{ "isActive": false }` để tắt (khách nhập sẽ nhận `voucher_inactive`), `true` để bật lại. Đơn đã đặt bằng mã không bị ảnh hưởng.
 
 ---
 
@@ -1498,38 +1568,165 @@ await ProductLog.create({
 
 ---
 
-## 16. Analytics APIs
+## 16. Analytics & Inventory APIs (admin)
 
-### GET `/admin/analytics/revenue`
+Tất cả cần `Authorization: Bearer <admin token>`.
 
-```http
-/admin/analytics/revenue?from=2026-01-01&to=2026-12-31&groupBy=month|week|day
-```
+### GET `/analytics/dashboard`
 
-**Response 200:**
+Số liệu tổng quan: `summary` (tổng khách, sản phẩm, đơn, doanh thu đơn đã giao, số sản phẩm tồn ≤ 5),
+`revenueByCategory`, `topProducts` (theo đơn `delivered`/`completed`).
+
+### GET `/analytics/integrity`
+
+Kiểm tra toàn vẹn dữ liệu, chỉ đọc. Mỗi kiểm tra là một bất biến mà code giữ trong transaction; dòng sai nghĩa là
+dữ liệu bị sửa thẳng trong DB hoặc có lỗi cần tìm.
+
+| `key` | Bất biến |
+| --- | --- |
+| `stock_ledger` | `Products.Stock` = tổng `StockMovements.Change` của sản phẩm |
+| `order_total` | `Total = Subtotal − Discount + ShippingFee` |
+| `order_lines` | `Subtotal` = tổng `Quantity × UnitPrice` của đơn |
+| `voucher_usage` | `Vouchers.UsedCount` = số dòng `VoucherUsages` của mã |
+| `status_history` | trạng thái cuối trong `OrderStatusHistory` = `Orders.Status` |
+
 ```json
 {
-  "success": true,
-  "data": [
-    { "period": "2026-01", "revenue": 250000000, "orders": 48 },
-    { "period": "2026-02", "revenue": 310000000, "orders": 61 }
+  "checkedAt": "2026-11-12T04:54:00Z", "durationMs": 42, "ok": false,
+  "checks": [
+    { "key": "stock_ledger", "label": "Tồn kho khớp sổ kho", "rule": "…", "ok": false, "problems": 1,
+      "sample": [{ "id": 51, "name": "RAM 16GB", "stock": 7, "ledger": 5 }] }
   ]
 }
 ```
 
----
+`sample` có tối đa 20 dòng mới nhất (ID lớn trước).
 
-### GET `/admin/analytics/top-products`
+### GET `/analytics/daily?from=YYYY-MM-DD&to=YYYY-MM-DD`
 
-```http
-/admin/analytics/top-products?from=2026-01-01&to=2026-12-31&limit=10
+Báo cáo theo ngày, **chia ngày theo giờ Việt Nam (UTC+7)** bất kể máy chủ SQL đặt múi giờ nào.
+Mặc định 30 ngày gần nhất, tối đa 92 ngày một lần.
+
+```json
+{
+  "from": "2026-11-06", "to": "2026-11-12", "timezone": "Asia/Ho_Chi_Minh",
+  "days": [
+    { "date": "2026-11-12", "orders": 3, "cancelledOrders": 0, "netSales": 2760000, "paidAmount": 0,
+      "unitsSold": 3, "newCustomers": 3, "receipts": 1, "unitsReceived": 9, "receiptCost": 18900000 }
+  ],
+  "totals": { "orders": 8, "netSales": 22460000, "...": "..." }
+}
 ```
 
+`netSales` không tính đơn đã huỷ; `paidAmount` là phần đã thanh toán (`PaymentStatus = paid`).
+
+### POST `/inventory/receipts`
+
+Tạo phiếu nhập kho; cộng tồn và ghi sổ kho trong một transaction (khoá sản phẩm theo thứ tự `ProductID`).
+
+```json
+{
+  "supplier": "Công ty Phân phối ABC",
+  "note": "HĐ 0012345",
+  "items": [{ "productId": 50002, "quantity": 10, "unitCost": 2100000 }]
+}
+```
+
+**Response 201:** phiếu kèm `code` dạng `NK000001`, `totalQuantity`, `totalCost`, `items`.
+Lỗi 400: thiếu nhà cung cấp, dòng lặp sản phẩm, số lượng ngoài 1–100.000, sản phẩm không tồn tại hoặc đã ẩn
+(`errors.productIds`).
+
+### GET `/inventory/receipts?page=&limit=` · GET `/inventory/receipts/:id`
+
+Danh sách phiếu nhập gần nhất; chi tiết một phiếu.
+
+### GET `/inventory/movements?productId=&reason=&limit=`
+
+Sổ kho: mỗi lần tồn thay đổi có một dòng (`opening`, `receipt`, `sale`, `cancel`, `adjust`) với `change`,
+`stockAfter`, mã đơn hoặc mã phiếu. Tổng `change` của một sản phẩm luôn bằng tồn hiện tại.
+
+### GET `/inventory/low-stock?threshold=5&limit=20`
+
+Sản phẩm sắp hết kèm số đã bán 30 ngày qua và giá nhập gần nhất.
+
 ---
 
-### GET `/admin/analytics/order-status`
+### Hot Deal — `/promotions`
 
-Phân bổ đơn hàng theo trạng thái.
+- `GET /promotions/active` (công khai): `{ serverNow, running: [...], upcoming: [...] }`, mỗi chương trình có
+  `items` là sản phẩm kèm `promotion { salePrice, endsAt, quantityLimit, soldCount, remaining, perOrderLimit }`.
+  `serverNow` để trình duyệt đếm ngược theo giờ máy chủ.
+- `POST /promotions/admin` (admin):
+
+```json
+{
+  "name": "Hot Deal cuối tuần",
+  "startsAt": "2026-11-14T20:00:00+07:00",
+  "endsAt": "2026-11-14T23:59:00+07:00",
+  "items": [{ "productId": 50002, "salePrice": 2190000, "quantityLimit": 20, "perOrderLimit": 2 }]
+}
+```
+
+  Giờ phải kèm múi giờ. Lỗi 400: giá khuyến mãi không thấp hơn giá niêm yết, giờ kết thúc đã qua, quá 31 ngày,
+  sản phẩm đã có trong chương trình khác trùng khung giờ.
+- `GET /promotions/admin`, `GET /promotions/admin/:id`, `PATCH /promotions/admin/:id/stop`.
+
+Sản phẩm (`GET /products`, `GET /products/:id`, giỏ hàng) trả thêm `promotion` khi có Hot Deal đang chạy;
+`price` vẫn là giá niêm yết. `POST /cart/quote` và `POST /orders` tự áp giá Hot Deal: một dòng chỉ được giá
+khuyến mãi khi cả dòng nằm trong giới hạn mỗi đơn và số suất còn lại (nếu không, dòng có `promotionNote`).
+`POST /orders` nhận thêm `expectedTotal` (tổng tiền khách đã thấy); nếu khác tổng mới thì trả
+**409** `errors.code = "price_changed"` và không tạo đơn.
+
+---
+
+### Dịch vụ sau bán — `/services`
+
+- `GET /services/options` (công khai): loại dịch vụ tại nhà, 14 ngày tới với số chỗ còn lại mỗi khung giờ,
+  danh mục và tình trạng cho thu cũ. Chỉ nhận lịch trong `STORE_PROVINCE`, mỗi khung giờ tối đa
+  `SERVICE_SLOT_CAPACITY` lịch.
+- `POST /services/trade-in/estimate` (công khai): `{ category, purchasePrice, ageMonths, condition }` →
+  `{ low, high, explanation }` (giá tham khảo, chốt sau khi kiểm tra máy).
+- `POST /services/requests` (đăng nhập), theo `type`:
+  - `home_service`: `{ serviceKind, scheduledDate: "YYYY-MM-DD", timeSlot: "08:00-10:00", address, description?, orderId? }`.
+    409 `slot_full` khi khung giờ vừa kín (đếm lịch bằng `UPDLOCK, HOLDLOCK`), 409 `duplicate_slot`.
+  - `trade_in`: `{ category, brandModel, purchasePrice, ageMonths, condition, contactPhone, description? }`.
+  - `warranty`: `{ serialNumber, description, contactPhone, handoff: "store" | "pickup" }`; chỉ serial trong đơn của
+    chính khách, còn hạn (400 `warranty_expired`), mỗi serial một yêu cầu đang mở (409 `open_request`).
+- `GET /services/requests`, `GET /services/requests/:id`, `PATCH /services/requests/:id/cancel` (khi còn `new`/`confirmed`).
+- Admin: `GET /services/admin/requests?type=&status=open|new|...`, `PATCH /services/admin/requests/:id`
+  `{ status?, note?, finalPrice?, internal? }`. Trạng thái: `new → confirmed → in_progress → completed`, huỷ được
+  trước khi hoàn tất. Ghi chú `internal` khách không thấy.
+
+---
+
+### Hỏi đáp sản phẩm
+
+- `GET /products/:id/questions` (không bắt buộc đăng nhập) → `{ items, mine }`: `items` là câu đã trả lời (công khai,
+  tối đa 50, mới trả lời trước); `mine` là câu đang chờ của chính người xem (cần gửi token).
+- `POST /products/:id/questions` `{ question }` (đăng nhập, ≥ 10 ký tự) → `201`. Mỗi người tối đa 5 câu đang chờ
+  (`409 too_many_pending`); tên hiển thị chỉ là tên gọi.
+- Admin: `GET /products/admin/questions?status=pending|answered|hidden` → `{ items, pendingCount }`;
+  `PATCH /products/admin/questions/:questionId` `{ answer }` để trả lời (công khai, báo người hỏi một lần bằng
+  thông báo `question_answered`) hoặc `{ hidden: true }` để ẩn.
+
+---
+
+### Thông báo và theo dõi giá — `/notifications` (đăng nhập)
+
+- `GET /notifications` → `{ unread, items: [{ id, type, title, body, link, read, createdAt }] }`;
+  `type` là `price_drop`, `order_status`, `service_update`, `back_in_stock`, `question_answered` hoặc `review` (đánh giá bị ẩn, cửa hàng phản hồi).
+- `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`.
+- `GET /notifications/price-watches`, `POST /notifications/price-watches` `{ productId, targetPrice? }`,
+  `DELETE /notifications/price-watches/:productId`.
+- Báo khi có hàng: `GET /notifications/stock-watches`, `POST /notifications/stock-watches` `{ productId }`
+  (chỉ sản phẩm đang hết, còn hàng → 400 `in_stock`; tối đa 50), `DELETE /notifications/stock-watches/:productId`.
+  Khi tồn > 0 (nhập kho, huỷ đơn, hàng trả nhập lại, admin sửa tồn, hoặc lượt quét định kỳ), server ghi thông báo
+  `back_in_stock` ("Hiện còn N sản phẩm, giá X") và xoá lượt chờ trong cùng transaction: mỗi lượt báo một lần.
+
+Giá so sánh là giá khách trả được lúc đó (giá Hot Deal đang chạy nếu thấp hơn giá niêm yết). Server quét định kỳ
+(`PRICE_WATCH_SWEEP_MS`, mặc định 5 phút) và quét ngay khi admin đổi giá hoặc tạo Hot Deal. Mỗi mức giá chỉ báo
+một lần; giá tăng lại rồi giảm thì báo lại. Admin đổi trạng thái đơn hàng không còn ghi đè ghi chú của khách
+(`Orders.Note`); khách nhận thông báo `order_status`.
 
 ---
 
@@ -1935,8 +2132,8 @@ Tuần 3 — Sprint 3 (Admin + Review):
   PATCH /admin/products/:id
   DELETE /admin/products/:id
   PATCH /admin/products/:id/stock
-  GET   /products/:id/reviews
-  POST  /products/:id/reviews
+  GET   /reviews/products/:id
+  POST  /reviews/products/:id
 
 Tuần 4 — Bonus (Payment + Voucher):
   POST  /payments/vnpay/create
@@ -1964,6 +2161,7 @@ Thêm ở giai đoạn 2 (migration `007_build_pc.sql`, seed `003_seed_component
 | GET | `/builder/presets` | Nhu cầu theo phần mềm: văn phòng, lập trình web, Android, đồ hoạ 3D, AI local |
 | POST | `/builder/check` | Kiểm tra cấu hình. Body `{ items: [{ productId, quantity?, owned? }] }`; `owned: true` là linh kiện khách đã có, không tính tiền |
 | POST | `/builder/auto` | Ráp cấu hình rẻ nhất còn hàng cho một nhu cầu. Body `{ presetId }` |
+| POST | `/builder/advise` | Tư vấn từ câu mô tả. Body `{ text }` (≤ 500 ký tự). Dò nhu cầu bằng từ khoá (Docker, Android Studio, Blender, Stable Diffusion, Office…) và ngân sách ("20 triệu", "15-20tr", "25tr5", "20.000.000đ"), rồi ráp như `/builder/auto`. Trả thêm `advice { matched, budget, withinBudget, difference, notes }`. Không nhận ra nhu cầu → `preset: null` kèm `message`, không đoán. Giá luôn lấy từ kho |
 | POST | `/builder/upgrade` | Gợi ý nâng cấp. Body `{ socket?, memoryType?, psuWatts?, maxGpuLengthMm?, cpuPowerW?, gpuPowerW?, hasM2Slot? }` |
 | POST | `/builder/quotes` | Lưu báo giá giữ giá 48 giờ (đăng nhập thì gắn với tài khoản). Body `{ items, title? }` |
 | GET | `/builder/quotes/:code` | Xem báo giá: giá báo, giá hiện tại, còn hạn hay không, kết quả kiểm tra |

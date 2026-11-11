@@ -19,10 +19,63 @@ features and DBMS demonstrations.
   detail pages, cancellation, reviews, vouchers, and VNPay sandbox integration.
 - Build PC with compatibility checks (socket, RAM type and slots, M.2 slots,
   form factor, GPU length, cooler height, PSU headroom), suggested builds by
-  the software a customer needs, upgrade advice for an existing PC, and
-  48-hour price-locked quotes with a shareable link.
+  the software a customer needs (picked from a preset or from a sentence such
+  as "code web và Docker, tầm 20 triệu": keywords and budget are parsed on the
+  server and the parts and prices always come from stock), upgrade advice for
+  an existing PC, and 48-hour price-locked quotes with a shareable link.
 - Price history on every product page and warranty lookup by serial number.
 - Admin workflows for product, image, order, warranty, user, and analytics management.
+  The order list searches by order code, customer or recipient name (without
+  accents) and phone, filters by status, and opens an order detail panel with a
+  printable delivery slip and the carrier and tracking code.
+- Returns: within `RETURN_DAYS` of delivery a customer requests an exchange or
+  a refund from the order page. Requested quantities never exceed what was
+  bought (the order row is locked, so concurrent requests queue up); the admin
+  approves, receives (optionally putting items back on sale), and completes.
+  Refunds are capped at what the customer paid; exchanges take the replacement
+  from stock. Every step is in the stock ledger and notifies the customer.
+- Stock receipts from suppliers and a stock ledger: every stock change (receipt,
+  sale, cancellation, manual adjustment, returned item, exchange) is recorded with the resulting stock,
+  plus a daily report split by Vietnam time with CSV export.
+- Time-limited Hot Deals: start and end times, a number of deal units and a
+  per-order limit. The server applies the deal price when quoting and when
+  creating an order, locks the deal row so two buyers cannot take the last
+  unit, gives the unit back when an order is cancelled, and refuses an order
+  (409) when the total changed after the customer saw it.
+- After-sales services: book a technician at home (time slots with a per-slot
+  capacity, locked so two bookings cannot overbook a slot), a trade-in
+  estimate and request, and warranty claims for the customer's own serial
+  numbers, each with a status timeline the customer can follow and the admin
+  updates.
+- Price watch and in-account notifications: a customer can watch a product
+  (optionally with a target price) and gets a notification when the price, or
+  a running Hot Deal, drops below it; order status changes and service
+  request updates also notify the customer (bell in the header). A sold-out
+  product has "Báo tôi khi có hàng": when stock comes back (a receipt, a
+  cancelled order, a restocked return) the customer is notified once.
+- Product Q&A: signed-in customers ask about a product, the store answers and
+  the answer is published under the question with the asker's given name only;
+  the asker is notified. Unanswered questions are visible only to the asker.
+- Review moderation: reviews come only from customers who received the product.
+  The store can reply publicly under a review, and can hide a review only for
+  one of four stated reasons (spam, offensive language, personal information,
+  off topic); hidden reviews are not shown and not counted in the star rating,
+  and the author is told why. The admin to-do list counts 1-2 star reviews
+  still waiting for a reply.
+- Order progress and status history: every status change (order placed,
+  VNPay result, admin update, cancellation, payment expiry) is recorded with
+  who made it, in the same transaction as the change; the order page shows
+  the steps reached and the history, the admin drawer shows notes too.
+- Data integrity checks for the admin (read-only): stock equals the stock
+  ledger, order totals and subtotals add up, voucher use counts match their
+  orders, and the last recorded status matches each order.
+- Admin order list filtered by date (Vietnam days) and downloadable as CSV
+  (Excel-safe: cells that would run as formulas are neutralised).
+- Component product pages show their Build PC specs, whether the part fits
+  the parts already picked in Build PC, and add it to that build.
+- Favorites (`#/yeu-thich`) with current price and stock, recently viewed
+  products, and a page that recovers by itself when a new version is deployed
+  while a tab is open (no blank screen).
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -97,12 +150,15 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/san-pham/:id` | Product detail (specs, stock, reviews from MongoDB) |
 | `#/tim-kiem?q=` | Search results with sorting and pagination |
 | `#/thanh-toan` | Checkout: shipping address, payment method, voucher |
-| `#/don-hang` | Order history |
-| `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, warranty serials |
+| `#/don-hang?trang-thai=` | Order history with tabs: all, being processed (`dang-xu-ly`), shipping (`dang-giao`), delivered (`da-giao`), cancelled (`da-huy`), each with a count |
+| `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, carrier and tracking code, warranty serials, return requests |
 | `#/build-pc` | Build PC: pick parts, compatibility check, suggested builds, upgrade advice, save a quote |
 | `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |
-| `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties |
+| `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties, warranty claims and repair history |
+| `#/dich-vu/:tab` | After-sales services: technician at home (`tai-nha`), trade-in (`thu-cu`), my requests (`cua-toi`) |
 | `#/tai-khoan` | Account: change password, download personal data, delete account |
+| `#/so-sanh?ids=1,2,3` | Compare up to 3 products side by side; parts of the same type get their Build PC specs (VRAM, socket, length…) |
+| `#/yeu-thich` | Favorite products saved in this browser, with current price and stock |
 | `#/chinh-sach/:slug` | Purchase terms, shipping, payment, returns, warranty, complaints, seller information |
 | `#/chinh-sach-bao-mat` | Privacy policy |
 
@@ -147,6 +203,31 @@ Order cancellation follows the same principle: it locks the order, restores
 inventory, updates the status, and commits as one transaction. See
 [`backend-app/src/services/order.service.js`](backend-app/src/services/order.service.js)
 for the implementation.
+
+### Concurrency control used across the store
+
+Every operation where two requests could race for the same scarce thing takes
+a lock inside one transaction, and each has an integration test that fires the
+requests at the same time (`npm run test:db`).
+
+| Race | What could go wrong | How it is prevented | Test |
+| --- | --- | --- | --- |
+| Two orders for the last unit | Stock goes negative, both customers charged | `UPDLOCK, ROWLOCK` on product rows in `ProductID` order, `CHECK (Stock >= 0)` | two orders, last unit → one succeeds |
+| Last use of a voucher | Code used beyond its limit | Voucher row locked `UPDLOCK`; usage and `UsedCount` written in the order's transaction | two orders, one use left → one discount |
+| Last Hot Deal units | More units sold at the deal price than offered | `PromotionItems` row locked after the product rows; `SoldCount <= QuantityLimit` constraint | five buyers, two units → exactly two |
+| Technician time slot | More bookings than technicians | Count of the slot read with `UPDLOCK, HOLDLOCK` (key-range lock) before inserting | many bookings for one slot → capped |
+| Return requests | Returning more than was bought | Order row locked `UPDLOCK`; requested quantities summed under the lock | five requests for one item → one accepted |
+| Pending product questions | Flooding past the 5-question cap | Pending count read with `UPDLOCK, HOLDLOCK` in the inserting transaction | eight at once → five |
+| Supplier receipts | Lost stock updates | Products locked in `ProductID` order (same order as checkout, no deadlock); ledger row per change | many receipts for one product → all counted |
+| Account deletion during checkout | An open order on a deleted account | Both lock the `Users` row first | delete and order at once → no open order left |
+| VNPay IPN called twice | Order paid or stock restored twice | Order row locked; amount checked; repeated call answers `02` | wrong amount → 04, retry → 02 |
+| "Helpful" on a review | One person counted many times | Condition (`helpful_by` ≠ voter, not own review, visible) and increment in one MongoDB `findOneAndUpdate` | five clicks at once → one counted |
+| Order status and its history | History out of step with the order | Status `UPDATE … OUTPUT INTO` a table variable and the history `INSERT` in one transaction (no trigger: `OUTPUT` without `INTO` is not allowed on tables with triggers) | no-op and rejected updates add no row |
+| Price and stock alert sweeps | The same alert sent twice | `UPDATE … OUTPUT INTO` / `DELETE … OUTPUT INTO` and the notification insert in one transaction | sweep twice → one notification |
+
+The stock ledger keeps one more invariant: for every product, the sum of
+`StockMovements.Change` equals `Products.Stock`, checked after sales,
+cancellations, receipts, adjustments, returns and exchanges in the tests.
 
 ## Tech stack
 
@@ -315,17 +396,21 @@ The API is mounted under `/api/v1` and includes:
 - `/auth` — registration, login, token refresh
 - `/users` — profile and user management
 - `/categories` — category operations
-- `/products` — catalog and product management
+- `/products` — catalog and product management, product Q&A (`/products/:id/questions`, admin `/products/admin/questions`)
 - `/cart` — saved cart (`GET`/`PUT /cart`), validation and server-side price quote (`POST /cart/quote`)
 - `/locations/provinces` — the 34 provinces and cities used by the address form
 - `/builder` — Build PC parts, compatibility check, suggested builds, upgrade advice, price-locked quotes
 - `/warranties` — public lookup by serial, the customer's warranties, admin registration
 - `/products/:id/price-history` — price changes over the last 180 days
-- `/orders` — checkout, order history, status, cancellation
+- `/orders` — checkout, order history, status (with carrier and tracking code), cancellation, return requests (`/orders/:id/returns`, admin `/orders/admin/returns`)
 - `/payments` — VNPay sandbox flow
-- `/reviews` — product reviews
-- `/vouchers` — voucher validation and management
-- `/analytics` — admin analytics
+- `/reviews` — product reviews from verified buyers, helpful votes, admin moderation (`/reviews/admin`: list, hide with a reason, show again, public reply)
+- `/vouchers` — voucher validation; admin create (validated, time-zone aware), list with state and usage, switch off/on
+- `/analytics` — admin dashboard numbers and the daily report (`/analytics/daily`)
+- `/inventory` — stock receipts, stock ledger, low-stock list (admin)
+- `/promotions` — running and upcoming Hot Deals (public), create/list/stop (admin)
+- `/services` — home service slots, trade-in estimate, customer service requests, admin processing
+- `/notifications` — the customer's notifications, mark as read, price watches, back-in-stock alerts
 
 Detailed request and response examples are documented in
 [`backend-app/API_SPEC.md`](backend-app/API_SPEC.md).
@@ -371,6 +456,12 @@ npm run build
 - Credentials in `.env.example`, Docker Compose, seed files, and this README are
   intentionally local demo values—not live secrets.
 - Replace all example passwords and JWT secrets before deployment.
+- The refresh token lives in an `HttpOnly; SameSite=Strict` cookie scoped to
+  `/api/v1/auth` (`Secure` in production), is rotated with a random `jti` on
+  every use, and is revoked on logout and password change. Only the
+  short-lived access token is kept by the page. If the frontend is served from
+  a different origin than the API, list it in `CORS_ORIGINS` so the cookie is
+  sent; the default proxy setup needs nothing.
 - VNPay credentials are not included in this repository.
 
 ## License

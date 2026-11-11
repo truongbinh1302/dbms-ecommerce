@@ -9,7 +9,9 @@ function getStoredToken() {
   return window.localStorage.getItem('bt_access_token') || '';
 }
 
-function getStoredRefreshToken() {
+// Refresh token nay nằm trong cookie httpOnly do server đặt. Khoá này chỉ còn ở trình duyệt đăng nhập
+// từ trước khi chuyển sang cookie: gửi một lần để server đổi sang cookie rồi xoá.
+function getLegacyRefreshToken() {
   if (!isBrowser()) return '';
   return window.localStorage.getItem('bt_refresh_token') || '';
 }
@@ -30,7 +32,7 @@ function normalizeUser(user = null) {
 function storeAuthSession(data = {}) {
   if (!isBrowser()) return;
   if (data.accessToken) window.localStorage.setItem('bt_access_token', data.accessToken);
-  if (data.refreshToken) window.localStorage.setItem('bt_refresh_token', data.refreshToken);
+  window.localStorage.removeItem('bt_refresh_token');
   if (data.user) window.localStorage.setItem('bt_user', JSON.stringify(normalizeUser(data.user)));
 }
 
@@ -68,13 +70,15 @@ async function parsePayload(response) {
 }
 
 async function refreshAccessToken() {
-  const refreshToken = getStoredRefreshToken();
-  if (!refreshToken) return '';
+  if (!getStoredToken() && !getLegacyRefreshToken()) return '';
+  const legacy = getLegacyRefreshToken();
 
+  // credentials: 'include' để trình duyệt gửi cookie refresh token (cả khi API ở origin khác, xem CORS_ORIGINS).
   const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+    body: JSON.stringify(legacy ? { refreshToken: legacy } : {}),
   });
 
   const payload = await parsePayload(response);
@@ -124,6 +128,7 @@ export function fetchProducts(params = {}) {
 export async function login(email, password) {
   const data = await request('/auth/login', {
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), password }),
   });
   const session = { ...data, user: normalizeUser(data.user) };
@@ -134,6 +139,7 @@ export async function login(email, password) {
 export async function register({ fullName, email, password, phone, acceptPrivacy }) {
   const data = await request('/auth/register', {
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify({
       fullName,
       email: String(email || '').trim().toLowerCase(),
@@ -189,13 +195,36 @@ export function fetchAdminOrders(params = {}, token) {
   });
 }
 
-export function updateAdminOrderStatus(orderId, status, note, token) {
+// shipment: { carrier, trackingCode } khi giao đơn cho đơn vị vận chuyển.
+export function updateAdminOrderStatus(orderId, status, note, token, shipment = {}) {
   return request(`/orders/admin/${orderId}/status`, {
     method: 'PATCH',
     auth: true,
     token,
-    body: JSON.stringify({ status, note }),
+    body: JSON.stringify({ status, note, ...shipment }),
   });
+}
+
+// Ghi nhận đã hoàn tiền cho đơn đã thanh toán rồi bị huỷ: { amount?, reference, note? }.
+export function recordOrderRefund(orderId, payload, token) {
+  return request(`/orders/admin/${orderId}/refund`, { method: 'POST', auth: true, token, body: JSON.stringify(payload) });
+}
+
+// --- Đổi trả ---
+export function createReturnRequest(orderId, payload) {
+  return request(`/orders/${orderId}/returns`, { method: 'POST', auth: true, body: JSON.stringify(payload) });
+}
+
+export function cancelReturnRequest(returnId) {
+  return request(`/orders/returns/${encodeURIComponent(returnId)}/cancel`, { method: 'PATCH', auth: true });
+}
+
+export function fetchAdminReturns(params, token) {
+  return adminGet('/orders/admin/returns', params, token);
+}
+
+export function updateAdminReturn(returnId, payload, token) {
+  return request(`/orders/admin/returns/${encodeURIComponent(returnId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
 }
 
 // Gợi ý khi gõ: endpoint gọn hơn /products (không đếm tổng số kết quả).
@@ -283,6 +312,11 @@ export function autoBuild(presetId) {
   return request('/builder/auto', { method: 'POST', body: JSON.stringify({ presetId }) });
 }
 
+// Tư vấn từ câu mô tả nhu cầu (dò từ khoá + ngân sách ở server, giá lấy từ kho).
+export function adviseBuild(text) {
+  return request('/builder/advise', { method: 'POST', body: JSON.stringify({ text }) });
+}
+
 export function suggestUpgrades(current) {
   return request('/builder/upgrade', { method: 'POST', body: JSON.stringify(current) });
 }
@@ -308,6 +342,154 @@ export function lookupWarranty(serial) {
 
 export function registerWarranty(payload, token) {
   return request('/warranties/admin', {
+    method: 'POST',
+    auth: true,
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
+// --- Thông báo và theo dõi giá ---
+export function fetchNotifications() {
+  return request('/notifications', { method: 'GET', auth: true });
+}
+
+export function markNotificationRead(notificationId) {
+  return request(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'PATCH', auth: true });
+}
+
+export function markAllNotificationsRead() {
+  return request('/notifications/read-all', { method: 'PATCH', auth: true });
+}
+
+export function fetchPriceWatches() {
+  return request('/notifications/price-watches', { method: 'GET', auth: true });
+}
+
+export function watchPrice(productId, targetPrice) {
+  return request('/notifications/price-watches', { method: 'POST', auth: true, body: JSON.stringify({ productId, targetPrice }) });
+}
+
+export function unwatchPrice(productId) {
+  return request(`/notifications/price-watches/${encodeURIComponent(productId)}`, { method: 'DELETE', auth: true });
+}
+
+// Báo khi có hàng (sản phẩm đang hết).
+export function fetchStockWatches() {
+  return request('/notifications/stock-watches', { method: 'GET', auth: true });
+}
+
+export function watchStock(productId) {
+  return request('/notifications/stock-watches', { method: 'POST', auth: true, body: JSON.stringify({ productId }) });
+}
+
+export function unwatchStock(productId) {
+  return request(`/notifications/stock-watches/${encodeURIComponent(productId)}`, { method: 'DELETE', auth: true });
+}
+
+// --- Dịch vụ sau bán ---
+export function fetchServiceOptions() {
+  return request('/services/options');
+}
+
+export function estimateTradeIn(payload) {
+  return request('/services/trade-in/estimate', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function createServiceRequest(payload) {
+  return request('/services/requests', { method: 'POST', auth: true, body: JSON.stringify(payload) });
+}
+
+export function fetchMyServiceRequests() {
+  return request('/services/requests', { method: 'GET', auth: true });
+}
+
+export function cancelServiceRequest(requestId, reason) {
+  return request(`/services/requests/${encodeURIComponent(requestId)}/cancel`, { method: 'PATCH', auth: true, body: JSON.stringify({ reason }) });
+}
+
+export function fetchAdminServiceRequests(params, token) {
+  return adminGet('/services/admin/requests', params, token);
+}
+
+export function updateAdminServiceRequest(requestId, payload, token) {
+  return request(`/services/admin/requests/${encodeURIComponent(requestId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
+}
+
+// --- Hot Deal ---
+export function fetchActivePromotions() {
+  return request('/promotions/active');
+}
+
+export function fetchAdminPromotions(token) {
+  return adminGet('/promotions/admin', {}, token);
+}
+
+export function fetchAdminPromotion(promotionId, token) {
+  return adminGet(`/promotions/admin/${encodeURIComponent(promotionId)}`, {}, token);
+}
+
+// --- Mã giảm giá (admin) ---
+export function fetchAdminVouchers(params, token) {
+  return adminGet('/vouchers/admin', params, token);
+}
+
+export function createVoucher(payload, token) {
+  return request('/vouchers', { method: 'POST', auth: true, token, body: JSON.stringify(payload) });
+}
+
+export function setVoucherActive(voucherId, isActive, token) {
+  return request(`/vouchers/admin/${encodeURIComponent(voucherId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify({ isActive }) });
+}
+
+export function createPromotion(payload, token) {
+  return request('/promotions/admin', { method: 'POST', auth: true, token, body: JSON.stringify(payload) });
+}
+
+export function stopPromotion(promotionId, token) {
+  return request(`/promotions/admin/${encodeURIComponent(promotionId)}/stop`, { method: 'PATCH', auth: true, token });
+}
+
+// --- Quản trị: số liệu, báo cáo theo ngày, sổ kho ---
+function adminGet(path, params = {}, token) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') search.set(key, value);
+  });
+  const query = search.toString();
+  return request(`${path}${query ? `?${query}` : ''}`, { method: 'GET', auth: true, token });
+}
+
+export function fetchAdminDashboard(token) {
+  return adminGet('/analytics/dashboard', {}, token);
+}
+
+export function fetchIntegrityReport(token) {
+  return adminGet('/analytics/integrity', {}, token);
+}
+
+export function fetchDailyReport(params, token) {
+  return adminGet('/analytics/daily', params, token);
+}
+
+export function fetchLowStock(params, token) {
+  return adminGet('/inventory/low-stock', params, token);
+}
+
+export function fetchStockReceipts(params, token) {
+  return adminGet('/inventory/receipts', params, token);
+}
+
+export function fetchStockReceipt(receiptId, token) {
+  return adminGet(`/inventory/receipts/${encodeURIComponent(receiptId)}`, {}, token);
+}
+
+export function fetchStockMovements(params, token) {
+  return adminGet('/inventory/movements', params, token);
+}
+
+export function createStockReceipt(payload, token) {
+  return request('/inventory/receipts', {
     method: 'POST',
     auth: true,
     token,
@@ -345,8 +527,52 @@ export function fetchMyWarranties() {
   return request('/warranties/me', { auth: true });
 }
 
-export function fetchReviews(productId) {
-  return request(`/reviews/products/${productId}`);
+// --- Hỏi đáp sản phẩm ---
+// Gửi kèm token nếu đã đăng nhập để thấy cả câu hỏi đang chờ của mình.
+export function fetchProductQuestions(productId) {
+  return request(`/products/${productId}/questions`, { auth: Boolean(getStoredToken()) });
+}
+
+export function askProductQuestion(productId, question) {
+  return request(`/products/${productId}/questions`, { method: 'POST', auth: true, body: JSON.stringify({ question }) });
+}
+
+export function fetchAdminQuestions(params, token) {
+  return adminGet('/products/admin/questions', params, token);
+}
+
+export function moderateQuestion(questionId, payload, token) {
+  return request(`/products/admin/questions/${encodeURIComponent(questionId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
+}
+
+export function fetchAdminReviews(params, token) {
+  return adminGet('/reviews/admin', params, token);
+}
+
+export function moderateReview(reviewId, payload, token) {
+  return request(`/reviews/admin/${encodeURIComponent(reviewId)}`, { method: 'PATCH', auth: true, token, body: JSON.stringify(payload) });
+}
+
+export function fetchReviews(productId, { page = 1, rating = null, limit = 5 } = {}) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (rating) params.set('rating', String(rating));
+  return request(`/reviews/products/${productId}?${params}`);
+}
+
+export function markReviewHelpful(reviewId) {
+  return request(`/reviews/${encodeURIComponent(reviewId)}/helpful`, { method: 'PATCH', auth: true });
+}
+
+export function fetchReviewEligibility(productId) {
+  return request(`/reviews/products/${productId}/eligibility`, { auth: true });
+}
+
+export function createReview(productId, review) {
+  return request(`/reviews/products/${productId}`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(review),
+  });
 }
 
 export function createVNPayPaymentLink(orderId, orderInfo, token) {
@@ -370,6 +596,7 @@ export async function logout(token) {
   try {
     return await request('/auth/logout', {
       method: 'POST',
+      credentials: 'include',
       auth: true,
       token,
     });
@@ -420,4 +647,4 @@ export function deleteProduct(productId, token) {
   });
 }
 
-export { getStoredToken, getStoredRefreshToken, storeAuthSession, clearAuthSession, normalizeUser };
+export { getStoredToken, storeAuthSession, clearAuthSession, normalizeUser };

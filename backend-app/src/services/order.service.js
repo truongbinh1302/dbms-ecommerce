@@ -5,6 +5,10 @@ const pricing = require('./pricing.service');
 const voucherService = require('./voucher.service');
 const cartService = require('./cart.service');
 const priceQuoteService = require('./priceQuote.service');
+const inventoryService = require('./inventory.service');
+const promotionService = require('./promotion.service');
+const notificationService = require('./notification.service');
+const returnService = require('./return.service');
 const { assertShippingAddress } = require('./address.service');
 
 const allowedStatuses = ['pending', 'pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -133,6 +137,11 @@ const createOrder = async (userId, orderData = {}) => {
   const note = orderData.note ? String(orderData.note).trim().slice(0, 500) || null : null;
   const quoteCode = orderData.quoteCode ? String(orderData.quoteCode).trim().toUpperCase() : null;
   const termsVersion = orderData.termsVersion ? String(orderData.termsVersion).slice(0, 20) : null;
+  const rawExpected = orderData.expectedTotal;
+  const expectedTotal = rawExpected === undefined || rawExpected === null || rawExpected === ''
+    || !Number.isFinite(Number(rawExpected))
+    ? null
+    : Math.round(Number(rawExpected));
 
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
@@ -157,8 +166,13 @@ const createOrder = async (userId, orderData = {}) => {
     if (lockedQuote && !products.some((product) => lockedQuote.prices.has(product.ProductID))) {
       lockedQuote = null;
     }
+    // Hot Deal: khoá dòng PromotionItems (sau khi đã khoá Products) để hai đơn không cùng lấy suất cuối.
+    const promotions = await promotionService.loadForProducts(transaction, products.map((product) => product.ProductID), { lock: true });
     const lines = pricing.applyLockedPrices(
-      products.map((product) => ({ productId: product.ProductID, quantity: product.quantity, unitPrice: Number(product.Price) })),
+      pricing.applyPromotions(
+        products.map((product) => ({ productId: product.ProductID, quantity: product.quantity, unitPrice: Number(product.Price) })),
+        promotions,
+      ),
       lockedQuote ? lockedQuote.prices : null,
     );
     const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
@@ -173,6 +187,16 @@ const createOrder = async (userId, orderData = {}) => {
     }
 
     const quote = pricing.buildQuote(subtotal, voucher);
+    // Khách gửi kèm tổng tiền đã thấy ở trang thanh toán: nếu giá vừa đổi (Hot Deal hết suất, hết giờ,
+    // admin đổi giá) thì dừng lại cho khách xem giá mới, không âm thầm tính số tiền khác.
+    if (expectedTotal !== null && expectedTotal !== quote.total) {
+      throw createHttpError(409, 'Giá đơn hàng vừa thay đổi. Vui lòng kiểm tra lại tổng tiền rồi đặt lại.', {
+        code: 'price_changed',
+        expectedTotal,
+        total: quote.total,
+        items: lines.map((line) => ({ productId: line.productId, unitPrice: line.unitPrice, promotionNote: line.promotionNote || null })),
+      });
+    }
     const status = paymentMethod === 'cod' ? 'pending' : 'pending_payment';
 
     const orderResult = await new sql.Request(transaction)
@@ -206,6 +230,7 @@ const createOrder = async (userId, orderData = {}) => {
             UpdatedAt = GETDATE()
         WHERE OrderID = @orderId
       `);
+    await recordStatusChange(transaction, { orderId, to: status, by: 'customer' });
 
     for (const [index, item] of products.entries()) {
       await new sql.Request(transaction)
@@ -213,21 +238,26 @@ const createOrder = async (userId, orderData = {}) => {
         .input('productId', sql.Int, item.ProductID)
         .input('quantity', sql.Int, item.quantity)
         .input('unitPrice', sql.Decimal(18, 2), lines[index].unitPrice)
+        .input('promotionId', sql.Int, lines[index].promotionId || null)
         .query(`
-          INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice)
-          VALUES (@orderId, @productId, @quantity, @unitPrice)
+          INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice, PromotionID)
+          VALUES (@orderId, @productId, @quantity, @unitPrice, @promotionId)
         `);
 
-      await new sql.Request(transaction)
-        .input('productId', sql.Int, item.ProductID)
-        .input('quantity', sql.Int, item.quantity)
-        .query(`
-          UPDATE Products
-          SET Stock = Stock - @quantity,
-              Version = Version + 1,
-              UpdatedAt = GETDATE()
-          WHERE ProductID = @productId
-        `);
+      if (lines[index].promotionId) {
+        await promotionService.consume(transaction, {
+          promotionId: lines[index].promotionId,
+          productId: item.ProductID,
+          quantity: item.quantity,
+        });
+      }
+
+      await inventoryService.changeStock(transaction, {
+        productId: item.ProductID,
+        change: -item.quantity,
+        reason: 'sale',
+        orderId,
+      });
     }
 
     if (voucher) {
@@ -330,7 +360,8 @@ const quoteCart = async (rawItems, rawVoucherCode = null, rawQuoteCode = null) =
   if (lockedQuote && !baseLines.some((line) => lockedQuote.prices.has(line.productId))) {
     lockedQuote = null;
   }
-  const lines = pricing.applyLockedPrices(baseLines, lockedQuote ? lockedQuote.prices : null);
+  const promotions = await promotionService.loadForProducts(pool, baseLines.map((line) => line.productId));
+  const lines = pricing.applyLockedPrices(pricing.applyPromotions(baseLines, promotions), lockedQuote ? lockedQuote.prices : null);
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
 
   let voucher = null;
@@ -362,37 +393,38 @@ const getUserOrders = async (userId, status = null, page = 1, limit = 10) => {
   const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
   const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 10, 1), 100);
   const offset = (pageNum - 1) * pageSize;
-  const statusCondition = status ? 'AND Status = @status' : '';
+  // Một hoặc nhiều trạng thái, cách nhau bằng dấu phẩy (tab "Đang xử lý" gồm nhiều trạng thái).
+  const statuses = String(status || '').split(',').map((item) => item.trim()).filter(Boolean);
+  if (statuses.some((item) => !allowedStatuses.includes(item))) {
+    throw createHttpError(400, `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`);
+  }
+  const statusesJson = statuses.length ? JSON.stringify(statuses) : null;
+  const statusCondition = 'AND (@statuses IS NULL OR Status IN (SELECT value FROM OPENJSON(@statuses)))';
 
-  const request = new sql.Request(pool);
-  request.input('userId', sql.Int, Number(userId));
-  if (status) request.input('status', sql.NVarChar, status);
-  request.input('offset', sql.Int, offset);
-  request.input('limit', sql.Int, pageSize);
+  const result = await new sql.Request(pool)
+    .input('userId', sql.Int, Number(userId))
+    .input('statuses', sql.NVarChar(sql.MAX), statusesJson)
+    .input('offset', sql.Int, offset)
+    .input('limit', sql.Int, pageSize)
+    .query(`
+      SELECT OrderID AS id, OrderCode AS orderCode, Status, PaymentMethod, PaymentStatus, Total,
+             (SELECT COUNT(*) FROM OrderItems oi WHERE oi.OrderID = o.OrderID) AS itemCount,
+             CreatedAt
+      FROM Orders o
+      WHERE UserID = @userId ${statusCondition}
+      ORDER BY CreatedAt DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
 
-  const result = await request.query(`
-    SELECT OrderID AS id, OrderCode AS orderCode, Status, PaymentMethod, PaymentStatus, Total,
-           (SELECT COUNT(*) FROM OrderItems oi WHERE oi.OrderID = o.OrderID) AS itemCount,
-           CreatedAt
-    FROM Orders o
-    WHERE UserID = @userId ${statusCondition}
-    ORDER BY CreatedAt DESC
-    OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-  `);
+      SELECT COUNT(*) AS total FROM Orders WHERE UserID = @userId ${statusCondition};
 
-  const countRequest = new sql.Request(pool);
-  countRequest.input('userId', sql.Int, Number(userId));
-  if (status) countRequest.input('status', sql.NVarChar, status);
+      -- Số đơn theo từng trạng thái (cho các tab), không phụ thuộc bộ lọc đang chọn.
+      SELECT Status, COUNT(*) AS Total FROM Orders WHERE UserID = @userId GROUP BY Status;
+    `);
 
-  const countResult = await countRequest.query(`
-    SELECT COUNT(*) AS total
-    FROM Orders
-    WHERE UserID = @userId ${statusCondition}
-  `);
-
-  const totalItems = Number(countResult.recordset[0]?.total || 0);
+  const totalItems = Number(result.recordsets[1][0]?.total || 0);
   return {
-    items: result.recordset,
+    items: result.recordsets[0],
+    counts: Object.fromEntries(result.recordsets[2].map((row) => [row.Status, Number(row.Total)])),
     pagination: {
       page: pageNum,
       limit: pageSize,
@@ -401,6 +433,18 @@ const getUserOrders = async (userId, status = null, page = 1, limit = 10) => {
     },
   };
 };
+
+/**
+ * Ghi một dòng lịch sử trạng thái đơn (migration 020). Gọi trong cùng transaction với lệnh đổi trạng thái.
+ * by: customer | admin | payment | system.
+ */
+const recordStatusChange = (runner, { orderId, from = null, to, by = 'system', note = null }) => new sql.Request(runner)
+  .input('orderId', sql.Int, Number(orderId))
+  .input('from', sql.NVarChar(50), from)
+  .input('to', sql.NVarChar(50), to)
+  .input('by', sql.NVarChar(20), by)
+  .input('note', sql.NVarChar(500), note ? String(note).slice(0, 500) : null)
+  .query('INSERT INTO OrderStatusHistory (OrderID, FromStatus, ToStatus, ChangedBy, Note) VALUES (@orderId, @from, @to, @by, @note)');
 
 const getOrderById = async (orderId, userId = null) => {
   const request = new sql.Request(getPool());
@@ -414,6 +458,9 @@ const getOrderById = async (orderId, userId = null) => {
            o.VNPayTxnRef AS txnRef, o.CancelReason,
            o.Subtotal, o.Discount, o.ShippingFee, o.Total, o.Note, o.QuoteCode AS quoteCode, o.TermsVersion AS termsVersion,
            o.ShippingAddress, o.CreatedAt, o.UpdatedAt,
+           o.ShippingCarrier AS shippingCarrier, o.TrackingCode AS trackingCode,
+           o.ShippedAt AS shippedAt, o.DeliveredAt AS deliveredAt,
+           o.RefundAmount AS refundAmount, o.RefundReference AS refundReference, o.RefundedAt AS refundedAt,
            u.FullName AS customerName, u.Email, u.Phone
     FROM Orders o
     JOIN Users u ON o.UserID = u.UserID
@@ -428,9 +475,10 @@ const getOrderById = async (orderId, userId = null) => {
     .query(`
       SELECT oi.ProductID, p.Name AS productName,
              JSON_VALUE(p.Images, '$[0]') AS thumbnail,
-             oi.Quantity, oi.UnitPrice
+             oi.Quantity, oi.UnitPrice, oi.PromotionID AS promotionId, pr.Name AS promotionName
       FROM OrderItems oi
       JOIN Products p ON oi.ProductID = p.ProductID
+      LEFT JOIN Promotions pr ON pr.PromotionID = oi.PromotionID
       WHERE oi.OrderID = @orderId
     `);
 
@@ -446,6 +494,26 @@ const getOrderById = async (orderId, userId = null) => {
       ORDER BY ProductID, SerialNumber
     `);
   order.warranties = warrantiesResult.recordset;
+  order.returns = await returnService.listForOrder(orderId);
+  order.returnWindow = await returnService.getReturnWindow(orderId);
+
+  // Lịch sử trạng thái: khách chỉ thấy ghi chú của lần huỷ (lý do huỷ vốn đã hiện cho khách);
+  // ghi chú nội bộ của admin ở các bước khác chỉ admin thấy.
+  const historyResult = await new sql.Request(getPool())
+    .input('orderId', sql.Int, Number(orderId))
+    .query(`
+      SELECT FromStatus, ToStatus, ChangedBy, Note, ChangedAt
+      FROM OrderStatusHistory
+      WHERE OrderID = @orderId
+      ORDER BY HistoryID
+    `);
+  order.history = historyResult.recordset.map((row) => ({
+    from: row.FromStatus,
+    status: row.ToStatus,
+    by: row.ChangedBy,
+    note: !userId || row.ToStatus === 'cancelled' ? row.Note : null,
+    at: row.ChangedAt,
+  }));
 
   try {
     order.shippingAddress = JSON.parse(order.ShippingAddress || '{}');
@@ -478,24 +546,24 @@ const lockOrderById = async (transaction, orderId, userId = null) => {
  * Chạy bên trong transaction của hàm gọi; hàm gọi chịu trách nhiệm commit/rollback.
  * Nếu đơn đã thanh toán thì chuyển PaymentStatus sang refund_required để admin hoàn tiền.
  */
-const cancelLockedOrder = async (transaction, order, { reason = null, paymentStatus = null } = {}) => {
+const cancelLockedOrder = async (transaction, order, { reason = null, paymentStatus = null, by = 'system' } = {}) => {
   const orderId = Number(order.OrderID);
 
   const itemsResult = await new sql.Request(transaction)
     .input('orderId', sql.Int, orderId)
-    .query('SELECT ProductID, Quantity FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID');
+    .query('SELECT ProductID, Quantity, PromotionID FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID');
 
   for (const item of itemsResult.recordset) {
-    await new sql.Request(transaction)
-      .input('productId', sql.Int, item.ProductID)
-      .input('quantity', sql.Int, item.Quantity)
-      .query(`
-        UPDATE Products
-        SET Stock = Stock + @quantity,
-            Version = Version + 1,
-            UpdatedAt = GETDATE()
-        WHERE ProductID = @productId
-      `);
+    await inventoryService.changeStock(transaction, {
+      productId: item.ProductID,
+      change: Number(item.Quantity),
+      reason: 'cancel',
+      orderId,
+      note: reason ? String(reason).slice(0, 300) : null,
+    });
+    if (item.PromotionID) {
+      await promotionService.release(transaction, { promotionId: item.PromotionID, productId: item.ProductID, quantity: Number(item.Quantity) });
+    }
   }
 
   const usageResult = await new sql.Request(transaction)
@@ -532,6 +600,7 @@ const cancelLockedOrder = async (transaction, order, { reason = null, paymentSta
       OUTPUT INSERTED.UpdatedAt
       WHERE OrderID = @orderId
     `);
+  await recordStatusChange(transaction, { orderId, from: order.Status, to: 'cancelled', by, note: reason });
 
   return {
     orderId,
@@ -555,8 +624,9 @@ const cancelOrder = async (orderId, userId, reason) => {
       throw createHttpError(422, 'Cannot cancel order in current status');
     }
 
-    const result = await cancelLockedOrder(transaction, order, { reason: reason || null });
+    const result = await cancelLockedOrder(transaction, order, { reason: reason || null, by: 'customer' });
     await transaction.commit();
+    notificationService.sweepSoon(); // hàng trả về kho: báo khách đang chờ có hàng
     return { orderId: result.orderId, status: result.status, paymentStatus: result.paymentStatus };
   } catch (err) {
     await safeRollback(transaction);
@@ -564,10 +634,32 @@ const cancelOrder = async (orderId, userId, reason) => {
   }
 };
 
-const updateOrderStatus = async (orderId, status, note) => {
+const SHIPPING_CARRIER_MAX = 50;
+const TRACKING_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,59}$/;
+
+/** Đơn vị vận chuyển và mã vận đơn admin nhập khi giao đơn cho bên vận chuyển. */
+const normalizeShipment = ({ carrier, trackingCode } = {}) => {
+  const cleanCarrier = String(carrier ?? '').trim().replace(/\s+/g, ' ');
+  const cleanCode = String(trackingCode ?? '').trim();
+  if (cleanCarrier.length > SHIPPING_CARRIER_MAX) throw createHttpError(400, `Tên đơn vị vận chuyển tối đa ${SHIPPING_CARRIER_MAX} ký tự`);
+  if (cleanCode && !TRACKING_CODE_PATTERN.test(cleanCode)) {
+    throw createHttpError(400, 'Mã vận đơn chỉ gồm chữ, số, dấu chấm, gạch ngang (3–60 ký tự)');
+  }
+  if (cleanCode && !cleanCarrier) throw createHttpError(400, 'Hãy nhập đơn vị vận chuyển cho mã vận đơn');
+  return { carrier: cleanCarrier || null, trackingCode: cleanCode || null };
+};
+
+const shippedMessage = ({ carrier, trackingCode }) => {
+  if (carrier && trackingCode) return `Đơn đang được ${carrier} giao tới bạn, mã vận đơn ${trackingCode}.`;
+  if (carrier) return `Đơn đang được ${carrier} giao tới bạn.`;
+  return 'Đơn đang trên đường giao tới bạn.';
+};
+
+const updateOrderStatus = async (orderId, status, note, shipment = {}) => {
   if (!allowedStatuses.includes(status)) {
     throw createHttpError(400, `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`);
   }
+  const { carrier, trackingCode } = status === 'shipped' ? normalizeShipment(shipment) : { carrier: null, trackingCode: null };
 
   // Admin huỷ đơn cũng phải hoàn kho và trả lượt voucher như khách huỷ.
   if (status === 'cancelled') {
@@ -581,8 +673,16 @@ const updateOrderStatus = async (orderId, status, note) => {
       if (!adminCancellableStatuses.includes(order.Status)) {
         throw createHttpError(422, `Cannot cancel order in status "${order.Status}"`);
       }
-      const result = await cancelLockedOrder(transaction, order, { reason: note || 'Admin huỷ đơn' });
+      const result = await cancelLockedOrder(transaction, order, { reason: note || 'Admin huỷ đơn', by: 'admin' });
+      await notificationService.notify(transaction, {
+        userId: order.UserID,
+        type: 'order_status',
+        title: `Đơn #${order.OrderID} đã bị huỷ`,
+        body: note || 'Cửa hàng đã huỷ đơn. Nếu bạn đã thanh toán, tiền sẽ được hoàn lại.',
+        link: `/don-hang/${order.OrderID}`,
+      });
       await transaction.commit();
+      notificationService.sweepSoon();
       return { id: result.orderId, status: result.status, updatedAt: result.updatedAt };
     } catch (err) {
       await safeRollback(transaction);
@@ -590,21 +690,55 @@ const updateOrderStatus = async (orderId, status, note) => {
     }
   }
 
+  // Đơn đã có yêu cầu đổi trả thì giữ trạng thái "đã giao" (mốc tính hạn đổi trả).
+  if (status !== 'delivered') {
+    const returns = await new sql.Request(getPool())
+      .input('orderId', sql.Int, Number(orderId))
+      .query(`
+        SELECT COUNT(*) AS Total FROM ReturnRequests
+        WHERE OrderID = @orderId AND Status NOT IN (N'rejected', N'cancelled')
+      `);
+    if (Number(returns.recordset[0].Total) > 0) {
+      throw createHttpError(422, 'Đơn đã có yêu cầu đổi trả, không đổi trạng thái được nữa', { code: 'has_returns' });
+    }
+  }
+
   // Đơn đã huỷ thì kho đã được hoàn, không cho chuyển sang trạng thái khác nữa.
+  // Cột Note là ghi chú của KHÁCH lúc đặt hàng: không ghi đè bằng ghi chú của admin.
+  // ShippedAt/DeliveredAt ghi lần đầu đơn sang trạng thái đó; DeliveredAt là mốc tính hạn đổi trả,
+  // nên bị xoá nếu admin chuyển đơn ra khỏi "đã giao" (vd. bấm nhầm).
+  // Đổi trạng thái và ghi lịch sử trong một transaction (một batch): lịch sử luôn khớp với đơn.
   const result = await new sql.Request(getPool())
     .input('orderId', sql.Int, Number(orderId))
     .input('status', sql.NVarChar, status)
-    .input('note', sql.NVarChar, note || null)
+    .input('carrier', sql.NVarChar(50), carrier)
+    .input('trackingCode', sql.NVarChar(60), trackingCode)
+    .input('note', sql.NVarChar(500), note ? String(note).slice(0, 500) : null)
     .query(`
+      SET XACT_ABORT ON;
+      BEGIN TRANSACTION;
+      DECLARE @changed TABLE (
+        id INT, status NVARCHAR(50), updatedAt DATETIME2, userId INT, orderCode NVARCHAR(30),
+        carrier NVARCHAR(50), trackingCode NVARCHAR(60),
+        previousStatus NVARCHAR(50), previousCarrier NVARCHAR(50), previousTrackingCode NVARCHAR(60)
+      );
       UPDATE Orders
       SET Status = @status,
-          Note = COALESCE(@note, Note),
+          ShippingCarrier = CASE WHEN @status = N'shipped' AND @carrier IS NOT NULL THEN @carrier ELSE ShippingCarrier END,
+          TrackingCode = CASE WHEN @status = N'shipped' AND @carrier IS NOT NULL THEN @trackingCode ELSE TrackingCode END,
+          ShippedAt = CASE WHEN @status IN (N'shipped', N'delivered') THEN COALESCE(ShippedAt, SYSDATETIME()) ELSE ShippedAt END,
+          DeliveredAt = CASE WHEN @status = N'delivered' THEN COALESCE(DeliveredAt, SYSDATETIME()) ELSE NULL END,
           UpdatedAt = GETDATE()
       OUTPUT
-        INSERTED.OrderID AS id,
-        INSERTED.Status AS status,
-        INSERTED.UpdatedAt AS updatedAt
-      WHERE OrderID = @orderId AND Status <> 'cancelled'
+        INSERTED.OrderID, INSERTED.Status, INSERTED.UpdatedAt, INSERTED.UserID, INSERTED.OrderCode,
+        INSERTED.ShippingCarrier, INSERTED.TrackingCode,
+        DELETED.Status, DELETED.ShippingCarrier, DELETED.TrackingCode
+      INTO @changed
+      WHERE OrderID = @orderId AND Status <> 'cancelled';
+      INSERT INTO OrderStatusHistory (OrderID, FromStatus, ToStatus, ChangedBy, Note)
+      SELECT id, previousStatus, status, N'admin', @note FROM @changed WHERE previousStatus <> status;
+      COMMIT TRANSACTION;
+      SELECT * FROM @changed;
     `);
 
   const updatedOrder = result.recordset[0];
@@ -618,7 +752,78 @@ const updateOrderStatus = async (orderId, status, note) => {
     throw createHttpError(404, 'Order not found');
   }
 
-  return updatedOrder;
+  const shipmentChanged = status === 'shipped'
+    && (updatedOrder.carrier !== updatedOrder.previousCarrier || updatedOrder.trackingCode !== updatedOrder.previousTrackingCode);
+  if (updatedOrder.previousStatus !== updatedOrder.status || shipmentChanged) {
+    try {
+      await notificationService.notify(null, {
+        userId: updatedOrder.userId,
+        type: 'order_status',
+        title: `Đơn ${updatedOrder.orderCode || `#${updatedOrder.id}`}: ${notificationService.ORDER_STATUS_LABELS[status] || status}`,
+        body: status === 'shipped'
+          ? shippedMessage(updatedOrder)
+          : status === 'delivered' ? 'Đơn đã giao. Cảm ơn bạn đã mua hàng!' : null,
+        link: `/don-hang/${updatedOrder.id}`,
+      });
+    } catch (err) {
+      console.warn('[notifications] order status notification failed:', err.message);
+    }
+  }
+
+  return {
+    id: updatedOrder.id,
+    status: updatedOrder.status,
+    updatedAt: updatedOrder.updatedAt,
+    shippingCarrier: updatedOrder.carrier,
+    trackingCode: updatedOrder.trackingCode,
+  };
+};
+
+/**
+ * Admin ghi nhận đã hoàn tiền cho đơn đã thanh toán rồi bị huỷ (PaymentStatus = refund_required).
+ * Tiền được hoàn ở cổng thanh toán/ngân hàng; ở đây lưu số tiền, mã giao dịch hoàn và báo cho khách.
+ */
+const recordRefund = async (orderId, { amount, reference, note } = {}) => {
+  const cleanReference = String(reference ?? '').trim().slice(0, 100);
+  if (!cleanReference) throw createHttpError(400, 'Hãy nhập mã giao dịch hoàn tiền (từ VNPay hoặc ngân hàng)');
+  const transaction = new sql.Transaction(getPool());
+  await transaction.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
+  try {
+    const order = await lockOrderById(transaction, orderId);
+    if (!order) throw createHttpError(404, 'Order not found');
+    if (order.PaymentStatus !== 'refund_required') {
+      throw createHttpError(422, 'Đơn này không ở trạng thái chờ hoàn tiền', { code: 'not_refund_required' });
+    }
+    const total = Number(order.Total);
+    const refund = amount === undefined || amount === null || amount === '' ? total : Math.round(Number(amount));
+    if (!Number.isFinite(refund) || refund <= 0 || refund > total) {
+      throw createHttpError(400, `Số tiền hoàn phải từ 1đ đến ${total.toLocaleString('vi-VN')}đ`);
+    }
+    const updated = await new sql.Request(transaction)
+      .input('orderId', sql.Int, Number(order.OrderID))
+      .input('amount', sql.Decimal(18, 2), refund)
+      .input('reference', sql.NVarChar(100), cleanReference)
+      .query(`
+        UPDATE Orders
+        SET PaymentStatus = N'refunded', RefundAmount = @amount, RefundReference = @reference,
+            RefundedAt = SYSDATETIME(), UpdatedAt = GETDATE()
+        OUTPUT INSERTED.OrderID, INSERTED.OrderCode, INSERTED.UserID, INSERTED.RefundedAt
+        WHERE OrderID = @orderId
+      `);
+    const row = updated.recordset[0];
+    await notificationService.notify(transaction, {
+      userId: row.UserID,
+      type: 'order_status',
+      title: `Đơn ${row.OrderCode || `#${row.OrderID}`}: đã hoàn tiền`,
+      body: `Cửa hàng đã hoàn ${refund.toLocaleString('vi-VN')}đ (mã giao dịch ${cleanReference}).${note ? ` ${String(note).trim().slice(0, 200)}` : ''} Thời gian tiền về tài khoản tuỳ ngân hàng.`,
+      link: `/don-hang/${row.OrderID}`,
+    });
+    await transaction.commit();
+    return { id: row.OrderID, paymentStatus: 'refunded', refundAmount: refund, refundReference: cleanReference, refundedAt: row.RefundedAt };
+  } catch (err) {
+    await safeRollback(transaction);
+    throw err;
+  }
 };
 
 /**
@@ -692,6 +897,9 @@ const applyVNPayResult = async ({ txnRef, responseCode, transactionStatus, amoun
               UpdatedAt = GETDATE()
           WHERE OrderID = @orderId
         `);
+      if (orderStatus !== order.Status) {
+        await recordStatusChange(transaction, { orderId: base.orderId, from: order.Status, to: orderStatus, by: 'payment', note: 'Thanh toán VNPay thành công' });
+      }
 
       await transaction.commit();
       if (paymentStatus === 'refund_required') {
@@ -706,6 +914,7 @@ const applyVNPayResult = async ({ txnRef, responseCode, transactionStatus, amoun
       const result = await cancelLockedOrder(transaction, order, {
         reason: `Thanh toán VNPay không thành công (mã ${responseCode})`,
         paymentStatus: 'failed',
+        by: 'payment',
       });
       await transaction.commit();
       return { ...base, code: '00', paymentStatus: result.paymentStatus, orderStatus: result.status };
@@ -767,6 +976,7 @@ const expireStalePayments = async (expireMinutes = config.payment.expireMinutes)
       await cancelLockedOrder(transaction, order, {
         reason: `Quá hạn thanh toán ${expireMinutes} phút`,
         paymentStatus: 'expired',
+        by: 'system',
       });
       await transaction.commit();
       expired += 1;
@@ -779,67 +989,121 @@ const expireStalePayments = async (expireMinutes = config.payment.expireMinutes)
   return expired;
 };
 
-const getAdminOrders = async (status = null, page = 1, limit = 20) => {
+/**
+ * Danh sách đơn cho admin: lọc theo một hoặc nhiều trạng thái ("confirmed,shipped"),
+ * tìm theo mã đơn, số đơn, tên/email khách, tên/số điện thoại người nhận.
+ */
+const ADMIN_PAYMENT_FILTERS = ['unpaid', 'pending', 'paid', 'failed', 'expired', 'refund_required', 'refunded'];
+
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Ngày dạng YYYY-MM-DD (theo lịch Việt Nam); trống thì null, sai định dạng thì 400. */
+const parseFilterDay = (value, label) => {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const date = new Date(`${text}T00:00:00Z`);
+  if (!DAY_PATTERN.test(text) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text) {
+    throw createHttpError(400, `${label} không hợp lệ (YYYY-MM-DD)`);
+  }
+  return text;
+};
+
+const getAdminOrders = async (status = null, page = 1, limit = 20, q = '', payment = '', from = '', to = '') => {
   const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
   const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 100);
   const offset = (pageNum - 1) * pageSize;
-  const statusCondition = status ? 'WHERE o.Status = @status' : '';
-  const request = new sql.Request(getPool());
-  if (status) {
-    request.input('status', sql.NVarChar, status);
+  const statuses = String(status || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (statuses.some((item) => !allowedStatuses.includes(item))) {
+    throw createHttpError(400, `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`);
   }
-  request.input('offset', sql.Int, offset);
-  request.input('limit', sql.Int, pageSize);
+  const keyword = String(q || '').trim().slice(0, 100);
+  const paymentStatus = String(payment || '').trim();
+  if (paymentStatus && !ADMIN_PAYMENT_FILTERS.includes(paymentStatus)) {
+    throw createHttpError(400, 'Trạng thái thanh toán không hợp lệ');
+  }
+  const fromDay = parseFilterDay(from, 'Từ ngày');
+  const toDay = parseFilterDay(to, 'Đến ngày');
+  if (fromDay && toDay && fromDay > toDay) throw createHttpError(400, 'Từ ngày phải trước hoặc bằng đến ngày');
 
-  const result = await request.query(`
-    SELECT
-      o.OrderID AS id,
-      o.Status AS status,
-      o.PaymentMethod AS paymentMethod,
-      o.PaymentStatus AS paymentStatus,
-      o.Total AS total,
-      o.CreatedAt AS createdAt,
-      u.FullName AS customerName,
-      u.Email AS customerEmail,
-      COUNT(oi.OrderItemID) AS itemCount,
-      COALESCE(
-        STRING_AGG(
-          CONVERT(NVARCHAR(MAX), CONCAT(p.Name, N' x', oi.Quantity)), N', '
-        ),
-        N'Không có sản phẩm'
-      ) AS itemsText
+  // Khoảng ngày theo giờ Việt Nam, đổi sang giờ của máy chủ SQL (giống báo cáo ngày) để so với CreatedAt.
+  const dayBounds = `
+    DECLARE @tz INT = DATEPART(TZOFFSET, SYSDATETIMEOFFSET());
+    DECLARE @start DATETIME2 = CASE WHEN @from IS NULL THEN NULL
+      ELSE CAST(SWITCHOFFSET(TODATETIMEOFFSET(CAST(@from AS DATETIME2), 420), @tz) AS DATETIME2) END;
+    DECLARE @end DATETIME2 = CASE WHEN @to IS NULL THEN NULL
+      ELSE CAST(SWITCHOFFSET(TODATETIMEOFFSET(DATEADD(DAY, 1, CAST(@to AS DATETIME2)), 420), @tz) AS DATETIME2) END;`;
+
+  const where = `
+    WHERE (@statuses IS NULL OR o.Status IN (SELECT value FROM OPENJSON(@statuses)))
+      AND (@payment IS NULL OR o.PaymentStatus = @payment)
+      AND (@start IS NULL OR o.CreatedAt >= @start)
+      AND (@end IS NULL OR o.CreatedAt < @end)
+      AND (@q IS NULL
+        OR o.OrderCode LIKE N'%' + @q + N'%'
+        OR CAST(o.OrderID AS NVARCHAR(12)) = @q
+        OR u.FullName COLLATE Latin1_General_CI_AI LIKE N'%' + @q + N'%'
+        OR u.Email LIKE N'%' + @q + N'%'
+        OR JSON_VALUE(o.ShippingAddress, '$.recipientName') COLLATE Latin1_General_CI_AI LIKE N'%' + @q + N'%'
+        OR JSON_VALUE(o.ShippingAddress, '$.phone') LIKE N'%' + @q + N'%')`;
+  const bind = (request) => request
+    .input('statuses', sql.NVarChar(sql.MAX), statuses.length ? JSON.stringify(statuses) : null)
+    .input('q', sql.NVarChar(100), keyword || null)
+    .input('payment', sql.NVarChar(30), paymentStatus || null)
+    .input('from', sql.NVarChar(10), fromDay)
+    .input('to', sql.NVarChar(10), toDay);
+
+  const result = await bind(new sql.Request(getPool()))
+    .input('offset', sql.Int, offset)
+    .input('limit', sql.Int, pageSize)
+    .query(`
+      ${dayBounds}
+      SELECT
+        o.OrderID AS id,
+        o.OrderCode AS orderCode,
+        o.Status AS status,
+        o.PaymentMethod AS paymentMethod,
+        o.PaymentStatus AS paymentStatus,
+        o.Total AS total,
+        o.CreatedAt AS createdAt,
+        u.FullName AS customerName,
+        u.Email AS customerEmail,
+        JSON_VALUE(o.ShippingAddress, '$.recipientName') AS recipientName,
+        JSON_VALUE(o.ShippingAddress, '$.phone') AS recipientPhone,
+        JSON_VALUE(o.ShippingAddress, '$.province') AS province,
+        items.ItemCount AS itemCount,
+        COALESCE(items.ItemsText, N'Không có sản phẩm') AS itemsText
+      FROM Orders o
+      JOIN Users u ON o.UserID = u.UserID
+      OUTER APPLY (
+        SELECT COUNT(*) AS ItemCount,
+               STRING_AGG(CONVERT(NVARCHAR(MAX), CONCAT(p.Name, N' x', oi.Quantity)), N', ') AS ItemsText
+        FROM OrderItems oi JOIN Products p ON oi.ProductID = p.ProductID
+        WHERE oi.OrderID = o.OrderID
+      ) items
+      ${where}
+      ORDER BY o.CreatedAt DESC, o.OrderID DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+
+  const countResult = await bind(new sql.Request(getPool())).query(`
+    ${dayBounds}
+    SELECT COUNT(*) AS total
     FROM Orders o
     JOIN Users u ON o.UserID = u.UserID
-    LEFT JOIN OrderItems oi ON o.OrderID = oi.OrderID
-    LEFT JOIN Products p ON oi.ProductID = p.ProductID
-    ${statusCondition}
-    GROUP BY
-      o.OrderID,
-      o.Status,
-      o.PaymentMethod,
-      o.PaymentStatus,
-      o.Total,
-      o.CreatedAt,
-      u.FullName,
-      u.Email
-    ORDER BY o.CreatedAt DESC
-    OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-  `);
-
-  const countRequest = new sql.Request(getPool());
-  if (status) {
-    countRequest.input('status', sql.NVarChar, status);
-  }
-  const countResult = await countRequest.query(`
-    SELECT COUNT(*) AS total
-    FROM Orders
-    ${status ? 'WHERE Status = @status' : ''}
+    ${where}
   `);
 
   const totalItems = Number(countResult.recordset[0]?.total || 0);
+  // Số đơn đang chờ hoàn tiền (khách đã trả rồi đơn bị huỷ): hiện cảnh báo trên trang quản trị.
+  const refundCount = await new sql.Request(getPool())
+    .query("SELECT COUNT(*) AS total FROM Orders WHERE PaymentStatus = N'refund_required'");
 
   return {
     items: result.recordset,
+    refundRequired: Number(refundCount.recordset[0]?.total || 0),
     pagination: {
       page: pageNum,
       limit: pageSize,
@@ -927,6 +1191,7 @@ module.exports = {
   getOrderById,
   cancelOrder,
   updateOrderStatus,
+  recordRefund,
   getAdminOrders,
   updateOrderPayment,
   getOrderByVNPayTxnRef,
@@ -936,5 +1201,6 @@ module.exports = {
   expireStalePayments,
   // Xuất thêm để viết unit test
   normalizeItems,
+  normalizeShipment,
   parseOrderIdFromTxnRef,
 };

@@ -1,7 +1,7 @@
+// Nút nhanh dưới header: mục nào cũng mở một trang hoặc khối có thật.
 export const quickLinks = [
   'Build PC',
   'Hot Deal',
-  'Tin công nghệ',
   'Dịch vụ kỹ thuật tại nhà',
   'Thu cũ đổi mới',
   'Tra cứu bảo hành',
@@ -22,85 +22,83 @@ export const categories = [
   { id: 'chair', label: 'Ghế - Bàn', icon: 'chair', targetSection: 'section-accessories' },
 ]
 
+// Banner trang chủ: chỉ nói điều cửa hàng làm được thật. Các con số (giao hàng, đổi trả, free ship,
+// giữ giá báo giá) lấy từ /store/info lúc hiển thị theo khoá trong `stats` (xem heroStat trong CustomerSite).
 export const heroSlides = [
   {
     id: 'hero-build-pc',
-    eyebrow: 'BinhTinhStore Signature',
-    title: 'Build PC theo nhu cầu, tối ưu hiệu năng và ngân sách',
+    eyebrow: 'Build PC',
+    title: 'Build PC theo nhu cầu, kiểm tra tương thích trước khi mua',
     description:
-      'Tặng combo vệ sinh máy, hỗ trợ lắp đặt miễn phí và tư vấn cấu hình theo game, đồ hoạ hoặc AI.',
-    cta: 'Khám phá dàn PC',
-    secondaryCta: 'Nhận tư vấn nhanh',
+      'Chọn linh kiện hoặc để hệ thống gợi ý theo phần mềm bạn dùng. Socket, loại RAM, công suất nguồn và kích thước case được kiểm tra tự động.',
+    cta: 'Mở Build PC',
+    secondaryCta: 'Đặt kỹ thuật viên lắp tại nhà',
+    secondaryPath: '/dich-vu/tai-nha',
     accent: 'from-sky-500 via-cyan-500 to-emerald-400',
-    stats: [
-      { value: '2 giờ', label: 'giao nội thành' },
-      { value: '0%', label: 'trả góp tối đa' },
-      { value: '36 tháng', label: 'bảo hành mở rộng' },
-    ],
-    badges: ['Tối ưu cho gaming', 'Render mượt', 'Nâng cấp dễ dàng'],
+    stats: ['quoteHold', 'delivery', 'returns'],
+    badges: ['Kiểm tra tương thích', 'Gợi ý theo phần mềm', 'Tư vấn nâng cấp'],
   },
   {
     id: 'hero-laptop-gaming',
-    eyebrow: 'RTX 50 Series Ready',
-    title: 'Laptop gaming thế hệ mới cho FPS ổn định và nhiệt độ mát hơn',
+    eyebrow: 'Laptop gaming',
+    title: 'Laptop gaming: xem lịch sử giá trước khi chốt',
     description:
-      'Loạt máy Lenovo, ASUS, Acer và MSI với màn 165Hz–240Hz, pin lớn và tản nhiệt tối ưu cho stream.',
+      'Mỗi sản phẩm có biểu đồ giá 180 ngày. Bấm theo dõi giá để được báo khi giá giảm hoặc có Hot Deal.',
     cta: 'Xem laptop gaming',
-    secondaryCta: 'So sánh cấu hình',
+    secondaryCta: 'Xem Hot Deal',
+    secondaryPath: '#hot-deal',
     accent: 'from-fuchsia-600 via-rose-500 to-orange-400',
-    stats: [
-      { value: '240Hz', label: 'màn hình nhanh' },
-      { value: 'RTX 5070', label: 'GPU phổ biến' },
-      { value: '24GB', label: 'RAM tối đa demo' },
-    ],
-    badges: ['FPS cao', 'Màn đẹp', 'Tặng balo'],
+    stats: ['freeShip', 'payment', 'returns'],
+    badges: ['Lịch sử giá', 'Báo khi giảm giá', 'Đánh giá từ người đã mua'],
   },
   {
     id: 'hero-office-setup',
     eyebrow: 'Setup làm việc',
     title: 'Góc làm việc gọn gàng với màn hình, phím cơ và phụ kiện đồng bộ',
     description:
-      'Gợi ý bộ sản phẩm cho dân văn phòng, lập trình viên và content creator với phong cách tối giản.',
-    cta: 'Xem trọn bộ setup',
-    secondaryCta: 'Nhận mã giảm giá',
+      'Màn hình, bàn phím, chuột và phụ kiện cho văn phòng, lập trình và sáng tạo nội dung. Máy cũ có thể thu lại để đổi máy mới.',
+    cta: 'Xem laptop văn phòng',
+    secondaryCta: 'Ước tính giá thu cũ',
+    secondaryPath: '/dich-vu/thu-cu',
     accent: 'from-slate-800 via-indigo-700 to-sky-500',
-    stats: [
-      { value: 'Free ship', label: 'đơn từ 3 triệu' },
-      { value: 'COD', label: 'hoặc VNPay' },
-      { value: '1-1', label: 'đổi mới nếu lỗi' },
-    ],
-    badges: ['Minimal', 'Ergonomic', 'Học tập hiệu quả'],
+    stats: ['freeShip', 'payment', 'warranty'],
+    badges: ['Văn phòng', 'Lập trình', 'Sáng tạo nội dung'],
   },
 ]
 
+// Thẻ dịch vụ trang chủ: mỗi thẻ mở một tính năng có thật (không phải khuyến mãi tự đặt).
 export const promoCards = [
   {
-    id: 'pc-monitor',
-    title: 'Mua PC tặng gói cân màu màn hình',
-    subtitle: 'Hỗ trợ kỹ thuật tại nhà',
+    id: 'home-service',
+    title: 'Kỹ thuật viên tới nhà',
+    subtitle: 'Lắp ráp PC, vệ sinh máy, cài đặt. Chọn khung giờ còn trống và theo dõi lịch hẹn.',
     accent: 'from-red-500 via-rose-500 to-orange-400',
-    icon: 'monitor',
+    icon: 'wrench',
+    path: '/dich-vu/tai-nha',
   },
   {
-    id: 'keyboard-deal',
-    title: 'Phím cơ giảm tới 26%',
-    subtitle: 'Nhiều switch cho game thủ và coder',
+    id: 'trade-in',
+    title: 'Thu cũ đổi mới',
+    subtitle: 'Xem giá ước tính ngay; giá chốt sau khi kiểm tra máy.',
     accent: 'from-orange-500 via-amber-500 to-yellow-400',
-    icon: 'keyboard',
+    icon: 'laptop',
+    path: '/dich-vu/thu-cu',
   },
   {
-    id: 'chair-deal',
-    title: 'Ghế bàn công thái học ưu đãi tới 40%',
-    subtitle: 'Đồng bộ góc làm việc đẹp hơn',
+    id: 'build-pc',
+    title: 'Build PC kiểm tra tương thích',
+    subtitle: 'Báo giá chia sẻ được, giữ giá có thời hạn',
     accent: 'from-violet-600 via-fuchsia-500 to-pink-400',
-    icon: 'chair',
+    icon: 'cpu',
+    path: '/build-pc',
   },
   {
-    id: 'mouse-deal',
-    title: 'Chuột gaming chỉ từ 399.000đ',
-    subtitle: 'Tối ưu cảm biến và độ bền switch',
+    id: 'warranty',
+    title: 'Tra cứu bảo hành',
+    subtitle: 'Theo số serial; gửi yêu cầu bảo hành online',
     accent: 'from-slate-900 via-slate-700 to-slate-500',
-    icon: 'mouse',
+    icon: 'shield',
+    path: '/bao-hanh',
   },
 ]
 
@@ -155,23 +153,25 @@ export const featuredTiles = [
   },
 ]
 
+// Cam kết hiển thị ở trang chủ. Phần mô tả có số (free ship, đổi trả) được thay bằng số trong
+// /store/info khi tải xong; nội dung dưới đây là bản dự phòng khớp cấu hình mặc định.
 export const trustHighlights = [
   {
     id: 'shipping',
     title: 'Miễn phí giao hàng',
-    description: 'Nội thành với đơn từ 2 triệu',
+    description: 'Đơn từ 3.000.000đ',
     icon: 'truck',
   },
   {
-    id: 'installment',
-    title: 'Trả góp 0%',
-    description: 'Hỗ trợ online, duyệt nhanh',
-    icon: 'bolt',
+    id: 'returns',
+    title: 'Đổi trả 7 ngày',
+    description: 'Theo chính sách đổi trả',
+    icon: 'package',
   },
   {
-    id: 'auth',
-    title: 'Hàng chính hãng',
-    description: 'Hoá đơn và tem đầy đủ',
+    id: 'warranty',
+    title: 'Bảo hành theo serial',
+    description: 'Tra cứu và gửi yêu cầu online',
     icon: 'shield',
   },
   {
@@ -181,13 +181,6 @@ export const trustHighlights = [
     icon: 'message',
   },
 ]
-
-// Không dùng đồng hồ đếm ngược hay % giảm giá cố định: mức giảm hiển thị
-// được tính từ giá gốc thật của sản phẩm (xem getMaxDiscountPercent trong CustomerSite).
-export const flashDeal = {
-  title: 'Đang giảm giá',
-  subtitle: 'Chuột, phím cơ và màn hình gaming đang có giá tốt',
-}
 
 const products = [
   {
@@ -775,105 +768,10 @@ export const productSections = [
   },
 ]
 
-export const adminSummary = [
-  {
-    id: 'revenue',
-    label: 'Doanh thu hôm nay',
-    value: '128.4 triệu',
-    delta: '+18.2%',
-    tone: 'emerald',
-  },
-  {
-    id: 'orders',
-    label: 'Đơn đang xử lý',
-    value: '42',
-    delta: '+6 đơn',
-    tone: 'sky',
-  },
-  {
-    id: 'conversion',
-    label: 'Tỷ lệ chuyển đổi',
-    value: '4.7%',
-    delta: '+0.8%',
-    tone: 'violet',
-  },
-  {
-    id: 'inventory',
-    label: 'Sản phẩm sắp hết',
-    value: '9',
-    delta: 'Cần nhập thêm',
-    tone: 'rose',
-  },
-]
-
-export const adminOrders = [
-  {
-    id: 'DH-240401',
-    customer: 'Nguyễn Minh Khoa',
-    item: 'PC BinhTinh Ryzen 7 / RTX 5070 Ti',
-    total: 35990000,
-    status: 'Đang đóng gói',
-    channel: 'Website',
-  },
-  {
-    id: 'DH-240402',
-    customer: 'Lê Gia Hân',
-    item: 'Laptop Lenovo Legion 5i 16IRX10',
-    total: 52990000,
-    status: 'Chờ thanh toán',
-    channel: 'Zalo',
-  },
-  {
-    id: 'DH-240403',
-    customer: 'Phạm Đức Anh',
-    item: 'Màn hình ViewSonic VA2432-H',
-    total: 1990000,
-    status: 'Đang giao',
-    channel: 'Website',
-  },
-  {
-    id: 'DH-240404',
-    customer: 'Võ Trà My',
-    item: 'Ghế công thái học ErgoFlex Pro',
-    total: 6490000,
-    status: 'Hoàn tất',
-    channel: 'Showroom',
-  },
-]
-
-export const adminInventoryAlerts = [
-  {
-    id: 'AL-1',
-    name: 'PC BinhTinh AI Workstation / RTX 5080 Pro',
-    remaining: 2,
-    recommendation: 'Ưu tiên nhập thêm GPU và PSU 1000W',
-  },
-  {
-    id: 'AL-2',
-    name: 'Laptop gaming MSI Stealth OLED 16 AI Studio',
-    remaining: 3,
-    recommendation: 'Giữ tồn kho cho nhóm khách cao cấp',
-  },
-  {
-    id: 'AL-3',
-    name: 'Màn hình LG UltraGear 27GS95QE OLED 240Hz',
-    remaining: 3,
-    recommendation: 'Đẩy pre-order để chốt tồn kho an toàn',
-  },
-]
-
-export const adminCategoryPerformance = [
-  { label: 'PC Gaming', value: 82 },
-  { label: 'Laptop Gaming', value: 74 },
-  { label: 'Laptop Office', value: 56 },
-  { label: 'Phụ kiện', value: 48 },
-  { label: 'Màn hình', value: 62 },
-]
-
 export const footerColumns = [
   {
     title: 'Về BinhTinhStore',
-    links: ['Giới thiệu', 'Tuyển dụng', 'Hệ thống showroom', 'Tin công nghệ'],
+    links: ['Giới thiệu', 'Dịch vụ sau bán', 'Định giá máy cũ'],
   },
   {
     title: 'Hỗ trợ khách hàng',

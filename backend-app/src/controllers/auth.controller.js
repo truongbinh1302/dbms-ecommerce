@@ -2,6 +2,7 @@ const { success, error } = require('../utils/response');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 const { getPool, sql } = require('../config/db.sql');
+const { setRefreshCookie, clearRefreshCookie, readRefreshCookie } = require('../utils/authCookie');
 
 const DEMO_ADMIN_EMAIL = 'admin@btstore.local';
 const DEMO_ADMIN_PASSWORD = 'password';
@@ -99,10 +100,10 @@ const register = async (req, res) => {
       .input('refreshToken', sql.NVarChar, refreshToken)
       .query(`UPDATE Users SET RefreshToken = @refreshToken WHERE UserID = @userId`);
 
+    setRefreshCookie(res, refreshToken);
     return success(res, {
       user: toUserResponse(user),
       accessToken,
-      refreshToken
     }, 'Register successful', 201);
 
   } catch (err) {
@@ -148,10 +149,10 @@ const login = async (req, res) => {
       .input('refreshToken', sql.NVarChar, refreshToken)
       .query(`UPDATE Users SET RefreshToken = @refreshToken WHERE UserID = @userId`);
 
+    setRefreshCookie(res, refreshToken);
     return success(res, {
       user: toUserResponse(user),
       accessToken,
-      refreshToken
     }, 'Login successful');
 
   } catch (err) {
@@ -159,8 +160,10 @@ const login = async (req, res) => {
   }
 };
 
+// Refresh token lấy từ cookie httpOnly. Phiên đăng nhập từ trước khi chuyển sang cookie còn giữ token trong
+// trình duyệt thì gửi trong body một lần; server đổi sang cookie và không trả token trong body nữa.
 const refresh = async (req, res) => {
-  const { refreshToken } = req.body;
+  const refreshToken = readRefreshCookie(req) || (req.body && req.body.refreshToken) || null;
 
   if (!refreshToken) {
     return error(res, 'Refresh token required', 401);
@@ -180,6 +183,7 @@ const refresh = async (req, res) => {
 
     const user = result.recordset[0];
     if (!user) {
+      clearRefreshCookie(res);
       return error(res, 'Invalid refresh token', 401);
     }
 
@@ -192,9 +196,11 @@ const refresh = async (req, res) => {
       .input('newRefreshToken', sql.NVarChar, newRefreshToken)
       .query(`UPDATE Users SET RefreshToken = @newRefreshToken WHERE UserID = @userId`);
 
-    return success(res, { accessToken: newAccessToken, refreshToken: newRefreshToken });
+    setRefreshCookie(res, newRefreshToken);
+    return success(res, { accessToken: newAccessToken });
 
   } catch (err) {
+    clearRefreshCookie(res);
     return error(res, 'Invalid or expired refresh token', 401);
   }
 };
@@ -207,6 +213,7 @@ const logout = async (req, res) => {
       .input('userId', sql.Int, userId)
       .query(`UPDATE Users SET RefreshToken = NULL WHERE UserID = @userId`);
 
+    clearRefreshCookie(res);
     return success(res, null, 'Logged out successfully');
   } catch (err) {
     return error(res, err.message, 500);

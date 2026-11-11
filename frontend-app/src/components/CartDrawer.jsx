@@ -1,6 +1,7 @@
 import StoreGlyph from './StoreGlyph'
 import PriceSummary, { VoucherField } from './PriceSummary'
 import { formatCurrency } from '../utils/format'
+import useDialog from '../hooks/useDialog'
 
 export default function CartDrawer({
   open,
@@ -18,6 +19,7 @@ export default function CartDrawer({
   onOpenProduct,
   onClearPriceLock,
 }) {
+  const dialogRef = useDialog(open, onClose)
   return (
     <>
       <div
@@ -27,6 +29,9 @@ export default function CartDrawer({
 
       {/* Khi đóng, giỏ chỉ trượt ra ngoài màn hình: inert để bàn phím và trình đọc màn hình bỏ qua nó. */}
       <aside
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
         aria-label="Giỏ hàng"
         aria-hidden={!open}
         inert={!open}
@@ -34,12 +39,13 @@ export default function CartDrawer({
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-500">Giỏ hàng</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Giỏ hàng</p>
             <h3 className="mt-1 text-2xl font-black text-slate-900">{items.length} sản phẩm đang chọn</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
+            aria-label="Đóng giỏ hàng"
             className="flex size-11 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-red-200 hover:text-red-600"
           >
             <StoreGlyph name="x" className="size-5" />
@@ -80,7 +86,7 @@ export default function CartDrawer({
                         <button
                           type="button"
                           onClick={() => onRemove(item.id)}
-                          className="text-sm font-semibold text-slate-400 transition hover:text-red-600"
+                          className="text-sm font-semibold text-slate-600 transition hover:text-red-600"
                         >
                           Xoá
                         </button>
@@ -92,6 +98,7 @@ export default function CartDrawer({
                           <button
                             type="button"
                             onClick={() => onDecrease(item.id)}
+                            aria-label={`Giảm số lượng ${item.name}`}
                             className="flex size-8 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm"
                           >
                             <StoreGlyph name="minus" className="size-4" />
@@ -100,6 +107,7 @@ export default function CartDrawer({
                           <button
                             type="button"
                             onClick={() => onIncrease(item.id)}
+                            aria-label={`Tăng số lượng ${item.name}`}
                             className="flex size-8 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm"
                           >
                             <StoreGlyph name="plus" className="size-4" />
