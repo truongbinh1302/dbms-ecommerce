@@ -66,6 +66,13 @@ features and DBMS demonstrations.
   VNPay result, admin update, cancellation, payment expiry) is recorded with
   who made it, in the same transaction as the change; the order page shows
   the steps reached and the history, the admin drawer shows notes too.
+- Data integrity checks for the admin (read-only): stock equals the stock
+  ledger, order totals and subtotals add up, voucher use counts match their
+  orders, and the last recorded status matches each order.
+- Admin order list filtered by date (Vietnam days) and downloadable as CSV
+  (Excel-safe: cells that would run as formulas are neutralised).
+- Component product pages show their Build PC specs, whether the part fits
+  the parts already picked in Build PC, and add it to that build.
 - Favorites (`#/yeu-thich`) with current price and stock, recently viewed
   products, and a page that recovers by itself when a new version is deployed
   while a tab is open (no blank screen).
@@ -143,7 +150,7 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/san-pham/:id` | Product detail (specs, stock, reviews from MongoDB) |
 | `#/tim-kiem?q=` | Search results with sorting and pagination |
 | `#/thanh-toan` | Checkout: shipping address, payment method, voucher |
-| `#/don-hang` | Order history |
+| `#/don-hang?trang-thai=` | Order history with tabs: all, being processed (`dang-xu-ly`), shipping (`dang-giao`), delivered (`da-giao`), cancelled (`da-huy`), each with a count |
 | `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, carrier and tracking code, warranty serials, return requests |
 | `#/build-pc` | Build PC: pick parts, compatibility check, suggested builds, upgrade advice, save a quote |
 | `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |

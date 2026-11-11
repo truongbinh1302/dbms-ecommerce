@@ -875,8 +875,11 @@ async function createOrder(userId, orderData) {
 
 **Query:**
 ```http
-/orders/my-orders?page=1&limit=10&status=pending
+/orders/my-orders?page=1&limit=10&status=pending,pending_payment,confirmed,processing
 ```
+
+`status` nhận một hoặc nhiều trạng thái cách nhau bằng dấu phẩy (trạng thái lạ → `400`). `counts` là số đơn của khách
+theo từng trạng thái (không phụ thuộc bộ lọc), dùng cho các tab ở trang "Đơn hàng của tôi".
 
 **Response 200:**
 ```json
@@ -893,6 +896,7 @@ async function createOrder(userId, orderData) {
         "createdAt": "2026-04-04T10:30:00Z"
       }
     ],
+    "counts": { "pending": 1, "delivered": 3, "cancelled": 1 },
     "pagination": { "page": 1, "limit": 10, "totalItems": 5, "totalPages": 1 }
   }
 }
@@ -1572,6 +1576,31 @@ Tất cả cần `Authorization: Bearer <admin token>`.
 
 Số liệu tổng quan: `summary` (tổng khách, sản phẩm, đơn, doanh thu đơn đã giao, số sản phẩm tồn ≤ 5),
 `revenueByCategory`, `topProducts` (theo đơn `delivered`/`completed`).
+
+### GET `/analytics/integrity`
+
+Kiểm tra toàn vẹn dữ liệu, chỉ đọc. Mỗi kiểm tra là một bất biến mà code giữ trong transaction; dòng sai nghĩa là
+dữ liệu bị sửa thẳng trong DB hoặc có lỗi cần tìm.
+
+| `key` | Bất biến |
+| --- | --- |
+| `stock_ledger` | `Products.Stock` = tổng `StockMovements.Change` của sản phẩm |
+| `order_total` | `Total = Subtotal − Discount + ShippingFee` |
+| `order_lines` | `Subtotal` = tổng `Quantity × UnitPrice` của đơn |
+| `voucher_usage` | `Vouchers.UsedCount` = số dòng `VoucherUsages` của mã |
+| `status_history` | trạng thái cuối trong `OrderStatusHistory` = `Orders.Status` |
+
+```json
+{
+  "checkedAt": "2026-11-12T04:54:00Z", "durationMs": 42, "ok": false,
+  "checks": [
+    { "key": "stock_ledger", "label": "Tồn kho khớp sổ kho", "rule": "…", "ok": false, "problems": 1,
+      "sample": [{ "id": 51, "name": "RAM 16GB", "stock": 7, "ledger": 5 }] }
+  ]
+}
+```
+
+`sample` có tối đa 20 dòng mới nhất (ID lớn trước).
 
 ### GET `/analytics/daily?from=YYYY-MM-DD&to=YYYY-MM-DD`
 
