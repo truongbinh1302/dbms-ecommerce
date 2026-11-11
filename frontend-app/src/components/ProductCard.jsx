@@ -59,6 +59,8 @@ export function ProductVisual({ product, className = '' }) {
             <img
               src={productImage}
               alt={product.name}
+              loading="lazy"
+              decoding="async"
               className="max-w-28 max-h-28 object-contain rounded-[2rem] shadow-2xl"
             />
           ) : (
@@ -97,14 +99,11 @@ export default function ProductCard({
       onClick={() => onView(product)}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
-          <span>{product.badge}</span>
-          {product.featured ? (
-            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-red-600">
-              Best seller
-            </span>
-          ) : null}
-        </div>
+        {product.badge ? (
+          <div className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
+            <span>{product.badge}</span>
+          </div>
+        ) : <span />}
 
         <button
           type="button"

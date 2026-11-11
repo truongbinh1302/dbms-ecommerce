@@ -44,8 +44,8 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
 
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-3 text-sm">
-                <span className="rounded-full bg-red-50 px-3 py-1.5 font-bold text-red-600">{product.badge}</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 font-semibold text-slate-600">{product.brand}</span>
+                {product.badge ? <span className="rounded-full bg-red-50 px-3 py-1.5 font-bold text-red-700">{product.badge}</span> : null}
+                {product.brand ? <span className="rounded-full bg-slate-100 px-3 py-1.5 font-semibold text-slate-600">{product.brand}</span> : null}
                 {product.shipping ? <span className="rounded-full bg-slate-100 px-3 py-1.5 font-semibold text-slate-600">{product.shipping}</span> : null}
               </div>
 
