@@ -991,7 +991,8 @@ Danh sách đơn cho admin, mới nhất trước.
 - `status` — một hoặc nhiều trạng thái, cách nhau bằng dấu phẩy (`pending,pending_payment,confirmed,processing` là nhóm "Cần xử lý" trên dashboard). Trạng thái lạ → `400`.
 - `q` — tìm theo mã đơn (`DH000123`), số đơn, tên/email khách, tên hoặc số điện thoại người nhận. Tên tìm không phân biệt dấu (`khach hoa` khớp "Khách Hoá").
 - `payment` — lọc theo trạng thái thanh toán (`refund_required`, `refunded`, `paid`, …). Response có thêm `refundRequired`: số đơn đang chờ hoàn tiền.
-- `page`, `limit` (tối đa 100).
+- `from`, `to` — khoảng ngày đặt hàng `YYYY-MM-DD` theo lịch Việt Nam (gồm cả hai đầu; đổi sang giờ của máy chủ SQL như báo cáo ngày). Sai định dạng hoặc `from` sau `to` → `400`.
+- `page`, `limit` (tối đa 100). Dashboard tải CSV bằng cách đọc lần lượt các trang 100 đơn (tối đa 5.000 đơn).
 
 **Response 200:** `data.items[]` gồm `id`, `orderCode`, `status`, `paymentMethod`, `paymentStatus`, `total`, `createdAt`, `customerName`, `customerEmail`, `recipientName`, `recipientPhone`, `province`, `itemCount`, `itemsText`; kèm `data.pagination { page, limit, totalItems, totalPages }`.
 
@@ -1007,6 +1008,7 @@ Admin cập nhật trạng thái đơn hàng. Không ghi đè ghi chú của kh�
 
 - Lần đầu sang `shipped` ghi `ShippedAt`; sang `delivered` ghi `DeliveredAt` — mốc tính hạn đổi trả. Chuyển đơn ra khỏi `delivered` thì xoá `DeliveredAt`.
 - `422 has_returns` — đơn đã có yêu cầu đổi trả (chưa bị từ chối/huỷ) thì giữ trạng thái `delivered`.
+- Đổi trạng thái và ghi `OrderStatusHistory` (người đổi `admin`, ghi chú `note` nếu có) trong một transaction; gửi lại cùng trạng thái không ghi thêm dòng.
 
 `GET /orders/:id` trả thêm `shippingCarrier`, `trackingCode`, `shippedAt`, `deliveredAt`, `returns[]` và `returnWindow { days, open, deadline, items[{ productId, remaining }] }`.
 
