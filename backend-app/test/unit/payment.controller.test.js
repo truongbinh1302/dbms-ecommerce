@@ -93,7 +93,7 @@ test('trang return ở production chỉ đọc trạng thái, không ghi DB', as
   fakeOrderService.getOrderPaymentStatus = async () => ({ id: 5, paymentStatus: 'pending', orderStatus: 'pending_payment' });
 
   const res = createRes();
-  await controller.vnpayReturn({ query: { vnp_TxnRef: '5_1', vnp_ResponseCode: '00' } }, res);
+  await controller.vnpayReturn({ query: { vnp_TxnRef: '5_1', vnp_ResponseCode: '00' }, headers: { accept: 'application/json' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.data.paymentStatus, 'pending');
 });
@@ -109,7 +109,7 @@ test('trang return ở dev ghi nhận kết quả bằng cùng logic với IPN',
   fakeOrderService.getOrderPaymentStatus = async () => ({ id: 5, paymentStatus: 'paid', orderStatus: 'confirmed' });
 
   const res = createRes();
-  await controller.vnpayReturn({ query: { vnp_TxnRef: '5_1', vnp_ResponseCode: '00' } }, res);
+  await controller.vnpayReturn({ query: { vnp_TxnRef: '5_1', vnp_ResponseCode: '00' }, headers: { accept: 'application/json' } }, res);
   assert.equal(called, true);
   assert.equal(res.body.data.orderStatus, 'confirmed');
 });
@@ -138,4 +138,39 @@ test('link VNPay không sống lâu hơn thời hạn thanh toán còn lại', a
   await controller.createVNPayLink({ body: { orderId: 3 }, user: { id: 1 }, ip: '127.0.0.1' }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(usedExpire, 5);
+});
+
+test('trình duyệt quay về từ VNPay được chuyển tới trang đơn hàng trên frontend', async () => {
+  config.vnpay.updateOnReturn = true;
+  config.clientUrl = 'http://localhost:5173';
+  let verified = null;
+  fakeVnpay.verifySecureHash = (payload) => {
+    verified = payload;
+    return true;
+  };
+  fakeOrderService.applyVNPayResult = async () => ({ code: '00', orderId: 9 });
+  fakeOrderService.getOrderPaymentStatus = async () => ({ id: 9, paymentStatus: 'paid', orderStatus: 'confirmed' });
+
+  let redirectedTo = null;
+  const res = createRes();
+  res.redirect = (status, url) => {
+    redirectedTo = { status, url };
+  };
+  await controller.vnpayReturn({ query: { vnp_TxnRef: '9_1', vnp_ResponseCode: '00', utm: 'x' }, headers: {} }, res);
+
+  assert.deepEqual(redirectedTo, { status: 302, url: 'http://localhost:5173/#/don-hang/9?ket-qua=00' });
+  // Chỉ tham số vnp_* được đưa vào kiểm tra chữ ký.
+  assert.deepEqual(Object.keys(verified).sort(), ['vnp_ResponseCode', 'vnp_TxnRef']);
+});
+
+test('chữ ký sai ở trang return: chuyển về danh sách đơn kèm báo lỗi', async () => {
+  config.clientUrl = 'http://localhost:5173';
+  fakeVnpay.verifySecureHash = () => false;
+  let redirectedTo = null;
+  const res = createRes();
+  res.redirect = (status, url) => {
+    redirectedTo = url;
+  };
+  await controller.vnpayReturn({ query: { vnp_TxnRef: '9_1' }, headers: {} }, res);
+  assert.equal(redirectedTo, 'http://localhost:5173/#/don-hang?ket-qua=chu-ky-sai');
 });

@@ -14,6 +14,8 @@ USE ecommerce_dbms;
 GO
 
 IF OBJECT_ID(N'dbo.Customers', N'V') IS NOT NULL DROP VIEW dbo.Customers;
+-- CartItems (migration 006) tham chiếu Users/Products nên phải xoá trước.
+IF OBJECT_ID(N'dbo.CartItems', N'U') IS NOT NULL DROP TABLE dbo.CartItems;
 IF OBJECT_ID(N'dbo.VoucherUsages', N'U') IS NOT NULL DROP TABLE dbo.VoucherUsages;
 IF OBJECT_ID(N'dbo.OrderItems', N'U') IS NOT NULL DROP TABLE dbo.OrderItems;
 IF OBJECT_ID(N'dbo.Orders', N'U') IS NOT NULL DROP TABLE dbo.Orders;

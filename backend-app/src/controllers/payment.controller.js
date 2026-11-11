@@ -15,6 +15,11 @@ const IPN_MESSAGES = {
 
 const ipnResponse = (res, code) => res.status(200).json({ RspCode: code, Message: IPN_MESSAGES[code] });
 
+// Chỉ các tham số vnp_* nằm trong chữ ký của VNPay; bỏ tham số khác (ví dụ ?format=json) trước khi kiểm tra.
+const pickVNPayParams = (source = {}) => Object.fromEntries(
+  Object.entries(source).filter(([key]) => key.startsWith('vnp_')),
+);
+
 const readVNPayResult = (payload) => ({
   txnRef: payload.vnp_TxnRef,
   responseCode: payload.vnp_ResponseCode,
@@ -76,16 +81,29 @@ const createVNPayLink = async (req, res) => {
 
 /**
  * Trang khách được VNPay chuyển về sau khi thanh toán.
- * Production: chỉ hiển thị trạng thái đã lưu (IPN mới là nguồn đáng tin).
+ * Production: chỉ đọc trạng thái đã lưu (IPN mới là nguồn đáng tin).
  * Dev (VNPAY_UPDATE_ON_RETURN=true): ghi nhận kết quả bằng đúng logic của IPN,
  * vì VNPay sandbox không gọi IPN về localhost được.
+ * Trình duyệt được chuyển về trang đơn hàng trên frontend; gọi kèm ?format=json
+ * hoặc header Accept: application/json thì nhận JSON như trước.
  */
 const vnpayReturn = async (req, res) => {
+  const wantsJson = req.query.format === 'json'
+    || String((req.headers && req.headers.accept) || '').includes('application/json');
+
+  const respond = ({ status = 200, message, data = null, orderId = null, result }) => {
+    if (wantsJson) {
+      return status === 200 ? success(res, data, message) : error(res, message, status);
+    }
+    const target = orderId ? `/don-hang/${orderId}` : '/don-hang';
+    return res.redirect(302, `${config.clientUrl}/#${target}?ket-qua=${encodeURIComponent(result)}`);
+  };
+
   try {
-    const payload = { ...req.query };
+    const payload = pickVNPayParams(req.query);
 
     if (!vnpayService.verifySecureHash(payload)) {
-      return error(res, 'Invalid VNPay signature', 400);
+      return respond({ status: 400, message: 'Invalid VNPay signature', result: 'chu-ky-sai' });
     }
 
     const vnpResult = readVNPayResult(payload);
@@ -93,10 +111,15 @@ const vnpayReturn = async (req, res) => {
     if (config.vnpay.updateOnReturn) {
       applied = await orderService.applyVNPayResult(vnpResult);
       if (applied.code === '01') {
-        return error(res, 'Order not found for VNPay transaction', 404);
+        return respond({ status: 404, message: 'Order not found for VNPay transaction', result: 'khong-tim-thay' });
       }
       if (applied.code === '04') {
-        return error(res, 'Payment amount does not match order total', 400);
+        return respond({
+          status: 400,
+          message: 'Payment amount does not match order total',
+          orderId: applied.orderId,
+          result: 'sai-so-tien',
+        });
       }
     }
 
@@ -104,27 +127,29 @@ const vnpayReturn = async (req, res) => {
     const order = orderId ? await orderService.getOrderPaymentStatus(orderId) : null;
 
     if (!order) {
-      return error(res, 'Order not found for VNPay transaction', 404);
+      return respond({ status: 404, message: 'Order not found for VNPay transaction', result: 'khong-tim-thay' });
     }
 
-    return success(
-      res,
-      {
+    return respond({
+      message: 'VNPay return callback processed successfully',
+      data: {
         orderId: order.id,
         paymentStatus: order.paymentStatus,
         orderStatus: order.orderStatus,
         vnpResponseCode: vnpResult.responseCode,
       },
-      'VNPay return callback processed successfully'
-    );
+      orderId: order.id,
+      result: vnpResult.responseCode || '',
+    });
   } catch (err) {
-    return error(res, err.message);
+    if (wantsJson) return error(res, err.message);
+    return res.redirect(302, `${config.clientUrl}/#/don-hang?ket-qua=loi`);
   }
 };
 
 const vnpayIpn = async (req, res) => {
   try {
-    const payload = { ...req.body, ...req.query };
+    const payload = pickVNPayParams({ ...req.body, ...req.query });
 
     if (!vnpayService.verifySecureHash(payload)) {
       return ipnResponse(res, '97');
