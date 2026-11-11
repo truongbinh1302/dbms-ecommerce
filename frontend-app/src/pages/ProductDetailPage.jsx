@@ -9,6 +9,7 @@ import ReviewForm from '../components/ReviewForm'
 import ProductQuestions from '../components/ProductQuestions'
 import PriceWatchButton from '../components/PriceWatchButton'
 import StockWatchButton from '../components/StockWatchButton'
+import { toggleCompare, useCompareItems } from '../hooks/useCompare'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatDateTime } from '../utils/orderLabels'
 import useCountdown, { formatClockTime, formatCountdown } from '../hooks/useCountdown'
@@ -35,6 +36,25 @@ function PromotionNotice({ promotion }) {
   Trang chi tiết sản phẩm: mọi thông tin (tên, thông số, giá, tồn kho) lấy từ API.
   Điểm đánh giá tính từ các review thật trong MongoDB, không dùng số Rating dựng sẵn trong seed.
 */
+// Thêm/bỏ sản phẩm khỏi danh sách so sánh (tối đa 3).
+function CompareToggle({ product, items }) {
+  const [full, setFull] = useState(false)
+  const comparing = items.some((item) => item.id === Number(product.id))
+  return (
+    <div className="mt-3 text-sm" aria-live="polite">
+      <button
+        type="button"
+        aria-pressed={comparing}
+        onClick={() => setFull(toggleCompare(product) === 'full')}
+        className={`font-bold ${comparing ? 'text-emerald-700' : 'text-slate-700 hover:text-red-600'}`}
+      >
+        {comparing ? '✓ Đang trong danh sách so sánh' : '+ Thêm vào so sánh'}
+      </button>
+      {full && !comparing ? <span className="ml-2 text-xs text-slate-600">Đã đủ 3 sản phẩm, bỏ bớt ở thanh so sánh.</span> : null}
+    </div>
+  )
+}
+
 export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, onProductLoaded, currentUser, onRequireLogin }) {
   const [state, setState] = useState({ id: null, product: null, error: '' })
   const [reviewState, setReviewState] = useState({ id: null, data: null })
@@ -82,6 +102,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
     ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
     : null
   const totalReviews = reviewState.id === productId && reviewState.data ? Number(reviewState.data.total || reviews.length) : 0
+  const compareItems = useCompareItems()
   const maxQuantity = product ? Math.max(1, Math.min(product.stock, 99)) : 1
   const safeQuantity = Math.min(quantity, maxQuantity)
 
@@ -180,6 +201,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
               Mua ngay
             </button>
           </div>
+          <CompareToggle product={product} items={compareItems} />
         </div>
       </section>
 

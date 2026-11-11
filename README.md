@@ -137,6 +137,7 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties, warranty claims and repair history |
 | `#/dich-vu/:tab` | After-sales services: technician at home (`tai-nha`), trade-in (`thu-cu`), my requests (`cua-toi`) |
 | `#/tai-khoan` | Account: change password, download personal data, delete account |
+| `#/so-sanh?ids=1,2,3` | Compare up to 3 products side by side; parts of the same type get their Build PC specs (VRAM, socket, length…) |
 | `#/chinh-sach/:slug` | Purchase terms, shipping, payment, returns, warranty, complaints, seller information |
 | `#/chinh-sach-bao-mat` | Privacy policy |
 

@@ -11,9 +11,6 @@ import StoreGlyph from '../components/StoreGlyph'
 import AuthModal from '../components/AuthModal'
 import { clearAuthSession, fetchCart, fetchProducts, fetchProductsByIds, fetchSearchSuggestions, logout, normalizeUser, quoteCart, saveCart } from '../api/client'
 import useHashRoute, { hrefFor, navigate } from '../hooks/useHashRoute'
-import CheckoutPage from './CheckoutPage'
-import OrderDetailPage from './OrderDetailPage'
-import OrdersPage from './OrdersPage'
 import ProductDetailPage from './ProductDetailPage'
 import SearchPage from './SearchPage'
 import {
@@ -29,6 +26,7 @@ import {
 import { classNames, formatCurrency } from '../utils/format'
 import useStoreInfo from '../hooks/useStoreInfo'
 import useDocumentTitle from '../hooks/useDocumentTitle'
+import CompareBar from '../components/CompareBar'
 import { mapApiProductToStoreProduct, normalizeText } from '../utils/productMapping'
 
 const CART_STORAGE_KEY = 'binhtinhstore-cart'
@@ -42,6 +40,10 @@ const PrivacyPolicyPage = lazy(() => import('./PrivacyPolicyPage'))
 const PolicyPage = lazy(() => import('./PolicyPage'))
 const QuotePage = lazy(() => import('./QuotePage'))
 const WarrantyPage = lazy(() => import('./WarrantyPage'))
+const ComparePage = lazy(() => import('./ComparePage'))
+const CheckoutPage = lazy(() => import('./CheckoutPage'))
+const OrderDetailPage = lazy(() => import('./OrderDetailPage'))
+const OrdersPage = lazy(() => import('./OrdersPage'))
 const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
 // Nút nhanh dưới header có trang riêng.
 const QUICK_LINK_ROUTES = {
@@ -730,6 +732,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     'tai-khoan': 'Tài khoản của tôi',
     'chinh-sach-bao-mat': 'Chính sách bảo mật',
     'chinh-sach': 'Chính sách',
+    'so-sanh': 'So sánh sản phẩm',
   }
   useDocumentTitle(routeSection === 'san-pham' ? null : SECTION_TITLES[routeSection] || '')
 
@@ -812,6 +815,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     )
   } else if (routeSection === 'tai-khoan') {
     routeContent = <AccountPage currentUser={currentUser} onRequireLogin={requireLogin} onAccountDeleted={handleAccountDeleted} />
+  } else if (routeSection === 'so-sanh') {
+    routeContent = <ComparePage ids={route.query.get('ids') || ''} onAddToCart={addToCart} />
   } else if (routeSection === 'chinh-sach-bao-mat') {
     routeContent = <PrivacyPolicyPage />
   } else if (routeSection === 'chinh-sach') {
@@ -876,7 +881,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 </div>
                 <div>
                   <div className="text-xl font-black tracking-tight text-white">BinhTinhStore</div>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white">
+                  <div className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.22em] text-white">
                     Build • Laptop • Gear
                   </div>
                 </div>
@@ -884,11 +889,13 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
 
               <button
                 type="button"
-                className="hidden h-12 items-center gap-2 rounded-lg bg-white/10 px-4 text-sm font-bold text-white transition hover:bg-white/15 xl:inline-flex"
+                className="hidden h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-white/10 px-3 text-sm font-bold text-white transition hover:bg-white/15 xl:inline-flex 2xl:px-4"
+                aria-expanded={mobileCategoriesOpen}
                 onClick={() => setMobileCategoriesOpen((currentValue) => !currentValue)}
               >
                 <StoreGlyph name="menu" className="size-5" />
-                Danh mục
+                {/* 1280–1535 px: cột logo chỉ rộng 290 px nên chỉ hiện biểu tượng, chữ vẫn đọc được bằng trình đọc màn hình. */}
+                <span className="max-2xl:sr-only">Danh mục</span>
               </button>
             </div>
 
@@ -947,7 +954,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
               {/* Màn hình 1280–1535px không đủ chỗ: ẩn hotline/showroom để ô tìm kiếm không bị ép mất. */}
               <HeaderAction icon="phone" label="Hotline" value="0338446502" className="header-action-wide" />
               <HeaderAction icon="map" label="Showroom" value="0 điểm bán" className="header-action-wide" />
-              <HeaderAction icon="receipt" label="Đơn hàng" value="Tra cứu" onClick={() => navigate('/don-hang')} />
+              {/* Đã đăng nhập thì khung chào đã có nút "Đơn hàng": ẩn nút này ở màn rộng để ô tìm kiếm đủ chỗ. */}
+              <HeaderAction icon="receipt" label="Đơn hàng" value="Tra cứu" onClick={() => navigate('/don-hang')} className={currentUser ? 'header-action-wide' : ''} />
               
               {currentUser ? (
                 <div className="flex min-h-14 items-center gap-2 rounded-2xl bg-white/10 px-3 text-white">
@@ -1498,6 +1506,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
           </div>
         </div>
       </footer>
+
+      <CompareBar hidden={routeSection === 'so-sanh'} />
 
       <FloatingSupportButtons
         favoriteCount={favoriteIds.length}

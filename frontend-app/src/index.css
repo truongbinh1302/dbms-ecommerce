@@ -109,8 +109,9 @@ svg {
 }
 
 @media (min-width: 1280px) {
+  /* Cột logo và cột nút lấy đúng bề rộng nội dung; ô tìm kiếm nhận phần còn lại (không đè lên nút Danh mục). */
   .storefront-header-grid {
-    grid-template-columns: 290px 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
   }
 
@@ -134,10 +135,6 @@ svg {
 }
 
 @media (min-width: 1536px) {
-  .storefront-header-grid {
-    grid-template-columns: 310px minmax(520px, 1fr) auto;
-  }
-
   .storefront-search-slot {
     width: min(100%, 700px);
   }
