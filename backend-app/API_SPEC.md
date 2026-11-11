@@ -2095,6 +2095,7 @@ Thêm ở giai đoạn 2 (migration `007_build_pc.sql`, seed `003_seed_component
 | GET | `/builder/presets` | Nhu cầu theo phần mềm: văn phòng, lập trình web, Android, đồ hoạ 3D, AI local |
 | POST | `/builder/check` | Kiểm tra cấu hình. Body `{ items: [{ productId, quantity?, owned? }] }`; `owned: true` là linh kiện khách đã có, không tính tiền |
 | POST | `/builder/auto` | Ráp cấu hình rẻ nhất còn hàng cho một nhu cầu. Body `{ presetId }` |
+| POST | `/builder/advise` | Tư vấn từ câu mô tả. Body `{ text }` (≤ 500 ký tự). Dò nhu cầu bằng từ khoá (Docker, Android Studio, Blender, Stable Diffusion, Office…) và ngân sách ("20 triệu", "15-20tr", "25tr5", "20.000.000đ"), rồi ráp như `/builder/auto`. Trả thêm `advice { matched, budget, withinBudget, difference, notes }`. Không nhận ra nhu cầu → `preset: null` kèm `message`, không đoán. Giá luôn lấy từ kho |
 | POST | `/builder/upgrade` | Gợi ý nâng cấp. Body `{ socket?, memoryType?, psuWatts?, maxGpuLengthMm?, cpuPowerW?, gpuPowerW?, hasM2Slot? }` |
 | POST | `/builder/quotes` | Lưu báo giá giữ giá 48 giờ (đăng nhập thì gắn với tài khoản). Body `{ items, title? }` |
 | GET | `/builder/quotes/:code` | Xem báo giá: giá báo, giá hiện tại, còn hạn hay không, kết quả kiểm tra |

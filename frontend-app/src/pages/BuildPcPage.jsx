@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import PageMessage from '../components/PageMessage'
 import {
+  adviseBuild,
   autoBuild,
   checkBuild,
   createBuildQuote,
@@ -363,10 +364,31 @@ function Builder({ catalog, build, setBuild, onBuyBuild }) {
   )
 }
 
+/* Kết quả tư vấn theo mô tả: vì sao chọn nhu cầu này, so với ngân sách khách nêu. */
+function AdviceSummary({ advice, subtotal }) {
+  return (
+    <div className="mt-3 space-y-1 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700" role="status">
+      {advice.matched.length ? <p>Nhận ra từ mô tả: {advice.matched.join(', ')}.</p> : null}
+      {advice.budget ? (
+        advice.withinBudget === null ? null : advice.withinBudget ? (
+          <p className="font-semibold text-emerald-700">Vừa ngân sách {formatCurrency(advice.budget)}, còn dư {formatCurrency(advice.difference)}.</p>
+        ) : (
+          <p className="font-semibold text-amber-800">
+            Cấu hình tối thiểu hiện là {formatCurrency(subtotal)}, vượt ngân sách {formatCurrency(advice.budget)} khoảng {formatCurrency(advice.difference)}.
+          </p>
+        )
+      ) : <p>Bạn chưa nêu ngân sách; đây là cấu hình rẻ nhất đạt ngưỡng cho nhu cầu.</p>}
+      {advice.notes.map((note) => <p key={note}>{note}</p>)}
+    </div>
+  )
+}
+
 function PresetPicker({ onApplyParts }) {
   const [presets, setPresets] = useState(null)
   const [error, setError] = useState('')
   const [suggestion, setSuggestion] = useState({ id: '', busy: false, data: null, error: '' })
+  const [need, setNeed] = useState('')
+  const [advice, setAdvice] = useState({ busy: false, result: null, error: '' })
 
   useEffect(() => {
     let cancelled = false
@@ -382,7 +404,24 @@ function PresetPicker({ onApplyParts }) {
     }
   }, [])
 
+  async function handleAdvise(event) {
+    event.preventDefault()
+    setAdvice({ busy: true, result: null, error: '' })
+    try {
+      const result = await adviseBuild(need)
+      setAdvice({ busy: false, result, error: '' })
+      if (result.preset) {
+        setSuggestion({ id: result.preset.id, busy: false, data: result, error: result.parts ? '' : result.message })
+      } else {
+        setSuggestion({ id: '', busy: false, data: null, error: '' })
+      }
+    } catch (err) {
+      setAdvice({ busy: false, result: null, error: err.message || 'Không tư vấn được' })
+    }
+  }
+
   async function handlePick(presetId) {
+    setAdvice({ busy: false, result: null, error: '' })
     setSuggestion({ id: presetId, busy: true, data: null, error: '' })
     try {
       const data = await autoBuild(presetId)
@@ -403,7 +442,29 @@ function PresetPicker({ onApplyParts }) {
           Hệ thống chọn linh kiện rẻ nhất còn hàng đạt ngưỡng cửa hàng khuyến nghị cho từng nhu cầu và tương thích với nhau.
           Ngưỡng là khuyến nghị của cửa hàng, không phải yêu cầu chính thức của nhà phát triển phần mềm.
         </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <form onSubmit={handleAdvise} className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <label htmlFor="build-need" className="sr-only">Mô tả nhu cầu và ngân sách</label>
+          <input
+            id="build-need"
+            value={need}
+            onChange={(event) => setNeed(event.target.value)}
+            maxLength={500}
+            placeholder="Ví dụ: sinh viên CNTT, code web và chạy Docker, tầm 20 triệu"
+            className="min-w-0 flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-red-500"
+          />
+          <button type="submit" disabled={advice.busy || need.trim().length < 3} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white disabled:bg-slate-300">
+            {advice.busy ? 'Đang ráp...' : 'Gợi ý theo mô tả'}
+          </button>
+        </form>
+        {advice.error ? <p className="mt-2 text-sm text-red-600" role="alert">{advice.error}</p> : null}
+        {advice.result && !advice.result.preset ? (
+          <p className="mt-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">{advice.result.message}</p>
+        ) : null}
+        {advice.result?.advice?.notes?.length && !advice.result.preset ? (
+          <ul className="mt-2 space-y-1 text-sm text-slate-600">{advice.result.advice.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+        ) : null}
+        <p className="mt-4 text-sm font-semibold text-slate-700">Hoặc chọn một nhu cầu:</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {presets.map((preset) => (
             <button
               key={preset.id}
@@ -431,6 +492,7 @@ function PresetPicker({ onApplyParts }) {
             <>
               <h2 className="text-xl font-black text-slate-900">Cấu hình gợi ý: {suggestion.data.preset.name}</h2>
               <p className="mt-1 text-sm text-slate-600">{suggestion.data.preset.reason}</p>
+              {suggestion.data.advice ? <AdviceSummary advice={suggestion.data.advice} subtotal={suggestion.data.subtotal} /> : null}
               <ul className="mt-4 divide-y divide-slate-100 text-sm">
                 {suggestion.data.parts.map((part) => (
                   <li key={part.productId} className="flex justify-between gap-3 py-2">

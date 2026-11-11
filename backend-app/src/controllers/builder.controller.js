@@ -16,6 +16,7 @@ module.exports = {
   listPresets: handle(async () => builderService.listPresets(), 'Presets retrieved'),
   checkBuild: handle((req) => builderService.checkConfiguration((req.body || {}).items), 'Build checked'),
   autoBuild: handle((req) => builderService.autoBuildPreset(String((req.body || {}).presetId || '')), 'Build suggested'),
+  advise: handle((req) => builderService.adviseFromText((req.body || {}).text), 'Advice ready'),
   suggestUpgrades: handle((req) => builderService.suggestUpgrades(req.body || {}), 'Upgrade options retrieved'),
   createQuote: handle((req) => priceQuoteService.createQuote(req.user ? req.user.id : null, req.body || {}), 'Quote created', 201),
   getQuote: handle((req) => priceQuoteService.getQuote(req.params.code), 'Quote retrieved'),

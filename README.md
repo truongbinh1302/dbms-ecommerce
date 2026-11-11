@@ -19,8 +19,10 @@ features and DBMS demonstrations.
   detail pages, cancellation, reviews, vouchers, and VNPay sandbox integration.
 - Build PC with compatibility checks (socket, RAM type and slots, M.2 slots,
   form factor, GPU length, cooler height, PSU headroom), suggested builds by
-  the software a customer needs, upgrade advice for an existing PC, and
-  48-hour price-locked quotes with a shareable link.
+  the software a customer needs (picked from a preset or from a sentence such
+  as "code web và Docker, tầm 20 triệu": keywords and budget are parsed on the
+  server and the parts and prices always come from stock), upgrade advice for
+  an existing PC, and 48-hour price-locked quotes with a shareable link.
 - Price history on every product page and warranty lookup by serial number.
 - Admin workflows for product, image, order, warranty, user, and analytics management.
   The order list searches by order code, customer or recipient name (without

@@ -301,6 +301,11 @@ export function autoBuild(presetId) {
   return request('/builder/auto', { method: 'POST', body: JSON.stringify({ presetId }) });
 }
 
+// Tư vấn từ câu mô tả nhu cầu (dò từ khoá + ngân sách ở server, giá lấy từ kho).
+export function adviseBuild(text) {
+  return request('/builder/advise', { method: 'POST', body: JSON.stringify({ text }) });
+}
+
 export function suggestUpgrades(current) {
   return request('/builder/upgrade', { method: 'POST', body: JSON.stringify(current) });
 }
