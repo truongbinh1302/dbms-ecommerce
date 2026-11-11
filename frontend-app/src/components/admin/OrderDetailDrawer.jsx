@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { fetchOrder, recordOrderRefund, updateAdminOrderStatus } from '../../api/client'
 import { formatCurrency } from '../../utils/format'
 import { RETURN_KIND_LABELS, RETURN_STATUS_LABELS, formatAddress, formatDateTime } from '../../utils/orderLabels'
+import OrderTimeline from '../OrderTimeline'
 
 const STATUS_LABELS = {
   pending: 'Chờ xử lý',
@@ -282,6 +283,13 @@ export default function OrderDetailDrawer({ orderId, token, onChanged, onClose }
                 </ul>
               </section>
             ) : null}
+
+            <section className="print:hidden">
+              <h4 className="font-black text-slate-900">Tiến trình</h4>
+              <div className="mt-2">
+                <OrderTimeline order={order} audience="admin" />
+              </div>
+            </section>
           </div>
         ) : null}
       </div>

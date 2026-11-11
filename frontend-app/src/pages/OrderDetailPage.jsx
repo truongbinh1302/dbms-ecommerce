@@ -16,6 +16,7 @@ import {
   statusTone,
 } from '../utils/orderLabels'
 import { LoginRequired, PaymentResultBanner } from './OrdersPage'
+import OrderTimeline from '../components/OrderTimeline'
 
 export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, isNew = false, paymentResult = '', showToast, onAddToCart }) {
   const userId = currentUser?.id
@@ -148,6 +149,10 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
         {order.Status === 'cancelled' && order.CancelReason ? (
           <p className="mt-3 text-sm text-slate-500">Lý do huỷ: {order.CancelReason}</p>
         ) : null}
+
+        <div className="mt-6">
+          <OrderTimeline order={order} audience="customer" />
+        </div>
 
         <div className="mt-6 grid gap-5 md:grid-cols-2">
           <div className="rounded-2xl bg-slate-50 p-4 text-sm">
