@@ -25,6 +25,7 @@ const getUserOrders = async (req, res) => {
     const result = await orderService.getUserOrders(userId, status, page, limit);
     return success(res, result, 'Orders retrieved successfully');
   } catch (err) {
+    if (err.status) return error(res, err.message, err.status, err.data);
     return error(res, err.message);
   }
 };

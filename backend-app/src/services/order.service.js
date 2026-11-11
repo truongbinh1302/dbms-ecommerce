@@ -393,37 +393,38 @@ const getUserOrders = async (userId, status = null, page = 1, limit = 10) => {
   const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
   const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 10, 1), 100);
   const offset = (pageNum - 1) * pageSize;
-  const statusCondition = status ? 'AND Status = @status' : '';
+  // Một hoặc nhiều trạng thái, cách nhau bằng dấu phẩy (tab "Đang xử lý" gồm nhiều trạng thái).
+  const statuses = String(status || '').split(',').map((item) => item.trim()).filter(Boolean);
+  if (statuses.some((item) => !allowedStatuses.includes(item))) {
+    throw createHttpError(400, `Invalid status. Allowed statuses: ${allowedStatuses.join(', ')}`);
+  }
+  const statusesJson = statuses.length ? JSON.stringify(statuses) : null;
+  const statusCondition = 'AND (@statuses IS NULL OR Status IN (SELECT value FROM OPENJSON(@statuses)))';
 
-  const request = new sql.Request(pool);
-  request.input('userId', sql.Int, Number(userId));
-  if (status) request.input('status', sql.NVarChar, status);
-  request.input('offset', sql.Int, offset);
-  request.input('limit', sql.Int, pageSize);
+  const result = await new sql.Request(pool)
+    .input('userId', sql.Int, Number(userId))
+    .input('statuses', sql.NVarChar(sql.MAX), statusesJson)
+    .input('offset', sql.Int, offset)
+    .input('limit', sql.Int, pageSize)
+    .query(`
+      SELECT OrderID AS id, OrderCode AS orderCode, Status, PaymentMethod, PaymentStatus, Total,
+             (SELECT COUNT(*) FROM OrderItems oi WHERE oi.OrderID = o.OrderID) AS itemCount,
+             CreatedAt
+      FROM Orders o
+      WHERE UserID = @userId ${statusCondition}
+      ORDER BY CreatedAt DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
 
-  const result = await request.query(`
-    SELECT OrderID AS id, OrderCode AS orderCode, Status, PaymentMethod, PaymentStatus, Total,
-           (SELECT COUNT(*) FROM OrderItems oi WHERE oi.OrderID = o.OrderID) AS itemCount,
-           CreatedAt
-    FROM Orders o
-    WHERE UserID = @userId ${statusCondition}
-    ORDER BY CreatedAt DESC
-    OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-  `);
+      SELECT COUNT(*) AS total FROM Orders WHERE UserID = @userId ${statusCondition};
 
-  const countRequest = new sql.Request(pool);
-  countRequest.input('userId', sql.Int, Number(userId));
-  if (status) countRequest.input('status', sql.NVarChar, status);
+      -- Số đơn theo từng trạng thái (cho các tab), không phụ thuộc bộ lọc đang chọn.
+      SELECT Status, COUNT(*) AS Total FROM Orders WHERE UserID = @userId GROUP BY Status;
+    `);
 
-  const countResult = await countRequest.query(`
-    SELECT COUNT(*) AS total
-    FROM Orders
-    WHERE UserID = @userId ${statusCondition}
-  `);
-
-  const totalItems = Number(countResult.recordset[0]?.total || 0);
+  const totalItems = Number(result.recordsets[1][0]?.total || 0);
   return {
-    items: result.recordset,
+    items: result.recordsets[0],
+    counts: Object.fromEntries(result.recordsets[2].map((row) => [row.Status, Number(row.Total)])),
     pagination: {
       page: pageNum,
       limit: pageSize,

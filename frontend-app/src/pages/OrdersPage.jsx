@@ -15,6 +15,23 @@ import {
 
 const PAGE_SIZE = 10
 
+// Tab lọc đơn: slug trên URL (#/don-hang?trang-thai=dang-giao) → các trạng thái gửi lên API.
+const TABS = [
+  { slug: '', label: 'Tất cả', statuses: [] },
+  { slug: 'dang-xu-ly', label: 'Đang xử lý', statuses: ['pending', 'pending_payment', 'confirmed', 'processing'] },
+  { slug: 'dang-giao', label: 'Đang giao', statuses: ['shipped'] },
+  { slug: 'da-giao', label: 'Đã giao', statuses: ['delivered'] },
+  { slug: 'da-huy', label: 'Đã huỷ', statuses: ['cancelled'] },
+]
+
+const ordersHref = (tab, page = 1) => {
+  const params = new URLSearchParams()
+  if (tab) params.set('trang-thai', tab)
+  if (page > 1) params.set('trang', String(page))
+  const query = params.toString()
+  return hrefFor(`/don-hang${query ? `?${query}` : ''}`)
+}
+
 export function PaymentResultBanner({ code }) {
   const result = describePaymentResult(code)
   if (!result) return null
@@ -40,27 +57,30 @@ export function LoginRequired({ onRequireLogin }) {
   )
 }
 
-export default function OrdersPage({ currentUser, onRequireLogin, page = 1, paymentResult = '' }) {
+export default function OrdersPage({ currentUser, onRequireLogin, page = 1, paymentResult = '', tab = '' }) {
   const userId = currentUser?.id
-  const requestKey = `${userId}:${page}`
-  const [state, setState] = useState({ key: null, items: [], totalPages: 0, error: '' })
+  const activeTab = TABS.find((item) => item.slug === tab) || TABS[0]
+  const requestKey = `${userId}:${page}:${activeTab.slug}`
+  const [state, setState] = useState({ key: null, items: [], totalPages: 0, counts: null, error: '' })
 
   useEffect(() => {
     if (!userId) return undefined
     let cancelled = false
-    fetchMyOrders({ page: String(page), limit: String(PAGE_SIZE) })
+    const params = { page: String(page), limit: String(PAGE_SIZE) }
+    if (activeTab.statuses.length) params.status = activeTab.statuses.join(',')
+    fetchMyOrders(params)
       .then((result) => {
         if (!cancelled) {
-          setState({ key: requestKey, items: result.items || [], totalPages: result.pagination?.totalPages || 0, error: '' })
+          setState({ key: requestKey, items: result.items || [], totalPages: result.pagination?.totalPages || 0, counts: result.counts || null, error: '' })
         }
       })
       .catch((err) => {
-        if (!cancelled) setState({ key: requestKey, items: [], totalPages: 0, error: err.message })
+        if (!cancelled) setState((current) => ({ ...current, key: requestKey, items: [], totalPages: 0, error: err.message }))
       })
     return () => {
       cancelled = true
     }
-  }, [userId, page, requestKey])
+  }, [userId, page, requestKey, activeTab])
 
   if (!userId) {
     return <LoginRequired onRequireLogin={onRequireLogin} />
@@ -73,13 +93,38 @@ export default function OrdersPage({ currentUser, onRequireLogin, page = 1, paym
       <h1 className="text-2xl font-black text-slate-900">Đơn hàng của tôi</h1>
       <PaymentResultBanner code={paymentResult} />
 
+      <nav aria-label="Lọc đơn theo trạng thái" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {TABS.map((item) => {
+          const count = state.counts
+            ? (item.statuses.length
+              ? item.statuses.reduce((sum, key) => sum + (state.counts[key] || 0), 0)
+              : Object.values(state.counts).reduce((sum, value) => sum + value, 0))
+            : null
+          const active = item.slug === activeTab.slug
+          return (
+            <a
+              key={item.slug || 'all'}
+              href={ordersHref(item.slug)}
+              aria-current={active ? 'page' : undefined}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+            >
+              {item.label}{count !== null ? ` (${count})` : ''}
+            </a>
+          )
+        })}
+      </nav>
+
       {state.error ? <p className="text-red-600">{state.error}</p> : null}
       {loading ? <p className="text-slate-500">Đang tải đơn hàng...</p> : null}
 
       {!loading && !state.error && state.items.length === 0 ? (
-        <p className="text-slate-500">
-          Bạn chưa có đơn hàng nào. <a href={hrefFor('/')} className="font-bold text-red-600">Bắt đầu mua sắm</a>
-        </p>
+        activeTab.slug ? (
+          <p className="text-slate-600">Không có đơn nào ở mục “{activeTab.label}”.</p>
+        ) : (
+          <p className="text-slate-500">
+            Bạn chưa có đơn hàng nào. <a href={hrefFor('/')} className="font-bold text-red-600">Bắt đầu mua sắm</a>
+          </p>
+        )
       ) : null}
 
       {state.items.length > 0 ? (
@@ -108,9 +153,9 @@ export default function OrdersPage({ currentUser, onRequireLogin, page = 1, paym
 
       {state.totalPages > 1 ? (
         <nav className="flex items-center justify-center gap-3 text-sm" aria-label="Phân trang">
-          {page > 1 ? <a href={hrefFor(`/don-hang?trang=${page - 1}`)} className="rounded-xl border border-slate-200 px-4 py-2 font-semibold">Trang trước</a> : null}
-          <span className="text-slate-500">Trang {page}/{state.totalPages}</span>
-          {page < state.totalPages ? <a href={hrefFor(`/don-hang?trang=${page + 1}`)} className="rounded-xl border border-slate-200 px-4 py-2 font-semibold">Trang sau</a> : null}
+          {page > 1 ? <a href={ordersHref(activeTab.slug, page - 1)} className="rounded-xl border border-slate-200 px-4 py-2 font-semibold">Trang trước</a> : null}
+          <span className="text-slate-600">Trang {page}/{state.totalPages}</span>
+          {page < state.totalPages ? <a href={ordersHref(activeTab.slug, page + 1)} className="rounded-xl border border-slate-200 px-4 py-2 font-semibold">Trang sau</a> : null}
         </nav>
       ) : null}
     </section>

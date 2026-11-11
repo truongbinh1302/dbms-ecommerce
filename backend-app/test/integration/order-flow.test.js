@@ -378,3 +378,20 @@ test('tìm kiếm không dấu trên toàn catalog', async () => {
   const byIds = await productService.getProducts({ ids: String(productId), limit: 5 });
   assert.deepEqual(byIds.items.map((p) => p.id), [productId]);
 });
+
+test('đơn của tôi: lọc nhiều trạng thái, đếm theo từng trạng thái cho các tab', async () => {
+  const all = await orderService.getUserOrders(ctx.userId, '', 1, 100);
+  const counted = Object.values(all.counts).reduce((sum, value) => sum + value, 0);
+  assert.equal(counted, all.pagination.totalItems, 'tổng các tab bằng tổng số đơn');
+  assert.ok(all.counts.cancelled >= 1, 'các test trước đã có đơn huỷ');
+
+  const open = await orderService.getUserOrders(ctx.userId, 'pending,pending_payment,confirmed,processing', 1, 100);
+  assert.ok(open.items.every((item) => ['pending', 'pending_payment', 'confirmed', 'processing'].includes(item.Status)));
+  const expected = ['pending', 'pending_payment', 'confirmed', 'processing'].reduce((sum, key) => sum + (all.counts[key] || 0), 0);
+  assert.equal(open.pagination.totalItems, expected);
+  assert.deepEqual(open.counts, all.counts, 'số đếm không phụ thuộc bộ lọc');
+
+  const cancelled = await orderService.getUserOrders(ctx.userId, 'cancelled', 1, 100);
+  assert.equal(cancelled.items.length, all.counts.cancelled);
+  await assert.rejects(orderService.getUserOrders(ctx.userId, 'pending,lost', 1, 10), (err) => err.status === 400);
+});

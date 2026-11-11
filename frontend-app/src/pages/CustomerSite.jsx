@@ -875,6 +875,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         onRequireLogin={requireLogin}
         page={routePage}
         paymentResult={route.query.get('ket-qua') || ''}
+        tab={route.query.get('trang-thai') || ''}
       />
     )
   }
