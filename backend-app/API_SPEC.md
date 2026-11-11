@@ -1556,6 +1556,34 @@ Sản phẩm sắp hết kèm số đã bán 30 ngày qua và giá nhập gần 
 
 ---
 
+### Hot Deal — `/promotions`
+
+- `GET /promotions/active` (công khai): `{ serverNow, running: [...], upcoming: [...] }`, mỗi chương trình có
+  `items` là sản phẩm kèm `promotion { salePrice, endsAt, quantityLimit, soldCount, remaining, perOrderLimit }`.
+  `serverNow` để trình duyệt đếm ngược theo giờ máy chủ.
+- `POST /promotions/admin` (admin):
+
+```json
+{
+  "name": "Hot Deal cuối tuần",
+  "startsAt": "2026-11-14T20:00:00+07:00",
+  "endsAt": "2026-11-14T23:59:00+07:00",
+  "items": [{ "productId": 50002, "salePrice": 2190000, "quantityLimit": 20, "perOrderLimit": 2 }]
+}
+```
+
+  Giờ phải kèm múi giờ. Lỗi 400: giá khuyến mãi không thấp hơn giá niêm yết, giờ kết thúc đã qua, quá 31 ngày,
+  sản phẩm đã có trong chương trình khác trùng khung giờ.
+- `GET /promotions/admin`, `GET /promotions/admin/:id`, `PATCH /promotions/admin/:id/stop`.
+
+Sản phẩm (`GET /products`, `GET /products/:id`, giỏ hàng) trả thêm `promotion` khi có Hot Deal đang chạy;
+`price` vẫn là giá niêm yết. `POST /cart/quote` và `POST /orders` tự áp giá Hot Deal: một dòng chỉ được giá
+khuyến mãi khi cả dòng nằm trong giới hạn mỗi đơn và số suất còn lại (nếu không, dòng có `promotionNote`).
+`POST /orders` nhận thêm `expectedTotal` (tổng tiền khách đã thấy); nếu khác tổng mới thì trả
+**409** `errors.code = "price_changed"` và không tạo đơn.
+
+---
+
 ## 17. Race Condition — Xử lý tồn kho đồng thời
 
 > Đây là phần quan trọng nhất liên quan đến **Transaction & Concurrency Control** trong assignment.

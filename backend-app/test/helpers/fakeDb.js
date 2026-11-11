@@ -20,6 +20,9 @@ const createStore = () => ({
   cartItems: [],
   buildQuotes: [],
   stockMovements: [],
+  // Dòng PromotionItems kèm thông tin chương trình: { PromotionID, ProductID, SalePrice, QuantityLimit,
+  // SoldCount, PerOrderLimit, Name, EndsAt, running } (running = đang trong khung giờ và IsActive).
+  promotionItems: [],
   nextOrderId: 1,
 });
 
@@ -77,7 +80,31 @@ const createFakeDb = () => {
     }],
 
     [/^INSERT INTO OrderItems/, (i, s) => {
-      s.orderItems.push({ OrderID: i.orderId, ProductID: i.productId, Quantity: i.quantity, UnitPrice: i.unitPrice });
+      s.orderItems.push({ OrderID: i.orderId, ProductID: i.productId, Quantity: i.quantity, UnitPrice: i.unitPrice, PromotionID: i.promotionId ?? null });
+      return [];
+    }],
+
+    // promotion.service.loadForProducts: chương trình đang chạy của các sản phẩm, giá thấp trước.
+    [/^SELECT pi.PromotionID, pi.ProductID, pi.SalePrice, pi.QuantityLimit, pi.SoldCount, pi.PerOrderLimit, pr.Name, pr.EndsAt FROM PromotionItems pi (WITH \(UPDLOCK, ROWLOCK\) )?JOIN Promotions pr/, ({ ids }, s) => {
+      const wanted = JSON.parse(ids);
+      return s.promotionItems
+        .filter((item) => item.running && wanted.includes(item.ProductID))
+        .sort((a, b) => a.ProductID - b.ProductID || a.SalePrice - b.SalePrice)
+        .map((item) => ({ ...item }));
+    }],
+
+    [/^UPDATE PromotionItems SET SoldCount = SoldCount \+ @quantity WHERE PromotionID = @promotionId AND ProductID = @productId$/, (i, s) => {
+      const item = s.promotionItems.find((x) => x.PromotionID === i.promotionId && x.ProductID === i.productId);
+      if (item.QuantityLimit !== null && item.SoldCount + i.quantity > item.QuantityLimit) {
+        throw new Error('CHECK constraint CK_PromotionItems_SoldCount');
+      }
+      item.SoldCount += i.quantity;
+      return [];
+    }],
+
+    [/^UPDATE PromotionItems SET SoldCount = CASE WHEN SoldCount >= @quantity THEN SoldCount - @quantity ELSE 0 END WHERE PromotionID = @promotionId AND ProductID = @productId$/, (i, s) => {
+      const item = s.promotionItems.find((x) => x.PromotionID === i.promotionId && x.ProductID === i.productId);
+      if (item) item.SoldCount = Math.max(item.SoldCount - i.quantity, 0);
       return [];
     }],
 
@@ -109,7 +136,7 @@ const createFakeDb = () => {
         .filter((o) => o.OrderID === orderId && (userId === undefined || o.UserID === userId))
         .map((o) => ({ ...o }))],
 
-    [/^SELECT ProductID, Quantity FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID$/, ({ orderId }, s) =>
+    [/^SELECT ProductID, Quantity, PromotionID FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID$/, ({ orderId }, s) =>
       s.orderItems.filter((it) => it.OrderID === orderId).sort((a, b) => a.ProductID - b.ProductID)],
 
     [/^DELETE FROM VoucherUsages OUTPUT DELETED.VoucherID WHERE OrderID = @orderId$/, ({ orderId }, s) => {
@@ -169,7 +196,7 @@ const createFakeDb = () => {
       return [];
     }],
 
-    [/^SELECT ci.ProductID AS id, ci.Quantity AS cartQuantity, .* FROM CartItems ci JOIN Products p ON p.ProductID = ci.ProductID LEFT JOIN Categories c ON c.CategoryID = p.CategoryID WHERE ci.UserID = @userId AND p.IsDeleted = 0 ORDER BY ci.UpdatedAt DESC, ci.ProductID$/,
+    [/^SELECT ci.ProductID AS id, ci.Quantity AS cartQuantity, .* FROM CartItems ci JOIN Products p ON p.ProductID = ci.ProductID LEFT JOIN Categories c ON c.CategoryID = p.CategoryID OUTER APPLY \(.*\) promo WHERE ci.UserID = @userId AND p.IsDeleted = 0 ORDER BY ci.UpdatedAt DESC, ci.ProductID$/,
       ({ userId }, s) => s.cartItems
         .filter((c) => c.UserID === userId)
         .map((c) => ({ c, p: s.products.find((p) => p.ProductID === c.ProductID) }))
@@ -259,6 +286,7 @@ const SERVICES_USING_DB = [
   'priceQuote.service',
   'builder.service',
   'inventory.service',
+  'promotion.service',
 ];
 
 /**

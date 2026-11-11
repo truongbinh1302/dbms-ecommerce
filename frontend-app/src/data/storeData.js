@@ -182,13 +182,6 @@ export const trustHighlights = [
   },
 ]
 
-// Không dùng đồng hồ đếm ngược hay % giảm giá cố định: mức giảm hiển thị
-// được tính từ giá gốc thật của sản phẩm (xem getMaxDiscountPercent trong CustomerSite).
-export const flashDeal = {
-  title: 'Đang giảm giá',
-  subtitle: 'Chuột, phím cơ và màn hình gaming đang có giá tốt',
-}
-
 const products = [
   {
     id: 'pc-1',

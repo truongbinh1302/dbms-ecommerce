@@ -46,6 +46,7 @@ export default function CheckoutPage({
   onOrderPlaced,
   priceLockCode = '',
   onClearPriceLock,
+  onRefreshQuote,
 }) {
   const [provinces, setProvinces] = useState([])
   const [address, setAddress] = useState(EMPTY_ADDRESS)
@@ -154,6 +155,8 @@ export default function CheckoutPage({
         shippingAddress: address,
         note: note.trim() || undefined,
         acceptTerms: true,
+        // Tổng tiền khách đang thấy: nếu giá đổi trước khi đơn được tạo, server dừng lại (409) thay vì tính khác.
+        expectedTotal: quote ? quote.total : undefined,
       })
 
       if (saveAsDefault) {
@@ -182,6 +185,11 @@ export default function CheckoutPage({
       onOrderPlaced(order)
     } catch (err) {
       setFieldErrors(err.details?.fields || {})
+      if (err.status === 409 && err.details?.code === 'price_changed') {
+        if (onRefreshQuote) onRefreshQuote()
+        setFormError('Giá vừa thay đổi (ví dụ Hot Deal vừa hết suất hoặc hết giờ). Tổng tiền đã được tính lại, vui lòng kiểm tra rồi đặt lại.')
+        return
+      }
       if (err.status === 410) {
         // Báo giá vừa hết hạn giữa lúc khách điền form: bỏ mã, giá được tính lại theo giá hiện tại.
         if (onClearPriceLock) onClearPriceLock()
@@ -284,9 +292,11 @@ export default function CheckoutPage({
                 <span className="text-slate-700">
                   <a href={hrefFor(`/san-pham/${item.id}`)} className="hover:text-red-600">{item.name}</a>
                   <span className="text-slate-400"> × {item.quantity}</span>
+                  {line?.promotion ? <span className="mt-0.5 block text-xs font-bold text-red-600">Hot Deal: {line.promotion.name}</span> : null}
+                  {line?.promotionNote ? <span className="mt-0.5 block text-xs text-amber-700">{line.promotionNote}, tính giá thường</span> : null}
                 </span>
                 <span className="shrink-0 text-right font-semibold text-slate-900">
-                  {line?.priceLocked ? (
+                  {line?.priceLocked || line?.promotion ? (
                     <span className="block text-xs font-normal text-slate-400 line-through">{formatCurrency(line.listPrice * line.quantity)}</span>
                   ) : null}
                   {formatCurrency(line ? line.lineTotal : item.price * item.quantity)}

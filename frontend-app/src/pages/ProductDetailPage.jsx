@@ -8,6 +8,24 @@ import PriceHistory from '../components/PriceHistory'
 import ReviewForm from '../components/ReviewForm'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatDateTime } from '../utils/orderLabels'
+import useCountdown, { formatClockTime, formatCountdown } from '../hooks/useCountdown'
+
+// Hot Deal đang chạy: đếm ngược tới giờ kết thúc, số suất còn lại, giới hạn mỗi đơn.
+function PromotionNotice({ promotion }) {
+  const left = useCountdown(promotion.endsAt)
+  return (
+    <div className="mt-3 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+      <p className="font-bold">
+        {promotion.name}: {left > 0 ? `kết thúc sau ${formatCountdown(left)}` : 'vừa kết thúc'}
+      </p>
+      <p className="mt-1">
+        Đến {formatClockTime(promotion.endsAt)}
+        {promotion.remaining !== null && promotion.remaining !== undefined ? ` · còn ${promotion.remaining} suất` : ''}
+        {promotion.perOrderLimit ? ` · tối đa ${promotion.perOrderLimit} sản phẩm mỗi đơn` : ''}
+      </p>
+    </div>
+  )
+}
 
 /*
   Trang chi tiết sản phẩm: mọi thông tin (tên, thông số, giá, tồn kho) lấy từ API.
@@ -109,6 +127,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
               <div className="text-sm text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div>
             ) : null}
             <div className="text-3xl font-black text-red-600">{formatCurrency(product.price)}</div>
+            {product.promotion?.active ? <PromotionNotice promotion={product.promotion} /> : null}
             <div className={`mt-2 text-sm font-semibold ${outOfStock ? 'text-red-600' : 'text-emerald-700'}`}>
               {outOfStock ? 'Tạm hết hàng' : `Còn ${product.stock} sản phẩm`}
             </div>

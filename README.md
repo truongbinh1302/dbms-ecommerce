@@ -26,6 +26,11 @@ features and DBMS demonstrations.
 - Stock receipts from suppliers and a stock ledger: every stock change (receipt,
   sale, cancellation, manual adjustment) is recorded with the resulting stock,
   plus a daily report split by Vietnam time with CSV export.
+- Time-limited Hot Deals: start and end times, a number of deal units and a
+  per-order limit. The server applies the deal price when quoting and when
+  creating an order, locks the deal row so two buyers cannot take the last
+  unit, gives the unit back when an order is cancelled, and refuses an order
+  (409) when the total changed after the customer saw it.
 - SQL Server transactions for order creation and cancellation.
 - Row-level locking with `UPDLOCK` and `ROWLOCK` to protect inventory during
   concurrent orders.
@@ -330,6 +335,7 @@ The API is mounted under `/api/v1` and includes:
 - `/vouchers` — voucher validation and management
 - `/analytics` — admin dashboard numbers and the daily report (`/analytics/daily`)
 - `/inventory` — stock receipts, stock ledger, low-stock list (admin)
+- `/promotions` — running and upcoming Hot Deals (public), create/list/stop (admin)
 
 Detailed request and response examples are documented in
 [`backend-app/API_SPEC.md`](backend-app/API_SPEC.md).

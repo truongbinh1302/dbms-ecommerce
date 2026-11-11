@@ -3,6 +3,7 @@ import heroAsset from '../assets/hero.png'
 import StoreGlyph from '../components/StoreGlyph'
 import DailyReport from '../components/admin/DailyReport'
 import InventoryPanel from '../components/admin/InventoryPanel'
+import PromotionsPanel from '../components/admin/PromotionsPanel'
 import { fetchAdminDashboard, fetchAdminOrders, fetchDailyReport, fetchOrder, registerWarranty, updateAdminOrderStatus } from '../api/client'
 import { formatCurrency, formatCompactNumber } from '../utils/format'
 
@@ -200,6 +201,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                 <a href="#admin-overview" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Tổng quan</a>
                 <a href="#admin-report" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Báo cáo</a>
                 <a href="#admin-stock" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Kho hàng</a>
+                <a href="#admin-promotions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Hot Deal</a>
               </nav>
               <button
                 type="button"
@@ -443,6 +445,10 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
 
         <div id="admin-stock" className="mt-6 scroll-mt-32">
           <InventoryPanel token={token} onChanged={() => setRefreshKey((key) => key + 1)} />
+        </div>
+
+        <div id="admin-promotions" className="mt-6 scroll-mt-32">
+          <PromotionsPanel token={token} />
         </div>
       </div>
     </div>

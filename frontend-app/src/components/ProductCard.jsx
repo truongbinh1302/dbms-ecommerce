@@ -167,6 +167,13 @@ export default function ProductCard({
               </div>
             </div>
 
+            {product.promotion?.active ? (
+              <p className="mt-2 text-xs font-bold text-red-600">
+                Hot Deal{product.promotion.remaining !== null && product.promotion.remaining !== undefined ? ` · còn ${product.promotion.remaining} suất` : ''}
+                {product.promotion.perOrderLimit ? ` · tối đa ${product.promotion.perOrderLimit}/đơn` : ''}
+              </p>
+            ) : null}
+
             <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
               <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.installment}</span>
               <span className="rounded-full bg-white px-3 py-2 text-slate-600 shadow-sm">{product.shipping}</span>

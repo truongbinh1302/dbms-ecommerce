@@ -3,6 +3,7 @@ import heroAsset from '../assets/hero.png'
 import CartDrawer from '../components/CartDrawer'
 import FooterSellerInfo from '../components/FooterSellerInfo'
 import ProductCard, { ProductVisual } from '../components/ProductCard'
+import HotDealSection from '../components/HotDealSection'
 import ProductQuickView from '../components/ProductQuickView'
 import SectionHeader from '../components/SectionHeader'
 import StoreGlyph from '../components/StoreGlyph'
@@ -23,7 +24,6 @@ import WarrantyPage from './WarrantyPage'
 import {
   categories,
   featuredTiles,
-  flashDeal,
   footerColumns,
   heroSlides,
   productSections,
@@ -170,15 +170,6 @@ function scrollToElement(elementId) {
   }
 }
 
-function getMaxDiscountPercent(products) {
-  return products.reduce((max, product) => {
-    if (!product.oldPrice || product.oldPrice <= product.price) {
-      return max
-    }
-    return Math.max(max, Math.round((1 - product.price / product.oldPrice) * 100))
-  }, 0)
-}
-
 const isApiProductId = (id) => Number.isInteger(Number(id)) && Number(id) > 0
 
 // Gộp giỏ trên máy với giỏ đã lưu ở server khi đăng nhập: lấy số lượng lớn hơn của mỗi sản phẩm.
@@ -241,6 +232,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   const [voucherCode, setVoucherCode] = useState('')
   const [priceLockCode, setPriceLockCode] = useState(() => loadFromStorage(PRICE_LOCK_STORAGE_KEY, ''))
   const [quoteState, setQuoteState] = useState(null)
+  // Tăng lên để báo giá lại (ví dụ server báo giá vừa đổi lúc đặt hàng).
+  const [quoteNonce, setQuoteNonce] = useState(0)
 
   useEffect(() => {
     let mounted = true
@@ -425,8 +418,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   const quoteKey = useMemo(() => {
     const items = cartItems.map((item) => ({ productId: Number(item.id), quantity: item.quantity }))
     const canQuote = items.length > 0 && items.every((item) => Number.isInteger(item.productId) && item.productId > 0)
-    return canQuote ? JSON.stringify({ items, voucherCode, quoteCode: priceLockCode }) : ''
-  }, [cartItems, voucherCode, priceLockCode])
+    return canQuote ? JSON.stringify({ items, voucherCode, quoteCode: priceLockCode, nonce: quoteNonce }) : ''
+  }, [cartItems, voucherCode, priceLockCode, quoteNonce])
 
   useEffect(() => {
     if (!quoteKey) {
@@ -450,7 +443,6 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   }, [quoteKey])
 
   const currentQuote = quoteState && quoteState.key === quoteKey ? quoteState : null
-  const maxDiscountPercent = useMemo(() => getMaxDiscountPercent(runtimeProducts), [runtimeProducts])
 
   const viewedProducts = useMemo(
     () => viewedIds.map((id) => productMap[id]).filter(Boolean),
@@ -714,6 +706,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         onOrderPlaced={handleOrderPlaced}
         priceLockCode={priceLockCode}
         onClearPriceLock={clearPriceLock}
+        onRefreshQuote={() => setQuoteNonce((value) => value + 1)}
       />
     )
   } else if (routeSection === 'don-hang' && routeId > 0) {
@@ -1324,42 +1317,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
           </div>
         </section>
 
-        <section className="mt-5 overflow-hidden rounded-[36px] bg-slate-950 text-white shadow-[0_30px_80px_rgba(15,23,42,0.18)]">
-          <div className="grid gap-6 p-6 lg:grid-cols-[1fr_320px] lg:items-center">
-            <div>
-              <div className="inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-semibold uppercase tracking-[0.24em] text-red-200">
-                {flashDeal.title}
-              </div>
-              <h2 className="mt-4 text-4xl font-black leading-tight">{flashDeal.subtitle}</h2>
-              {maxDiscountPercent > 0 ? (
-                <div className="mt-3 text-lg text-white/80">Giảm tới {maxDiscountPercent}% so với giá gốc</div>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3">
-                  {runtimeProducts
-                    .slice(0, 3)
-                    .map((product) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() => handleQuickView(product)}
-                    className="flex items-center gap-4 rounded-[28px] bg-white/6 p-4 text-left backdrop-blur-sm transition hover:bg-white/10"
-                  >
-                    <div className="flex size-16 items-center justify-center rounded-2xl bg-white/10 text-white">
-                      <StoreGlyph name={product.visual?.kind === 'desktop' ? 'desktop' : product.visual?.kind} className="size-8" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-base font-bold">{product.name}</h3>
-                      <p className="mt-1 text-sm text-red-200">{formatCurrency(product.price)}</p>
-                    </div>
-                    <StoreGlyph name="chevron-right" className="size-5 text-white/70" />
-                  </button>
-                ))}
-            </div>
-          </div>
-        </section>
-
+        <HotDealSection fallbackProducts={runtimeProducts} onOpen={handleQuickView} onAddToCart={addToCart} />
 
         {productSections.map((section) => {
           const sectionProducts = runtimeProducts

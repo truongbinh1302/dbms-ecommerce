@@ -315,6 +315,27 @@ export function registerWarranty(payload, token) {
   });
 }
 
+// --- Hot Deal ---
+export function fetchActivePromotions() {
+  return request('/promotions/active');
+}
+
+export function fetchAdminPromotions(token) {
+  return adminGet('/promotions/admin', {}, token);
+}
+
+export function fetchAdminPromotion(promotionId, token) {
+  return adminGet(`/promotions/admin/${encodeURIComponent(promotionId)}`, {}, token);
+}
+
+export function createPromotion(payload, token) {
+  return request('/promotions/admin', { method: 'POST', auth: true, token, body: JSON.stringify(payload) });
+}
+
+export function stopPromotion(promotionId, token) {
+  return request(`/promotions/admin/${encodeURIComponent(promotionId)}/stop`, { method: 'PATCH', auth: true, token });
+}
+
 // --- Quản trị: số liệu, báo cáo theo ngày, sổ kho ---
 function adminGet(path, params = {}, token) {
   const search = new URLSearchParams();

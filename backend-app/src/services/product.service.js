@@ -1,6 +1,7 @@
 const { getPool, sql } = require('../config/db.sql');
 const ProductLog = require('../models/productLog.model');
 const { formatProduct } = require('../utils/productFormat');
+const { promoApply, PROMO_COLUMNS } = require('./promotionSql');
 const { tokenizeQuery } = require('../utils/searchText');
 const { refreshSearchText } = require('./searchIndex.service');
 
@@ -125,9 +126,11 @@ const getProducts = async (filters = {}, { countTotal = true } = {}) => {
     SELECT p.ProductID AS id, p.Name, p.Slug, p.Brand, p.Description, p.Price, p.OldPrice,
            p.Stock, p.Specs, p.Images, p.IsFeatured, p.Rating, p.ReviewsCount,
            p.CreatedAt, p.UpdatedAt,
-           c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug
+           c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug,
+           ${PROMO_COLUMNS}
     FROM Products p
     LEFT JOIN Categories c ON p.CategoryID = c.CategoryID
+    ${promoApply('p')}
     ${where}
     ORDER BY ${orderBy}
     OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -180,9 +183,11 @@ const getProductById = async (id) => {
       SELECT p.ProductID AS id, p.Name, p.Slug, p.Brand, p.Description,
              p.Price, p.OldPrice, p.Stock, p.Specs, p.Images,
              p.IsFeatured, p.Rating, p.ReviewsCount, p.CreatedAt, p.UpdatedAt,
-             c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug
+             c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug,
+             ${PROMO_COLUMNS}
       FROM Products p
       LEFT JOIN Categories c ON p.CategoryID = c.CategoryID
+      ${promoApply('p')}
       WHERE p.ProductID = @id AND p.IsDeleted = 0
     `);
 

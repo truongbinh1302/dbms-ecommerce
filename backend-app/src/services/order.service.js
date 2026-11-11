@@ -6,6 +6,7 @@ const voucherService = require('./voucher.service');
 const cartService = require('./cart.service');
 const priceQuoteService = require('./priceQuote.service');
 const inventoryService = require('./inventory.service');
+const promotionService = require('./promotion.service');
 const { assertShippingAddress } = require('./address.service');
 
 const allowedStatuses = ['pending', 'pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -134,6 +135,11 @@ const createOrder = async (userId, orderData = {}) => {
   const note = orderData.note ? String(orderData.note).trim().slice(0, 500) || null : null;
   const quoteCode = orderData.quoteCode ? String(orderData.quoteCode).trim().toUpperCase() : null;
   const termsVersion = orderData.termsVersion ? String(orderData.termsVersion).slice(0, 20) : null;
+  const rawExpected = orderData.expectedTotal;
+  const expectedTotal = rawExpected === undefined || rawExpected === null || rawExpected === ''
+    || !Number.isFinite(Number(rawExpected))
+    ? null
+    : Math.round(Number(rawExpected));
 
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
@@ -158,8 +164,13 @@ const createOrder = async (userId, orderData = {}) => {
     if (lockedQuote && !products.some((product) => lockedQuote.prices.has(product.ProductID))) {
       lockedQuote = null;
     }
+    // Hot Deal: khoá dòng PromotionItems (sau khi đã khoá Products) để hai đơn không cùng lấy suất cuối.
+    const promotions = await promotionService.loadForProducts(transaction, products.map((product) => product.ProductID), { lock: true });
     const lines = pricing.applyLockedPrices(
-      products.map((product) => ({ productId: product.ProductID, quantity: product.quantity, unitPrice: Number(product.Price) })),
+      pricing.applyPromotions(
+        products.map((product) => ({ productId: product.ProductID, quantity: product.quantity, unitPrice: Number(product.Price) })),
+        promotions,
+      ),
       lockedQuote ? lockedQuote.prices : null,
     );
     const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
@@ -174,6 +185,16 @@ const createOrder = async (userId, orderData = {}) => {
     }
 
     const quote = pricing.buildQuote(subtotal, voucher);
+    // Khách gửi kèm tổng tiền đã thấy ở trang thanh toán: nếu giá vừa đổi (Hot Deal hết suất, hết giờ,
+    // admin đổi giá) thì dừng lại cho khách xem giá mới, không âm thầm tính số tiền khác.
+    if (expectedTotal !== null && expectedTotal !== quote.total) {
+      throw createHttpError(409, 'Giá đơn hàng vừa thay đổi. Vui lòng kiểm tra lại tổng tiền rồi đặt lại.', {
+        code: 'price_changed',
+        expectedTotal,
+        total: quote.total,
+        items: lines.map((line) => ({ productId: line.productId, unitPrice: line.unitPrice, promotionNote: line.promotionNote || null })),
+      });
+    }
     const status = paymentMethod === 'cod' ? 'pending' : 'pending_payment';
 
     const orderResult = await new sql.Request(transaction)
@@ -214,10 +235,19 @@ const createOrder = async (userId, orderData = {}) => {
         .input('productId', sql.Int, item.ProductID)
         .input('quantity', sql.Int, item.quantity)
         .input('unitPrice', sql.Decimal(18, 2), lines[index].unitPrice)
+        .input('promotionId', sql.Int, lines[index].promotionId || null)
         .query(`
-          INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice)
-          VALUES (@orderId, @productId, @quantity, @unitPrice)
+          INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice, PromotionID)
+          VALUES (@orderId, @productId, @quantity, @unitPrice, @promotionId)
         `);
+
+      if (lines[index].promotionId) {
+        await promotionService.consume(transaction, {
+          promotionId: lines[index].promotionId,
+          productId: item.ProductID,
+          quantity: item.quantity,
+        });
+      }
 
       await inventoryService.changeStock(transaction, {
         productId: item.ProductID,
@@ -327,7 +357,8 @@ const quoteCart = async (rawItems, rawVoucherCode = null, rawQuoteCode = null) =
   if (lockedQuote && !baseLines.some((line) => lockedQuote.prices.has(line.productId))) {
     lockedQuote = null;
   }
-  const lines = pricing.applyLockedPrices(baseLines, lockedQuote ? lockedQuote.prices : null);
+  const promotions = await promotionService.loadForProducts(pool, baseLines.map((line) => line.productId));
+  const lines = pricing.applyLockedPrices(pricing.applyPromotions(baseLines, promotions), lockedQuote ? lockedQuote.prices : null);
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
 
   let voucher = null;
@@ -480,7 +511,7 @@ const cancelLockedOrder = async (transaction, order, { reason = null, paymentSta
 
   const itemsResult = await new sql.Request(transaction)
     .input('orderId', sql.Int, orderId)
-    .query('SELECT ProductID, Quantity FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID');
+    .query('SELECT ProductID, Quantity, PromotionID FROM OrderItems WHERE OrderID = @orderId ORDER BY ProductID');
 
   for (const item of itemsResult.recordset) {
     await inventoryService.changeStock(transaction, {
@@ -490,6 +521,9 @@ const cancelLockedOrder = async (transaction, order, { reason = null, paymentSta
       orderId,
       note: reason ? String(reason).slice(0, 300) : null,
     });
+    if (item.PromotionID) {
+      await promotionService.release(transaction, { promotionId: item.PromotionID, productId: item.ProductID, quantity: Number(item.Quantity) });
+    }
   }
 
   const usageResult = await new sql.Request(transaction)
