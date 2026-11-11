@@ -535,6 +535,36 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   const searchSuggestions = suggestionsOpen && suggestionState.query === trimmedSearch && trimmedSearch.length >= 2
     ? suggestionState.items
     : []
+  // Gợi ý đang chọn bằng phím mũi tên (theo từ khoá đang gõ; gõ tiếp thì bỏ chọn).
+  const [activeSuggestion, setActiveSuggestion] = useState({ query: '', index: -1 })
+  const activeIndex = activeSuggestion.query === trimmedSearch && activeSuggestion.index < searchSuggestions.length ? activeSuggestion.index : -1
+
+  function handleSearchKeyDown(event) {
+    const count = searchSuggestions.length
+    if (event.key === 'Escape') {
+      if (count) {
+        event.preventDefault()
+        setSuggestionsOpen(false)
+      }
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (!count) {
+        setSuggestionsOpen(true)
+        return
+      }
+      event.preventDefault()
+      const step = event.key === 'ArrowDown' ? 1 : -1
+      const next = activeIndex < 0 ? (step > 0 ? 0 : count - 1) : (activeIndex + step + count) % count
+      setActiveSuggestion({ query: trimmedSearch, index: next })
+      return
+    }
+    if (event.key === 'Enter' && activeIndex >= 0 && searchSuggestions[activeIndex]) {
+      event.preventDefault()
+      setSuggestionsOpen(false)
+      openProduct(searchSuggestions[activeIndex])
+    }
+  }
   const activeSlideData = heroSlides[activeSlide]
   const activeCategory = categories.find((category) => category.id === activeCategoryId) ?? categories[0]
 
@@ -926,7 +956,13 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                   }}
                   onBlur={() => window.setTimeout(() => setSuggestionsOpen(false), 150)}
                   onFocus={() => setSuggestionsOpen(true)}
+                  onKeyDown={handleSearchKeyDown}
                   aria-label="Tìm kiếm sản phẩm"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={searchSuggestions.length > 0}
+                  aria-controls="search-suggestions"
+                  aria-activedescendant={activeIndex >= 0 ? `search-suggestion-${activeIndex}` : undefined}
                   type="search"
                   placeholder="Bạn cần tìm laptop, PC, gear hay combo setup nào?"
                   className="h-12 w-full rounded-lg border border-white/25 bg-white px-4 pr-12 text-base text-slate-900 outline-none ring-0 transition placeholder:text-slate-400 focus:border-white focus:shadow-[0_0_0_4px_rgba(255,255,255,0.18)]"
@@ -940,28 +976,34 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
                 </button>
               </form>
 
+              <p className="sr-only" role="status">
+                {searchSuggestions.length ? `${searchSuggestions.length} gợi ý, dùng phím mũi tên để chọn, Enter để mở.` : ''}
+              </p>
               {searchSuggestions.length > 0 ? (
-                <div className="absolute inset-x-0 top-[calc(100%+12px)] z-40 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.18)]">
-                  {searchSuggestions.map((product) => (
-                    <button
+                <div id="search-suggestions" role="listbox" aria-label="Gợi ý sản phẩm" className="absolute inset-x-0 top-[calc(100%+12px)] z-40 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.18)]">
+                  {searchSuggestions.map((product, index) => (
+                    <div
                       key={product.id}
-                      type="button"
+                      id={`search-suggestion-${index}`}
+                      role="option"
+                      aria-selected={index === activeIndex}
                       onMouseDown={(event) => event.preventDefault()}
+                      onMouseEnter={() => setActiveSuggestion({ query: trimmedSearch, index })}
                       onClick={() => {
                         setSuggestionsOpen(false)
                         openProduct(product)
                       }}
-                      className="flex w-full items-center gap-4 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50"
+                      className={`flex w-full cursor-pointer items-center gap-4 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 ${index === activeIndex ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
                     >
                       <div className="flex size-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
                         <StoreGlyph name={product.visual?.kind === 'desktop' ? 'desktop' : product.visual?.kind} className="size-6" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-bold text-slate-900">{product.name}</div>
-                        <div className="mt-1 text-sm text-red-600">{formatCurrency(product.price)}</div>
+                        <div className="mt-1 text-sm font-semibold text-red-700">{formatCurrency(product.price)}</div>
                       </div>
                       <StoreGlyph name="chevron-right" className="size-4 text-slate-400" />
-                    </button>
+                    </div>
                   ))}
                 </div>
               ) : null}
