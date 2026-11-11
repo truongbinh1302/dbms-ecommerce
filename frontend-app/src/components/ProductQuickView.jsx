@@ -57,9 +57,15 @@ export default function ProductQuickView({ product, open, onClose, onAddToCart, 
                   </div>
                 </div>
                 <div className="mt-4 flex items-center gap-2 text-sm text-amber-500">
-                  <StoreGlyph name="star" className="size-4" />
-                  <span className="font-bold">{product.rating}</span>
-                  <span className="text-slate-400">({product.reviews} đánh giá)</span>
+                  {product.reviews > 0 ? (
+                    <>
+                      <StoreGlyph name="star" className="size-4" />
+                      <span className="font-bold">{product.rating.toFixed(1)}</span>
+                      <span className="text-slate-400">({product.reviews} đánh giá)</span>
+                    </>
+                  ) : (
+                    <span className="text-slate-400">Chưa có đánh giá</span>
+                  )}
                 </div>
               </div>
 

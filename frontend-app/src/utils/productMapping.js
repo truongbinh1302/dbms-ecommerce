@@ -59,6 +59,9 @@ export function mapApiProductToStoreProduct(product) {
     description: product.description || '',
     images: Array.isArray(product.images) ? product.images : [],
     badge: product.isFeatured ? 'Nổi bật' : '',
+    // Điểm sao tính từ đánh giá thật của người đã mua (0 khi chưa có đánh giá).
+    rating: Number(product.rating ?? product.Rating ?? 0),
+    reviews: Number(product.reviewsCount ?? product.ReviewsCount ?? 0),
     visual: { kind: getDemoVisualKind(id, categorySlug, brand) },
     categorySlug,
     categoryName: product.category?.name || '',

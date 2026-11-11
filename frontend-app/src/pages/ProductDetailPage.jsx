@@ -5,6 +5,7 @@ import { formatCurrency } from '../utils/format'
 import { mapApiProductToStoreProduct } from '../utils/productMapping'
 import PageMessage from '../components/PageMessage'
 import PriceHistory from '../components/PriceHistory'
+import ReviewForm from '../components/ReviewForm'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatDateTime } from '../utils/orderLabels'
 
@@ -12,10 +13,11 @@ import { formatDateTime } from '../utils/orderLabels'
   Trang chi tiết sản phẩm: mọi thông tin (tên, thông số, giá, tồn kho) lấy từ API.
   Điểm đánh giá tính từ các review thật trong MongoDB, không dùng số Rating dựng sẵn trong seed.
 */
-export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, onProductLoaded }) {
+export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, onProductLoaded, currentUser, onRequireLogin }) {
   const [state, setState] = useState({ id: null, product: null, error: '' })
   const [reviewState, setReviewState] = useState({ id: null, data: null })
   const [quantity, setQuantity] = useState(1)
+  const [reviewsVersion, setReviewsVersion] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -31,6 +33,13 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
         if (!cancelled) setState({ id: productId, product: null, error: err.message || 'Không tải được sản phẩm' })
       })
 
+    return () => {
+      cancelled = true
+    }
+  }, [productId, onProductLoaded])
+
+  useEffect(() => {
+    let cancelled = false
     fetchReviews(productId)
       .then((data) => {
         if (!cancelled) setReviewState({ id: productId, data })
@@ -38,11 +47,10 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
       .catch(() => {
         if (!cancelled) setReviewState({ id: productId, data: null })
       })
-
     return () => {
       cancelled = true
     }
-  }, [productId, onProductLoaded])
+  }, [productId, reviewsVersion])
 
   const loading = state.id !== productId
   const product = loading ? null : state.product
@@ -176,6 +184,12 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
             ))}
           </ul>
         )}
+        <ReviewForm
+          productId={productId}
+          currentUser={currentUser}
+          onRequireLogin={onRequireLogin}
+          onCreated={() => setReviewsVersion((version) => version + 1)}
+        />
       </section>
     </div>
   )

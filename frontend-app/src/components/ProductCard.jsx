@@ -131,9 +131,15 @@ export default function ProductCard({
           <div>
             <h3 className="line-clamp-2 text-lg font-extrabold leading-snug text-slate-900">{product.name}</h3>
             <div className="mt-2 flex items-center gap-2 text-sm text-amber-500">
-              <StoreGlyph name="star" className="size-4" />
-              <span className="font-bold">{product.rating}</span>
-              <span className="text-slate-400">({product.reviews} đánh giá)</span>
+              {product.reviews > 0 ? (
+                <>
+                  <StoreGlyph name="star" className="size-4" />
+                  <span className="font-bold">{product.rating.toFixed(1)}</span>
+                  <span className="text-slate-400">({product.reviews} đánh giá)</span>
+                </>
+              ) : (
+                <span className="text-slate-400">Chưa có đánh giá</span>
+              )}
             </div>
           </div>
 

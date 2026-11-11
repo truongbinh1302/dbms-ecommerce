@@ -130,6 +130,17 @@ const backfillSearchIndex = async () => {
   }
 };
 
+// Điểm sao lấy từ review thật trong MongoDB, không dùng số seed.
+const syncRatings = async () => {
+  try {
+    const { syncAllProductRatings } = require('./services/review.service');
+    const changed = await syncAllProductRatings();
+    if (changed > 0) console.log(`[reviews] Synced rating for ${changed} product(s)`);
+  } catch (err) {
+    console.warn('[reviews] Could not sync ratings:', err.message);
+  }
+};
+
 // Admin còn mật khẩu demo "password" (do migration tạo) là lỗ hổng khi chạy thật: báo to trong log.
 const warnDemoAdminPassword = async () => {
   try {
@@ -156,6 +167,7 @@ const startServer = async () => {
 
     startPaymentExpirySweeper();
     backfillSearchIndex();
+    syncRatings();
     warnDemoAdminPassword();
 
     app.listen(config.port, () => {

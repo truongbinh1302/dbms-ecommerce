@@ -349,6 +349,18 @@ export function fetchReviews(productId) {
   return request(`/reviews/products/${productId}`);
 }
 
+export function fetchReviewEligibility(productId) {
+  return request(`/reviews/products/${productId}/eligibility`, { auth: true });
+}
+
+export function createReview(productId, review) {
+  return request(`/reviews/products/${productId}`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(review),
+  });
+}
+
 export function createVNPayPaymentLink(orderId, orderInfo, token) {
   return request('/payments/vnpay/create', {
     method: 'POST',

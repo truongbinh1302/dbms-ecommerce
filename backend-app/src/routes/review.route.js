@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.get('/my', authenticate, reviewController.getMyReviews);
 router.get('/products/:productId', reviewController.getProductReviews);
+router.get('/products/:productId/eligibility', authenticate, reviewController.getEligibility);
 router.post('/products/:productId', authenticate, reviewController.createReview);
 router.patch('/:reviewId', authenticate, reviewController.updateReview);
 router.delete('/:reviewId', authenticate, reviewController.deleteReview);

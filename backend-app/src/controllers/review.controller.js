@@ -52,6 +52,15 @@ const markHelpful = async (req, res) => {
   }
 };
 
+const getEligibility = async (req, res) => {
+  try {
+    const result = await reviewService.getReviewEligibility(Number(req.params.productId), req.user.id);
+    return success(res, result, 'Review eligibility');
+  } catch (err) {
+    return error(res, err.message);
+  }
+};
+
 const getMyReviews = async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
@@ -63,6 +72,7 @@ const getMyReviews = async (req, res) => {
 };
 
 module.exports = {
+  getEligibility,
   getProductReviews,
   createReview,
   updateReview,

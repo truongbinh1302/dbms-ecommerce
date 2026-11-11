@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Review = require('../models/review.model');
-const { pool } = require('../config/db.sql');
+const { pool, getPool, sql } = require('../config/db.sql');
 
 /**
  * Review Service - Handles all review-related business logic
@@ -170,41 +170,43 @@ const addReview = async (productId, userId, reviewData) => {
     if (!userId || userId <= 0) {
       throw new Error('Invalid user ID');
     }
-    if (!reviewData.rating || reviewData.rating < 1 || reviewData.rating > 5) {
-      throw new Error('Rating must be between 1 and 5');
+    const rating = Number(reviewData.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new Error('Số sao phải từ 1 đến 5');
     }
-    if (!reviewData.title || reviewData.title.trim().length === 0) {
-      throw new Error('Review title is required');
+    if (!reviewData.title || String(reviewData.title).trim().length === 0) {
+      throw new Error('Vui lòng nhập tiêu đề đánh giá');
     }
-    if (!reviewData.content || reviewData.content.trim().length < 10) {
-      throw new Error('Review content must be at least 10 characters');
+    if (!reviewData.content || String(reviewData.content).trim().length < 10) {
+      throw new Error('Nội dung đánh giá cần ít nhất 10 ký tự');
     }
 
     // Step 1: Validate user has purchased this product
     const hasPurchased = await validateUserPurchase(userId, productId);
     if (!hasPurchased) {
-      throw new Error('User has not purchased this product. Only verified buyers can leave reviews.');
+      throw new Error('Chỉ khách đã nhận hàng sản phẩm này mới đánh giá được');
     }
 
     // Step 2: Check if user already has a review for this product
     const existingReview = await Review.findOne({ productId, userId });
     if (existingReview) {
-      throw new Error('User has already reviewed this product. Please update your existing review instead.');
+      throw new Error('Bạn đã đánh giá sản phẩm này rồi, hãy sửa đánh giá cũ');
     }
 
     // Step 3: Create new review
     const review = new Review({
       productId,
       userId,
-      rating: reviewData.rating,
-      title: reviewData.title.trim(),
-      content: reviewData.content.trim(),
+      rating,
+      title: String(reviewData.title).trim().slice(0, 200),
+      content: String(reviewData.content).trim().slice(0, 2000),
     });
 
     const savedReview = await review.save();
+    await syncProductRating(productId);
     return savedReview;
   } catch (error) {
-    throw new Error(`Failed to add review: ${error.message}`);
+    throw new Error(error.message);
   }
 };
 
@@ -245,6 +247,7 @@ const updateReview = async (reviewId, userId, updateData) => {
       runValidators: true,
     });
 
+    await syncProductRating(review.productId);
     return updatedReview;
   } catch (error) {
     throw new Error(`Failed to update review: ${error.message}`);
@@ -274,6 +277,7 @@ const deleteReview = async (reviewId, userId) => {
 
     // Hard delete
     await Review.findByIdAndDelete(reviewId);
+    await syncProductRating(review.productId);
     return true;
   } catch (error) {
     throw new Error(`Failed to delete review: ${error.message}`);
@@ -369,7 +373,69 @@ const getReviewById = async (reviewId) => {
   }
 };
 
+/*
+  Điểm sao và số đánh giá trong bảng Products (dùng để hiển thị, sắp xếp) được tính từ review thật
+  ở MongoDB. Trước đây là số seed cố định, không khớp với đánh giá của khách.
+*/
+const ratingSummary = (rows) => {
+  const map = new Map();
+  for (const row of rows) {
+    map.set(Number(row._id), { rating: Math.round(Number(row.avg) * 100) / 100, count: Number(row.count) });
+  }
+  return map;
+};
+
+/** Tính lại điểm của một sản phẩm sau khi review được thêm, sửa, xoá. */
+const syncProductRating = async (productId) => {
+  const id = Number(productId);
+  const rows = await Review.aggregate([
+    { $match: { productId: id } },
+    { $group: { _id: '$productId', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
+  ]);
+  const summary = ratingSummary(rows).get(id) || { rating: 0, count: 0 };
+  await new sql.Request(getPool())
+    .input('id', sql.Int, id)
+    .input('rating', sql.Decimal(3, 2), summary.rating)
+    .input('count', sql.Int, summary.count)
+    .query('UPDATE Products SET Rating = @rating, ReviewsCount = @count WHERE ProductID = @id');
+  return summary;
+};
+
+/** Đồng bộ toàn bộ điểm sao từ MongoDB (chạy khi khởi động). Trả về số sản phẩm đã sửa. */
+const syncAllProductRatings = async () => {
+  const rows = await Review.aggregate([
+    { $group: { _id: '$productId', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
+  ]);
+  const payload = JSON.stringify([...ratingSummary(rows)].map(([productId, value]) => ({ productId, ...value })));
+  const result = await new sql.Request(getPool())
+    .input('payload', sql.NVarChar(sql.MAX), payload)
+    .query(`
+      WITH rv AS (
+        SELECT productId, rating, [count]
+        FROM OPENJSON(@payload) WITH (productId INT, rating DECIMAL(3,2), [count] INT)
+      )
+      UPDATE p
+      SET Rating = COALESCE(r.rating, 0), ReviewsCount = COALESCE(r.[count], 0)
+      FROM Products p
+      LEFT JOIN rv r ON r.productId = p.ProductID
+      WHERE p.Rating <> COALESCE(r.rating, 0) OR p.ReviewsCount <> COALESCE(r.[count], 0);
+      SELECT @@ROWCOUNT AS changed;
+    `);
+  return result.recordset[0].changed;
+};
+
+/** Khách đã đăng nhập có viết đánh giá cho sản phẩm này được không. */
+const getReviewEligibility = async (productId, userId) => {
+  const existing = await Review.findOne({ productId: Number(productId), userId: Number(userId) }).lean();
+  if (existing) return { canReview: false, reason: 'already_reviewed', reviewId: String(existing._id) };
+  const purchased = await validateUserPurchase(Number(userId), Number(productId));
+  return purchased ? { canReview: true, reason: null } : { canReview: false, reason: 'not_purchased' };
+};
+
 module.exports = {
+  syncProductRating,
+  syncAllProductRatings,
+  getReviewEligibility,
   getProductReviews,
   getReviewStatistics,
   validateUserPurchase,

@@ -198,7 +198,7 @@ INSERT INTO @Seed (Slug, Name, Brand, Description, Price, OldPrice, Stock, Categ
 INSERT INTO dbo.Products (Name, Slug, Brand, Description, Price, OldPrice, Stock, CategoryID, Specs, Images, IsFeatured, Rating, ReviewsCount)
 SELECT s.Name, s.Slug, s.Brand, s.Description, s.Price, s.OldPrice, s.Stock,
        CASE WHEN s.CategorySlug = N'storage' THEN @StorageCat ELSE @ComponentsCat END,
-       s.Specs, N'[]', 0, 4.60, 0
+       s.Specs, N'[]', 0, 0, 0
 FROM @Seed s
 WHERE NOT EXISTS (SELECT 1 FROM dbo.Products p WHERE p.Slug = s.Slug);
 

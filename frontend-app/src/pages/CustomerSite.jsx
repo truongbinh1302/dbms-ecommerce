@@ -682,6 +682,8 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         onAddToCart={addToCart}
         onBuyNow={buyNow}
         onProductLoaded={rememberProduct}
+        currentUser={currentUser}
+        onRequireLogin={requireLogin}
       />
     )
   } else if (routeSection === 'tim-kiem') {
