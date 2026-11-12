@@ -8,6 +8,7 @@ const config = require('../config/env');
     nên thẻ sản phẩm luôn đúng giá trong DB.
   - Không lưu hội thoại ở máy chủ, không ghi nội dung tin nhắn vào log.
   - Giới hạn chi phí: số câu hỏi mỗi IP mỗi giờ (rate limit ở route) và tổng số câu hỏi mỗi ngày (ở đây).
+  - Khoá, mô hình, bật/tắt, giới hạn: admin chỉnh trên trang quản trị (settings.service), không có thì lấy .env.
 */
 
 const MAX_MESSAGES = 12;
@@ -22,7 +23,20 @@ const createHttpError = (status, message, code = null) => {
   return err;
 };
 
-const isEnabled = () => Boolean(config.assistant.apiKey);
+// Nạp muộn để unit test không cần DB (test truyền settings trực tiếp vào chat()).
+const loadSettings = () => require('./settings.service').getAssistantSettings();
+
+/** Trợ lý có đang bật không (có khoá và admin không tắt). */
+const getStatus = async () => {
+  try {
+    return { enabled: (await loadSettings()).enabled };
+  } catch {
+    return { enabled: false };
+  }
+};
+
+/** Số câu đã trả lời hôm nay trên máy chủ này (tính từ lúc khởi động). */
+const usageToday = (now = new Date()) => (usage.day === vietnamDay(now) ? usage.count : 0);
 
 const vietnamDay = (now = new Date()) => new Date(now.getTime() + 7 * 3600000).toISOString().slice(0, 10);
 const usage = { day: null, count: 0 };
@@ -193,8 +207,9 @@ const createToolRunner = () => {
 };
 
 /** Gọi OpenAI Chat Completions. Lỗi của OpenAI không đưa nguyên văn ra cho khách. */
-const callModel = async (fetchImpl, messages) => {
-  const { apiKey, model, baseUrl, timeoutMs } = config.assistant;
+const callModel = async (fetchImpl, messages, settings) => {
+  const { apiKey, model } = settings;
+  const { baseUrl, timeoutMs } = config.assistant;
   let response;
   try {
     response = await fetchImpl(`${baseUrl}/chat/completions`, {
@@ -245,17 +260,18 @@ const fold = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '
  * Trả lời một lượt hội thoại. options: { fetch, tools, now } để test.
  * Trả { reply, products }: products là sản phẩm có trong kết quả công cụ và được nhắc tên trong câu trả lời.
  */
-const chat = async (input, { fetch: fetchImpl = globalThis.fetch, tools = null, now = new Date() } = {}) => {
-  if (!isEnabled()) throw createHttpError(503, 'Trợ lý chưa được bật', 'assistant_disabled');
+const chat = async (input, { fetch: fetchImpl = globalThis.fetch, tools = null, now = new Date(), settings = null } = {}) => {
+  const current = settings || await loadSettings();
+  if (!current.enabled) throw createHttpError(503, 'Trợ lý chưa được bật', 'assistant_disabled');
   const history = validateMessages(input);
-  takeDailyQuota(now);
+  takeDailyQuota(now, current.dailyLimit);
 
   const runner = tools || createToolRunner();
   const messages = [{ role: 'system', content: systemPrompt(config.store) }, ...history];
   const seen = new Map();
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
-    const message = await callModel(fetchImpl, messages);
+    const message = await callModel(fetchImpl, messages, current);
     const calls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
     if (!calls.length || round === MAX_TOOL_ROUNDS) {
       const reply = String(message.content || '').trim() || 'Xin lỗi, mình chưa trả lời được câu này. Bạn hỏi lại cụ thể hơn nhé.';
@@ -292,7 +308,9 @@ module.exports = {
   MAX_MESSAGES,
   MAX_CHARS,
   TOOLS,
-  isEnabled,
+  getStatus,
+  usageToday,
+  loadSettings,
   validateMessages,
   takeDailyQuota,
   createToolRunner,

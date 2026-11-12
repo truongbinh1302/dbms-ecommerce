@@ -3,7 +3,6 @@
 */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const config = require('../../src/config/env');
 const assistant = require('../../src/services/assistant.service');
 
 const reply = (message) => ({ ok: true, status: 200, json: async () => ({ choices: [{ message }] }) });
@@ -20,19 +19,18 @@ const fakeFetch = (responses) => {
 };
 const toolCall = (id, name, args) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 
+// Cài đặt như trang quản trị trả về (không cần DB).
+const SETTINGS = { enabled: true, apiKey: 'sk-test', model: 'gpt-5.4-mini', perHour: 20, dailyLimit: 500 };
+const chat = (messages, options = {}) => assistant.chat(messages, { settings: SETTINGS, ...options });
+
 test.beforeEach(() => {
-  config.assistant.apiKey = 'sk-test';
-  config.assistant.dailyLimit = 500;
   assistant.resetUsage();
 });
-test.after(() => {
-  config.assistant.apiKey = '';
-});
 
-test('tắt khi chưa có OPENAI_API_KEY', async () => {
-  config.assistant.apiKey = '';
-  assert.equal(assistant.isEnabled(), false);
-  await assert.rejects(assistant.chat([{ role: 'user', content: 'chào' }], { fetch: fakeFetch([]) }), (err) => err.status === 503 && err.data.code === 'assistant_disabled');
+test('tắt khi chưa có khoá hoặc admin tắt', async () => {
+  for (const settings of [{ ...SETTINGS, apiKey: '', enabled: false }, { ...SETTINGS, enabled: false }]) {
+    await assert.rejects(assistant.chat([{ role: 'user', content: 'chào' }], { fetch: fakeFetch([]), settings }), (err) => err.status === 503 && err.data.code === 'assistant_disabled');
+  }
 });
 
 test('chỉ nhận vai user/assistant, tin cuối là của khách, giới hạn độ dài và số tin', () => {
@@ -60,7 +58,7 @@ test('gọi công cụ rồi trả lời; thẻ sản phẩm lấy từ kết qu
       return { products: [{ id: 2, name: 'Laptop Gaming X', price: 18500000, stock: 2, hotDeal: false }, { id: 9, name: 'Laptop Văn Phòng Y', price: 12000000, stock: 1 }] };
     },
   };
-  const result = await assistant.chat([{ role: 'user', content: 'Laptop dưới 20 triệu?' }], { fetch, tools });
+  const result = await chat([{ role: 'user', content: 'Laptop dưới 20 triệu?' }], { fetch, tools });
   assert.equal(result.reply, 'Bạn tham khảo Laptop Gaming X giá 18.500.000 đ, còn 2 máy.');
   assert.deepEqual(result.products, [{ id: 2, name: 'Laptop Gaming X', price: 18500000, stock: 2, hotDeal: false }]);
   assert.deepEqual(seenArgs, [{ query: 'laptop', maxPrice: 20000000 }]);
@@ -82,7 +80,7 @@ test('công cụ lạ hoặc lỗi được báo lại cho mô hình, không là
     reply({ content: 'Hiện mình chưa lấy được thông tin sản phẩm này.' }),
   ]);
   const tools = { async get_product() { throw new Error('db down'); } };
-  const result = await assistant.chat([{ role: 'user', content: 'Sản phẩm 1?' }], { fetch, tools });
+  const result = await chat([{ role: 'user', content: 'Sản phẩm 1?' }], { fetch, tools });
   assert.equal(result.products.length, 0);
   const toolMessages = fetch.calls[1].body.messages.filter((message) => message.role === 'tool').map((message) => JSON.parse(message.content));
   assert.deepEqual(toolMessages, [{ error: 'Công cụ không tồn tại' }, { error: 'Không lấy được dữ liệu' }]);
@@ -91,7 +89,7 @@ test('công cụ lạ hoặc lỗi được báo lại cho mô hình, không là
 test('mô hình gọi công cụ mãi thì dừng sau 4 vòng', async () => {
   const loop = () => reply({ content: '', tool_calls: [toolCall('x', 'get_store_policies', {})] });
   const fetch = fakeFetch([loop, loop, loop, loop, loop]);
-  const result = await assistant.chat([{ role: 'user', content: 'Đổi trả?' }], { fetch, tools: { async get_store_policies() { return { returnDays: 7 }; } } });
+  const result = await chat([{ role: 'user', content: 'Đổi trả?' }], { fetch, tools: { async get_store_policies() { return { returnDays: 7 }; } } });
   assert.equal(fetch.calls.length, 5);
   assert.match(result.reply, /chưa trả lời được/);
 });
@@ -99,21 +97,26 @@ test('mô hình gọi công cụ mãi thì dừng sau 4 vòng', async () => {
 test('lỗi OpenAI (khoá sai, quá tải, mạng) thành 503 với lời nhắn chung, không lộ chi tiết', async () => {
   for (const [response, code] of [[{ ok: false, status: 401 }, 'assistant_unavailable'], [{ ok: false, status: 429 }, 'assistant_busy']]) {
     await assert.rejects(
-      assistant.chat([{ role: 'user', content: 'chào' }], { fetch: fakeFetch([response]) }),
+      chat([{ role: 'user', content: 'chào' }], { fetch: fakeFetch([response]) }),
       (err) => err.status === 503 && err.data.code === code && !/401|429|key/i.test(err.message),
     );
   }
   await assert.rejects(
-    assistant.chat([{ role: 'user', content: 'chào' }], { fetch: fakeFetch([() => { throw new Error('ECONNRESET'); }]) }),
+    chat([{ role: 'user', content: 'chào' }], { fetch: fakeFetch([() => { throw new Error('ECONNRESET'); }]) }),
     (err) => err.status === 503,
   );
 });
 
-test('hạn mức câu hỏi mỗi ngày của cả cửa hàng, sang ngày mới (giờ Việt Nam) thì đếm lại', () => {
-  config.assistant.dailyLimit = 2;
+test('hạn mức câu hỏi mỗi ngày của cả cửa hàng, sang ngày mới (giờ Việt Nam) thì đếm lại', async () => {
   const evening = new Date('2026-11-12T16:00:00Z'); // 23:00 giờ VN
   assistant.takeDailyQuota(evening, 2);
   assistant.takeDailyQuota(evening, 2);
   assert.throws(() => assistant.takeDailyQuota(evening, 2), (err) => err.status === 429 && err.data.code === 'assistant_daily_limit');
   assert.doesNotThrow(() => assistant.takeDailyQuota(new Date('2026-11-12T17:30:00Z'), 2)); // 00:30 hôm sau
+  assert.equal(assistant.usageToday(new Date('2026-11-12T17:30:00Z')), 1);
+
+  assistant.resetUsage();
+  const ask = () => chat([{ role: 'user', content: 'chào' }], { fetch: fakeFetch([reply({ content: 'Chào bạn' })]), settings: { ...SETTINGS, dailyLimit: 1 } });
+  await ask();
+  await assert.rejects(ask(), (err) => err.status === 429, 'hạn mức admin đặt trên trang quản trị được dùng');
 });

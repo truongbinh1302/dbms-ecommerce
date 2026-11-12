@@ -9,14 +9,21 @@ const router = express.Router();
 // Mỗi IP hỏi tối đa ASSISTANT_MAX_PER_HOUR câu mỗi giờ (mỗi câu tốn tiền gọi OpenAI).
 const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: Math.max(1, config.assistant.perHour),
+  // Số câu mỗi giờ admin chỉnh được trên trang quản trị (đọc lại mỗi lần, có cache 30 giây).
+  limit: async () => {
+    try {
+      return Math.max(1, (await assistantService.loadSettings()).perHour);
+    } catch {
+      return Math.max(1, config.assistant.perHour);
+    }
+  },
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Bạn hỏi hơi nhanh, nghỉ một lát rồi hỏi tiếp nhé.' },
 });
 
 // Website hỏi trợ lý có bật không để hiện hoặc ẩn nút trợ lý.
-router.get('/status', (req, res) => success(res, { enabled: assistantService.isEnabled() }, 'Assistant status'));
+router.get('/status', async (req, res) => success(res, await assistantService.getStatus(), 'Assistant status'));
 
 router.post('/chat', chatLimiter, async (req, res) => {
   try {
