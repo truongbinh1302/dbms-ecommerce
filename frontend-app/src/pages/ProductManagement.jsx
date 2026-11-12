@@ -14,10 +14,12 @@ export default function ProductManagement({ token, onBackToAdmin }) {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [categories, setCategories] = useState([])
+  // 50.000 sản phẩm sinh tự động để thử chỉ mục: mặc định ẩn, bật khi cần thử tìm kiếm trên toàn bảng.
+  const [includeGenerated, setIncludeGenerated] = useState(false)
 
   const authToken = token || getStoredToken()
 
-  const loadProducts = async (pageNum = 1, query = '') => {
+  const loadProducts = async (pageNum = 1, query = '', withGenerated = false) => {
     setLoading(true)
     setError('')
     try {
@@ -25,6 +27,7 @@ export default function ProductManagement({ token, onBackToAdmin }) {
         q: query,
         page: pageNum,
         limit: 12,
+        ...(withGenerated ? { includeGenerated: 'true' } : {}),
       })
       setProducts(result.items)
       setTotalPages(result.pagination?.totalPages || 1)
@@ -56,7 +59,7 @@ export default function ProductManagement({ token, onBackToAdmin }) {
     const query = e.target.value
     setSearchQuery(query)
     setPage(1)
-    loadProducts(1, query)
+    loadProducts(1, query, includeGenerated)
   }
 
   const handleAddProduct = () => {
@@ -98,7 +101,7 @@ export default function ProductManagement({ token, onBackToAdmin }) {
     }
 
     // Reload products
-    await loadProducts(page, searchQuery)
+    await loadProducts(page, searchQuery, includeGenerated)
   }
 
 
@@ -115,7 +118,7 @@ export default function ProductManagement({ token, onBackToAdmin }) {
     setError('')
     try {
       await deleteProduct(product.id, authToken)
-      await loadProducts(page, searchQuery)
+      await loadProducts(page, searchQuery, includeGenerated)
     } catch (err) {
       setError(err.message || 'Không thể xóa sản phẩm')
     } finally {
@@ -165,6 +168,17 @@ export default function ProductManagement({ token, onBackToAdmin }) {
             onChange={handleSearch}
             className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-500"
           />
+          <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={includeGenerated}
+              onChange={(event) => {
+                setIncludeGenerated(event.target.checked)
+                loadProducts(1, searchQuery, event.target.checked)
+              }}
+            />
+            Gồm 50.000 sản phẩm sinh tự động (thử chỉ mục, không hiện ở trang khách)
+          </label>
         </div>
 
         {/* Error */}
@@ -209,6 +223,9 @@ export default function ProductManagement({ token, onBackToAdmin }) {
                 {/* Content */}
                 <div className="p-4">
                   <h3 className="font-bold text-slate-900 line-clamp-2">{product.name}</h3>
+                  {product.isGenerated ? (
+                    <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Sinh tự động</span>
+                  ) : null}
                   <p className="mt-1 text-sm text-slate-500">{product.brand}</p>
 
                   <div className="mt-3 flex items-center justify-between">
@@ -255,7 +272,7 @@ export default function ProductManagement({ token, onBackToAdmin }) {
         {totalPages > 1 && (
           <div className="mt-8 flex items-center justify-center gap-2">
             <button
-              onClick={() => loadProducts(Math.max(1, page - 1), searchQuery)}
+              onClick={() => loadProducts(Math.max(1, page - 1), searchQuery, includeGenerated)}
               disabled={page === 1}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -265,7 +282,7 @@ export default function ProductManagement({ token, onBackToAdmin }) {
               Trang {page} / {totalPages}
             </span>
             <button
-              onClick={() => loadProducts(Math.min(totalPages, page + 1), searchQuery)}
+              onClick={() => loadProducts(Math.min(totalPages, page + 1), searchQuery, includeGenerated)}
               disabled={page === totalPages}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >

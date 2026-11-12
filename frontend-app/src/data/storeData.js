@@ -1,6 +1,7 @@
 // Nút nhanh dưới header: mục nào cũng mở một trang hoặc khối có thật.
 export const quickLinks = [
   'Build PC',
+  'Máy chạy được gì?',
   'Hot Deal',
   'Dịch vụ kỹ thuật tại nhà',
   'Thu cũ đổi mới',

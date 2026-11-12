@@ -2,6 +2,12 @@ import StoreGlyph from './StoreGlyph'
 import { toggleCompare, useCompareItems } from '../hooks/useCompare'
 import { classNames, formatCurrency } from '../utils/format'
 
+// "Nên mua lúc nào?": chỉ hiện nhãn trên thẻ khi giá đang tốt so với 90 ngày qua.
+const PRICE_BADGES = {
+  lowest: 'Thấp nhất 90 ngày',
+  below_avg: 'Dưới giá trung bình 90 ngày',
+}
+
 function getVisualIcon(kind) {
   switch (kind) {
     case 'laptop':
@@ -173,6 +179,12 @@ export default function ProductCard({
               <p className="mt-2 text-xs font-bold text-red-600">
                 Hot Deal{product.promotion.remaining !== null && product.promotion.remaining !== undefined ? ` · còn ${product.promotion.remaining} suất` : ''}
                 {product.promotion.perOrderLimit ? ` · tối đa ${product.promotion.perOrderLimit}/đơn` : ''}
+              </p>
+            ) : null}
+
+            {PRICE_BADGES[product.priceInsight?.label] ? (
+              <p className="mt-2 text-xs font-bold text-emerald-700" title={product.priceInsight.text}>
+                ↓ {PRICE_BADGES[product.priceInsight.label]}
               </p>
             ) : null}
 

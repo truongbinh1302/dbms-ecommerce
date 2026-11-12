@@ -17,6 +17,9 @@ import useDocumentTitle from '../hooks/useDocumentTitle'
 
 // Thông số linh kiện Build PC: chỉ linh kiện mới cần, tải riêng để trang sản phẩm khác không phải tải phần mã này.
 const PartSpecs = lazy(() => import('../components/PartSpecs'))
+// "Máy này chạy được gì?": chỉ PC và laptop có ước tính, các trang khác không tải phần mã và không gọi API.
+const ProductCapabilities = lazy(() => import('../components/ProductCapabilities'))
+const MACHINE_CATEGORIES = ['pc-gaming', 'gaming-laptops', 'office-laptops']
 
 // Hot Deal đang chạy: đếm ngược tới giờ kết thúc, số suất còn lại, giới hạn mỗi đơn.
 function PromotionNotice({ promotion }) {
@@ -127,6 +130,11 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
         </div>
 
         <div>
+          {product.isGenerated ? (
+            <p className="mb-3 rounded-2xl bg-slate-100 px-4 py-2 text-xs text-slate-600">
+              Sản phẩm sinh tự động để thử hiệu năng cơ sở dữ liệu, không phải hàng thật và không hiện ở trang chủ hay tìm kiếm.
+            </p>
+          ) : null}
           {product.brand ? <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-600">{product.brand}</p> : null}
           <h1 className="mt-2 text-3xl font-black leading-tight text-slate-900">{product.name}</h1>
 
@@ -201,6 +209,7 @@ export default function ProductDetailPage({ productId, onAddToCart, onBuyNow, on
 
       <Suspense fallback={null}>
         <PartSpecs productId={productId} />
+        {MACHINE_CATEGORIES.includes(product.categorySlug) ? <ProductCapabilities productId={productId} /> : null}
       </Suspense>
 
       <PriceHistory productId={productId} />

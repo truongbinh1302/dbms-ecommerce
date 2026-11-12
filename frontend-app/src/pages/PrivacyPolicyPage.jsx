@@ -39,12 +39,13 @@ export default function PrivacyPolicyPage() {
           <li><strong>Giao hàng:</strong> tên người nhận, số điện thoại, tỉnh/thành phố, phường/xã, số nhà và ghi chú đơn hàng.</li>
           <li><strong>Đơn hàng:</strong> sản phẩm, số lượng, giá, mã giảm giá, mã báo giá, phương thức và trạng thái thanh toán.</li>
           <li><strong>Thanh toán VNPay:</strong> chúng tôi không nhận và không lưu số thẻ hay tài khoản ngân hàng. Chỉ lưu mã giao dịch và kết quả VNPay trả về.</li>
-          <li><strong>Hoạt động mua sắm:</strong> giỏ hàng (lưu trên máy chủ khi bạn đăng nhập), báo giá Build PC, đánh giá sản phẩm, số serial bảo hành, sản phẩm bạn bấm theo dõi giá (kèm giá mong muốn nếu bạn nhập) hoặc chờ có hàng, và các thông báo gửi tới tài khoản.</li>
+          <li><strong>Hoạt động mua sắm:</strong> giỏ hàng (lưu trên máy chủ khi bạn đăng nhập), báo giá Build PC, đánh giá sản phẩm, số serial bảo hành, sản phẩm bạn bấm theo dõi giá (kèm giá mong muốn nếu bạn nhập) hoặc chờ có hàng, cấu hình Build PC bạn bật theo dõi tổng giá (danh sách linh kiện, tên cấu hình, tổng giá lúc bắt đầu), và các thông báo gửi tới tài khoản.</li>
           <li><strong>Yêu cầu dịch vụ:</strong> khi bạn đặt lịch kỹ thuật tại nhà, gửi yêu cầu thu cũ hoặc bảo hành: địa chỉ và ngày giờ hẹn, số điện thoại liên hệ, mô tả lỗi, thông tin máy cũ (loại, mẫu, giá mua, thời gian dùng, tình trạng).</li>
           <li><strong>Hỏi đáp:</strong> câu hỏi bạn gửi ở trang sản phẩm. Sau khi cửa hàng trả lời, câu hỏi hiện công khai kèm tên gọi của bạn (chữ cuối trong họ tên), không kèm họ tên đầy đủ hay email.</li>
           <li><strong>Đổi trả:</strong> sản phẩm, số lượng, lý do và mô tả tình trạng bạn nhập khi yêu cầu đổi hoặc trả hàng; số tiền cửa hàng đã hoàn.</li>
           <li><strong>Trên trình duyệt của bạn:</strong> một cookie đăng nhập (<code>bt_refresh</code>, chỉ gửi tới máy chủ khi gia hạn phiên, trang web không đọc được, hết hạn sau 7 ngày hoặc khi bạn đăng xuất); trong localStorage: phiên đăng nhập ngắn hạn, giỏ hàng, sản phẩm đã xem, yêu thích, đang so sánh, cấu hình Build PC đang chọn. Website không dùng cookie quảng cáo hay công cụ theo dõi của bên thứ ba.</li>
           <li><strong>Trợ lý mua hàng:</strong> câu hỏi bạn gõ cho trợ lý và câu trả lời. Cửa hàng không lưu hội thoại trên máy chủ; trình duyệt giữ hội thoại trong tab đang mở (sessionStorage) cho tới khi bạn đóng tab hoặc bấm "Xoá hội thoại".</li>
+          <li><strong>Kiểm tra máy (“Máy này chạy được gì?”):</strong> khi bạn chọn file DxDiag, trình duyệt chỉ đọc và gửi các dòng hãng máy, model, CPU, dung lượng RAM và card đồ hoạ; tên máy, tên người dùng và phần còn lại của file không rời khỏi máy bạn. Máy chủ dùng các dòng đó để ước tính rồi bỏ đi, không lưu và không gắn với tài khoản.</li>
           <li><strong>Kỹ thuật:</strong> địa chỉ IP và thời điểm truy cập, dùng để giới hạn số lần gọi và chống tấn công.</li>
         </ul>
       </Section>
@@ -55,7 +56,7 @@ export default function PrivacyPolicyPage() {
           <li>Xác nhận, giao đơn, thu tiền, huỷ đơn và hoàn tiền.</li>
           <li>Giữ giá theo báo giá, tra cứu bảo hành, chăm sóc khách hàng.</li>
           <li>Hẹn lịch và cử kỹ thuật viên tới đúng địa chỉ, định giá máy thu cũ, xử lý bảo hành.</li>
-          <li>Báo trong tài khoản khi giá sản phẩm bạn theo dõi giảm, khi sản phẩm bạn chờ có hàng trở lại, khi đơn hàng, yêu cầu đổi trả hoặc yêu cầu dịch vụ đổi trạng thái. Không gửi email hay tin nhắn quảng cáo.</li>
+          <li>Báo trong tài khoản khi giá sản phẩm hoặc tổng giá cấu hình Build PC bạn theo dõi giảm, khi sản phẩm bạn chờ có hàng trở lại, khi đơn hàng, yêu cầu đổi trả hoặc yêu cầu dịch vụ đổi trạng thái. Không gửi email hay tin nhắn quảng cáo.</li>
           <li>Bảo đảm an toàn hệ thống và thực hiện nghĩa vụ kế toán, thuế.</li>
         </ul>
         <p>Chúng tôi không bán dữ liệu cá nhân và không dùng dữ liệu của bạn để quảng cáo khi chưa có sự đồng ý riêng.</p>
@@ -99,7 +100,7 @@ export default function PrivacyPolicyPage() {
       <Section title="6. Khi bạn xoá tài khoản">
         <ul className="list-disc space-y-1 pl-5">
           <li>Họ tên, email, số điện thoại, địa chỉ mặc định và mật khẩu bị thay bằng giá trị vô danh; tài khoản bị khoá và không đăng nhập lại được.</li>
-          <li>Giỏ hàng, đánh giá sản phẩm, danh sách theo dõi giá, danh sách chờ có hàng và thông báo của bạn bị xoá; báo giá Build PC không còn gắn với bạn.</li>
+          <li>Giỏ hàng, đánh giá sản phẩm, danh sách theo dõi giá (cả cấu hình Build PC đang theo dõi), danh sách chờ có hàng và thông báo của bạn bị xoá; báo giá Build PC không còn gắn với bạn.</li>
           <li>Yêu cầu dịch vụ đang mở bị huỷ; địa chỉ, số điện thoại, mô tả và thông tin máy trong các yêu cầu dịch vụ bị xoá.</li>
           <li>Câu hỏi chưa được trả lời bị xoá; câu đã trả lời được giữ cho người mua sau tham khảo nhưng hiện là “Khách hàng”, không còn gắn với bạn.</li>
           <li>Đơn hàng đã đặt được giữ lại làm chứng từ bán hàng như mục 4.</li>

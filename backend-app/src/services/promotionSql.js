@@ -24,4 +24,18 @@ const promoApply = (alias = 'p') => `
 const PROMO_COLUMNS = `promo.PromoID, promo.PromoName, promo.PromoSalePrice, promo.PromoEndsAt,
   promo.PromoQuantityLimit, promo.PromoSoldCount, promo.PromoPerOrderLimit`;
 
-module.exports = { ACTIVE_CONDITION, promoApply, PROMO_COLUMNS };
+// Giá khách đang trả được của mỗi sản phẩm: giá Hot Deal đang chạy (còn suất) nếu thấp hơn giá niêm yết.
+// Dùng làm bảng con, ví dụ: JOIN (EFFECTIVE_PRICE_SQL) cur ON cur.ProductID = w.ProductID
+const EFFECTIVE_PRICE_SQL = `
+  SELECT p.ProductID, p.Name, p.Price,
+         CASE WHEN deal.SalePrice IS NOT NULL AND deal.SalePrice < p.Price THEN deal.SalePrice ELSE p.Price END AS EffectivePrice
+  FROM Products p
+  OUTER APPLY (
+    SELECT MIN(pi.SalePrice) AS SalePrice
+    FROM PromotionItems pi JOIN Promotions pr ON pr.PromotionID = pi.PromotionID
+    WHERE pi.ProductID = p.ProductID AND ${ACTIVE_CONDITION}
+      AND (pi.QuantityLimit IS NULL OR pi.SoldCount < pi.QuantityLimit)
+  ) deal
+  WHERE p.IsDeleted = 0`;
+
+module.exports = { ACTIVE_CONDITION, promoApply, PROMO_COLUMNS, EFFECTIVE_PRICE_SQL };

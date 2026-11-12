@@ -100,10 +100,23 @@ test('theo dõi giá: báo khi giá giảm, không báo trùng, báo lại khi g
   await Promise.all([notificationService.sweepPriceWatches(), notificationService.sweepPriceWatches()]);
   assert.equal((await priceDrops(anna)).length, 1);
 
-  await setPrice(850000);
+  // Giá nhích lên mà vẫn dưới giá lúc bắt đầu theo dõi: không báo "giá giảm".
+  await setPrice(950000);
+  await notificationService.sweepPriceWatches();
+  assert.equal((await priceDrops(anna)).length, 1);
+  // Về lại giá cũ rồi giảm lần nữa thì báo.
+  await setPrice(1000000);
+  await notificationService.sweepPriceWatches();
+  await setPrice(980000);
   await notificationService.sweepPriceWatches();
   drops = await priceDrops(anna);
   assert.equal(drops.length, 2);
+  assert.match(drops[1].Body, /980\.000đ/);
+
+  await setPrice(850000);
+  await notificationService.sweepPriceWatches();
+  drops = await priceDrops(anna);
+  assert.equal(drops.length, 3);
 
   const list = await notificationService.listWatches(anna);
   assert.deepEqual([list[0].productId, list[0].currentPrice, list[0].priceAtWatch], [ctx.productId, 850000, 1000000]);

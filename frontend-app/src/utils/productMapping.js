@@ -76,5 +76,8 @@ export function mapApiProductToStoreProduct(product) {
     visual: { kind: getDemoVisualKind(id, categorySlug, brand) },
     categorySlug,
     categoryName: product.category?.name || '',
+    // Nhãn "Nên mua lúc nào?" (thấp nhất 90 ngày...) khi API trả kèm.
+    priceInsight: product.priceInsight || null,
+    isGenerated: Boolean(product.isGenerated),
   }
 }

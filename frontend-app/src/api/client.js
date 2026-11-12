@@ -321,6 +321,42 @@ export function suggestUpgrades(current) {
   return request('/builder/upgrade', { method: 'POST', body: JSON.stringify(current) });
 }
 
+// "Nên mua lúc nào?" cho cả cấu hình: tổng giá cuối mỗi ngày trong 90 ngày.
+export function fetchBuildPriceTrend(items) {
+  return request('/builder/price-trend', { method: 'POST', body: JSON.stringify({ items }) });
+}
+
+// Theo dõi tổng giá cả cấu hình (cần đăng nhập): báo khi cả bộ rẻ hơn lúc bắt đầu theo dõi.
+export function fetchBuildWatches() {
+  return request('/builder/watches', { method: 'GET', auth: true });
+}
+
+export function watchBuild(items, title) {
+  return request('/builder/watches', { method: 'POST', auth: true, body: JSON.stringify({ items, title: title || undefined }) });
+}
+
+export function unwatchBuild(watchId) {
+  return request(`/builder/watches/${encodeURIComponent(watchId)}`, { method: 'DELETE', auth: true });
+}
+
+// --- "Máy này chạy được gì?" và nâng cấp laptop ---
+export function fetchLaptopModels() {
+  return request('/machine/laptops');
+}
+
+// body: { source: 'dxdiag' | 'laptop' | 'manual', text, laptopModelId, ramGB, vramGB, gpuKind, slotsUsed }
+export function analyzeMachine(body) {
+  return request('/machine/analyze', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function fetchBuildCapabilities(items) {
+  return request('/machine/build', { method: 'POST', body: JSON.stringify({ items }) });
+}
+
+export function fetchProductCapabilities(productId) {
+  return request(`/machine/products/${encodeURIComponent(productId)}`);
+}
+
 // Đăng nhập thì báo giá gắn với tài khoản; chưa đăng nhập vẫn tạo được.
 export function createBuildQuote(items, title) {
   return request('/builder/quotes', {

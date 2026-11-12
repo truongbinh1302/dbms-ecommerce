@@ -44,6 +44,8 @@ const formatProduct = (row) => ({
   specs: parseJson(row.Specs, []),
   images: parseJson(row.Images, []),
   isFeatured: Boolean(row.IsFeatured),
+  // Sản phẩm sinh tự động để thử chỉ mục (không phải hàng thật).
+  isGenerated: Boolean(row.IsGenerated),
   rating: Number(row.Rating || 0),
   reviewsCount: Number(row.ReviewsCount || 0),
   category: {

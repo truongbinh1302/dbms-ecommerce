@@ -35,6 +35,7 @@ const VIEWED_STORAGE_KEY = 'binhtinhstore-viewed'
 const FAVORITES_STORAGE_KEY = 'binhtinhstore-favorites'
 // Mã báo giá Build PC đang giữ giá cho giỏ hàng (khách bấm "Mua theo báo giá").
 const BuildPcPage = lazy(() => import('./BuildPcPage'))
+const MachineCheckPage = lazy(() => import('./MachineCheckPage'))
 const ServicesPage = lazy(() => import('./ServicesPage'))
 const AccountPage = lazy(() => import('./AccountPage'))
 const PrivacyPolicyPage = lazy(() => import('./PrivacyPolicyPage'))
@@ -51,6 +52,7 @@ const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
 // Nút nhanh dưới header có trang riêng.
 const QUICK_LINK_ROUTES = {
   'Build PC': '/build-pc',
+  'Máy chạy được gì?': '/kiem-tra-may',
   'Dịch vụ kỹ thuật tại nhà': '/dich-vu/tai-nha',
   'Thu cũ đổi mới': '/dich-vu/thu-cu',
   'Tra cứu bảo hành': '/bao-hanh',
@@ -775,6 +777,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     'thanh-toan': 'Thanh toán',
     'don-hang': routeId > 0 ? `Đơn hàng #${routeId}` : 'Đơn hàng của tôi',
     'build-pc': 'Build PC',
+    'kiem-tra-may': 'Máy này chạy được gì?',
     'bao-gia': 'Báo giá cấu hình',
     'bao-hanh': 'Tra cứu bảo hành',
     'dich-vu': 'Dịch vụ sau bán',
@@ -847,8 +850,19 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
   } else if (routeSection === 'build-pc') {
     routeContent = (
       <BuildPcPage
+        key={route.segments[1] || 'tu-chon'}
         initialTab={route.segments[1] || 'tu-chon'}
         onBuyBuild={buyBuild}
+        onAddToCart={addToCart}
+        currentUser={currentUser}
+        onRequireLogin={requireLogin}
+      />
+    )
+  } else if (routeSection === 'kiem-tra-may') {
+    routeContent = (
+      <MachineCheckPage
+        key={route.query.get('model') || 'machine'}
+        initialModelId={Number(route.query.get('model')) || null}
         onAddToCart={addToCart}
       />
     )

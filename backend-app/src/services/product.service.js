@@ -5,6 +5,7 @@ const { promoApply, PROMO_COLUMNS } = require('./promotionSql');
 const { tokenizeQuery } = require('../utils/searchText');
 const { refreshSearchText } = require('./searchIndex.service');
 const notificationService = require('./notification.service');
+const priceInsightService = require('./priceInsight.service');
 
 const slugify = (value) => String(value || '')
   .toLowerCase()
@@ -63,6 +64,7 @@ const buildProductFilter = (request, filters, tokens, ids) => {
     maxPrice = null,
     inStock = null,
     featured = null,
+    includeGenerated = null,
   } = filters;
 
   request.input('q', sql.NVarChar, q ? String(q).trim() : null);
@@ -81,6 +83,11 @@ const buildProductFilter = (request, filters, tokens, ids) => {
   const idFilter = ids.length > 0
     ? `AND p.ProductID IN (${ids.map((_, index) => `@id${index}`).join(', ')})`
     : '';
+  // 50.000 sản phẩm sinh tự động (thử chỉ mục) không hiện ở trang khách. Vẫn lấy được khi hỏi theo mã
+  // (yêu thích, so sánh, giỏ cũ) hoặc khi gọi với includeGenerated=true (trang quản trị, thử hiệu năng).
+  const generatedFilter = ids.length > 0 || includeGenerated === 'true' || includeGenerated === true
+    ? ''
+    : 'AND p.IsGenerated = 0';
 
   return `
     WHERE p.IsDeleted = 0
@@ -94,6 +101,7 @@ const buildProductFilter = (request, filters, tokens, ids) => {
       AND (@inStock IS NULL OR p.Stock > 0)
       AND (@featured IS NULL OR p.IsFeatured = @featured)
       ${idFilter}
+      ${generatedFilter}
   `;
 };
 
@@ -129,7 +137,7 @@ const getProducts = async (filters = {}, { countTotal = true } = {}) => {
 
   const result = await request.query(`
     SELECT p.ProductID AS id, p.Name, p.Slug, p.Brand, p.Description, p.Price, p.OldPrice,
-           p.Stock, p.Specs, p.Images, p.IsFeatured, p.Rating, p.ReviewsCount,
+           p.Stock, p.Specs, p.Images, p.IsFeatured, p.IsGenerated, p.Rating, p.ReviewsCount,
            p.CreatedAt, p.UpdatedAt,
            c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug,
            ${PROMO_COLUMNS}
@@ -146,6 +154,8 @@ const getProducts = async (filters = {}, { countTotal = true } = {}) => {
   if (!countTotal) {
     return { items, pagination: { page, limit, totalItems: null, totalPages: null } };
   }
+  // Nhãn "Nên mua lúc nào?" (thấp nhất 90 ngày...) cho các sản phẩm của trang này.
+  await priceInsightService.attachInsights(items);
 
   const countRequest = new sql.Request(pool);
   const countWhere = buildProductFilter(countRequest, { ...filters, q: q || null }, tokens, ids);
@@ -188,7 +198,7 @@ const getProductById = async (id) => {
     .query(`
       SELECT p.ProductID AS id, p.Name, p.Slug, p.Brand, p.Description,
              p.Price, p.OldPrice, p.Stock, p.Specs, p.Images,
-             p.IsFeatured, p.Rating, p.ReviewsCount, p.CreatedAt, p.UpdatedAt,
+             p.IsFeatured, p.IsGenerated, p.Rating, p.ReviewsCount, p.CreatedAt, p.UpdatedAt,
              c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug,
              ${PROMO_COLUMNS}
       FROM Products p
@@ -426,6 +436,12 @@ const getPriceHistory = async (id, days = 180) => {
     changedAt: row.ChangedAt,
   }));
   const prices = points.map((point) => point.price).concat(Number(product.Price));
+  let insight = null;
+  try {
+    insight = (await priceInsightService.getInsights([productId])).get(productId) || null;
+  } catch (err) {
+    console.warn('Price insight skipped:', err.message);
+  }
   return {
     productId,
     days: windowDays,
@@ -433,6 +449,7 @@ const getPriceHistory = async (id, days = 180) => {
     lowestPrice: Math.min(...prices),
     highestPrice: Math.max(...prices),
     points,
+    insight,
   };
 };
 

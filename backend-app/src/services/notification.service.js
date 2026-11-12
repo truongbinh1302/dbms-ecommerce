@@ -1,5 +1,5 @@
 const { getPool, sql } = require('../config/db.sql');
-const { ACTIVE_CONDITION } = require('./promotionSql');
+const { EFFECTIVE_PRICE_SQL } = require('./promotionSql');
 
 /*
   Thông báo trong tài khoản và theo dõi giá.
@@ -75,19 +75,6 @@ const markRead = async (userId, notificationId = null) => {
 };
 
 // ---------- Theo dõi giá ----------
-
-// Giá khách đang trả được: giá Hot Deal đang chạy (còn suất) nếu thấp hơn giá niêm yết.
-const EFFECTIVE_PRICE_SQL = `
-  SELECT p.ProductID, p.Name, p.Price,
-         CASE WHEN deal.SalePrice IS NOT NULL AND deal.SalePrice < p.Price THEN deal.SalePrice ELSE p.Price END AS EffectivePrice
-  FROM Products p
-  OUTER APPLY (
-    SELECT MIN(pi.SalePrice) AS SalePrice
-    FROM PromotionItems pi JOIN Promotions pr ON pr.PromotionID = pi.PromotionID
-    WHERE pi.ProductID = p.ProductID AND ${ACTIVE_CONDITION}
-      AND (pi.QuantityLimit IS NULL OR pi.SoldCount < pi.QuantityLimit)
-  ) deal
-  WHERE p.IsDeleted = 0`;
 
 const currentPrice = async (productId) => {
   const result = await new sql.Request(getPool())
@@ -169,7 +156,8 @@ const listWatches = async (userId) => {
 /**
  * Ghi thông báo giá giảm cho mọi lượt theo dõi đạt điều kiện. Trả về số thông báo mới.
  * Điều kiện: giá hiện tại <= giá mong muốn (hoặc < giá lúc bắt đầu theo dõi nếu không đặt),
- * và thấp hơn lần báo trước. Giá tăng lại cao hơn lần báo trước thì xoá mốc để lần giảm sau lại được báo.
+ * và thấp hơn lần báo trước. Giá lên lại trên giá mong muốn (hoặc về giá lúc bắt đầu theo dõi) thì xoá mốc
+ * để lần giảm sau lại được báo.
  */
 const sweepPriceWatches = async () => {
   const result = await new sql.Request(getPool()).query(`
@@ -177,11 +165,15 @@ const sweepPriceWatches = async () => {
     BEGIN TRANSACTION;
     DECLARE @hits TABLE (UserID INT, ProductID INT, Name NVARCHAR(220), Price DECIMAL(18,2), PriceAtWatch DECIMAL(18,2));
 
+    -- Mở lại lượt báo khi giá đã hết "giảm" (lên trên giá mong muốn, hoặc về lại giá lúc bắt đầu theo dõi).
+    -- Giá chỉ nhích lên mà vẫn dưới mức đó thì không mở lại, để không báo "giá giảm" khi giá đang tăng.
     UPDATE w
     SET LastNotifiedPrice = NULL, LastNotifiedAt = NULL
     FROM PriceWatches w WITH (UPDLOCK)
     JOIN (${EFFECTIVE_PRICE_SQL}) cur ON cur.ProductID = w.ProductID
-    WHERE w.LastNotifiedPrice IS NOT NULL AND cur.EffectivePrice > w.LastNotifiedPrice;
+    WHERE w.LastNotifiedPrice IS NOT NULL
+      AND ((w.TargetPrice IS NOT NULL AND cur.EffectivePrice > w.TargetPrice)
+        OR (w.TargetPrice IS NULL AND cur.EffectivePrice >= w.PriceAtWatch));
 
     UPDATE w
     SET LastNotifiedPrice = cur.EffectivePrice, LastNotifiedAt = SYSDATETIME()
@@ -299,6 +291,9 @@ const sweepSoon = () => {
   setImmediate(() => {
     sweepPriceWatches().catch((err) => console.warn('[price-watch] sweep failed:', err.message));
     sweepStockWatches().catch((err) => console.warn('[stock-watch] sweep failed:', err.message));
+    // Nạp muộn để tránh vòng require (buildWatch.service dùng notify của file này).
+    require('./buildWatch.service').sweepBuildWatches()
+      .catch((err) => console.warn('[build-watch] sweep failed:', err.message));
   });
 };
 
