@@ -75,6 +75,23 @@ services:
       # Chạy trên máy cá nhân VNPay không gọi IPN về được, nên cho trang return (đã kiểm chữ ký) cập nhật đơn.
       # Khi có domain thật nhận được IPN thì đặt false.
       VNPAY_UPDATE_ON_RETURN: ${VNPAY_UPDATE_ON_RETURN:-true}
+      # Thông tin cửa hàng và chính sách (xem .env.docker.example)
+      STORE_LEGAL_NAME: ${STORE_LEGAL_NAME:-}
+      STORE_TAX_CODE: ${STORE_TAX_CODE:-}
+      STORE_ADDRESS: ${STORE_ADDRESS:-}
+      STORE_PHONE: ${STORE_PHONE:-}
+      STORE_EMAIL: ${STORE_EMAIL:-}
+      STORE_REPRESENTATIVE: ${STORE_REPRESENTATIVE:-}
+      RETURN_DAYS: ${RETURN_DAYS:-7}
+      SERVICE_SLOT_CAPACITY: ${SERVICE_SLOT_CAPACITY:-2}
+      SERVICE_BOOKING_DAYS: ${SERVICE_BOOKING_DAYS:-14}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Trợ lý mua hàng: để trống OPENAI_API_KEY thì tắt
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      SETTINGS_SECRET: ${SETTINGS_SECRET:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.4-mini}
+      ASSISTANT_MAX_PER_HOUR: ${ASSISTANT_MAX_PER_HOUR:-20}
+      ASSISTANT_DAILY_LIMIT: ${ASSISTANT_DAILY_LIMIT:-500}
     volumes:
       - uploads:/srv/backend-app/uploads
     depends_on:
