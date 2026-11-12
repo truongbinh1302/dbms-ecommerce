@@ -66,8 +66,9 @@ const listBuildWatches = async (userId) => {
 
 /**
  * Bắt đầu theo dõi một cấu hình. Cùng danh sách linh kiện đã theo dõi thì đặt lại mốc giá.
- * Kiểm tra số lượt và ghi trong một transaction (UPDLOCK trên các lượt của khách) để hai lần bấm cùng lúc
- * không vượt giới hạn.
+ * Khoá dòng Users của khách (UPDLOCK, ROWLOCK) trước khi đếm và ghi, như đặt hàng và xoá tài khoản:
+ * các lần bấm cùng lúc của một khách chạy lần lượt nên không vượt giới hạn, và không khoá theo dải
+ * trên BuildWatches (khoá dải với nhiều lệnh INSERT cùng lúc dễ gây deadlock).
  */
 const watchBuild = async (userId, { items, title } = {}) => {
   const lines = canonicalItems(items);
@@ -97,12 +98,15 @@ const watchBuild = async (userId, { items, title } = {}) => {
       .input('total', sql.Decimal(18, 2), total)
       .input('max', sql.Int, MAX_BUILD_WATCHES)
       .query(`
-        DECLARE @existing INT, @count INT;
+        DECLARE @existing INT, @count INT, @active INT;
+        SELECT @active = UserID FROM Users WITH (UPDLOCK, ROWLOCK) WHERE UserID = @userId AND IsActive = 1;
         SELECT @count = COUNT(*), @existing = MAX(CASE WHEN ItemsJson = @items THEN BuildWatchID END)
-        FROM BuildWatches WITH (UPDLOCK, HOLDLOCK)
+        FROM BuildWatches
         WHERE UserID = @userId;
 
-        IF @existing IS NOT NULL
+        IF @active IS NULL
+          SELECT CAST(NULL AS INT) AS BuildWatchID, CAST(0 AS BIT) AS IsFull, CAST(1 AS BIT) AS Inactive;
+        ELSE IF @existing IS NOT NULL
         BEGIN
           UPDATE BuildWatches
           SET TotalAtWatch = @total, Title = COALESCE(@title, Title), LastNotifiedTotal = NULL, LastNotifiedAt = NULL, CreatedAt = SYSDATETIME()
@@ -118,6 +122,7 @@ const watchBuild = async (userId, { items, title } = {}) => {
         END
       `);
     const row = saved.recordset[0];
+    if (row.Inactive) throw createHttpError(404, 'Không tìm thấy tài khoản');
     if (row.IsFull) {
       throw createHttpError(409, `Bạn đang theo dõi ${MAX_BUILD_WATCHES} cấu hình, hãy bỏ bớt trước khi thêm`, { code: 'too_many_build_watches' });
     }

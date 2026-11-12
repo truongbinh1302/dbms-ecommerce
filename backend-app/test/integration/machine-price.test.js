@@ -132,7 +132,7 @@ test('theo dõi giá cả cấu hình: 12 lần bấm cùng lúc chỉ lưu 10, 
   ];
   const results = await Promise.allSettled(sets.map((items) => buildWatchService.watchBuild(user, { items })));
   assert.equal(results.filter((result) => result.status === 'fulfilled').length, 10);
-  for (const result of results.filter((item) => item.status === 'rejected')) assert.equal(result.reason.status, 409);
+  for (const result of results.filter((item) => item.status === 'rejected')) assert.equal(result.reason.status, 409, result.reason.message);
   assert.equal((await buildWatchService.listBuildWatches(user)).length, 10);
 
   // Cấu hình đã theo dõi (khác thứ tự, thêm linh kiện đã có) vẫn là lượt cũ: không vượt giới hạn.
