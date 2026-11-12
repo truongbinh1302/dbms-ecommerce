@@ -24,6 +24,19 @@ features and DBMS demonstrations.
   server and the parts and prices always come from stock), upgrade advice for
   an existing PC, and 48-hour price-locked quotes with a shareable link.
 - Price history on every product page and warranty lookup by serial number.
+- "Đấu giá RAM" (`#/dau-gia`): RAM is scarce, so the store sells some kits by
+  public auction instead of letting resellers sweep them. The engine works for
+  any product; the pages default to RAM. Proxy bidding (customers enter a
+  secret maximum, the price is min(highest max, second max + increment), the
+  earlier bid wins ties), anti-sniping (a bid in the last 2 minutes extends the
+  auction), buy-now, a 24-hour window for the winner to check out at the
+  winning price (normal checkout, COD or VNPay, no vouchers), and stock held
+  from the moment an auction opens and returned when it is unsold, cancelled or
+  unpaid. Prices and bid history update live over Server-Sent Events (one
+  snapshot per change, coalesced, shared by every viewer). Concurrency: every
+  write locks `Users → Auctions → Products` in that order; the auction row is
+  taken with `XLOCK` because the 50-bidders-plus-50-viewers test deadlocked with
+  `UPDLOCK` (a viewer's shared lock on the row versus a bidder converting U→X).
 - "Nhờ AI ráp máy" (`#/build-pc/nho-ai`): the customer describes what the PC is
   for in their own words ("chơi game và stream, chạy AI 8B, tầm 25 triệu") and
   an OpenAI model assembles a build by calling the store's own tools:
@@ -197,6 +210,8 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/don-hang?trang-thai=` | Order history with tabs: all, being processed (`dang-xu-ly`), shipping (`dang-giao`), delivered (`da-giao`), cancelled (`da-huy`), each with a count |
 | `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, carrier and tracking code, warranty serials, return requests |
 | `#/build-pc` | Build PC: pick parts, compatibility check, what the build can run, build price over 90 days, suggested builds, upgrade advice, save a quote |
+| `#/dau-gia`, `#/dau-gia/:id` | RAM auctions: list (running, upcoming, ended, mine), live auction page with proxy bidding and buy-now |
+| `#/dau-gia/:id/thanh-toan` | Checkout for an auction the customer won, at the winning price |
 | `#/build-pc/nho-ai` | Ask the AI to assemble a build from a sentence: live steps, checked builds, open in Build PC or buy |
 | `#/build-pc/theo-doi` | Builds the signed-in customer watches, with the total then and now |
 | `#/kiem-tra-may?model=` | What a machine can run (DxDiag file, laptop model or typed specs) and laptop RAM/SSD upgrades |
@@ -455,6 +470,7 @@ The API is mounted under `/api/v1` and includes:
 - `/cart` — saved cart (`GET`/`PUT /cart`), validation and server-side price quote (`POST /cart/quote`)
 - `/locations/provinces` — the 34 provinces and cities used by the address form
 - `/builder` — Build PC parts (with 90-day price labels), compatibility check, suggested builds, upgrade advice, price-locked quotes, build price trend (`POST /builder/price-trend`), watched builds (`/builder/watches`), AI build assistant (`POST /builder/agent`, NDJSON stream)
+- `/auctions` — list and detail (optional sign-in), live updates `GET /auctions/:id/events` (SSE), `POST /auctions/:id/bids`, `POST /auctions/:id/buy-now`, `GET /auctions/:id/checkout`; admin `GET /auctions/admin/list`, `POST /auctions/admin`, `POST /auctions/admin/:id/cancel`. Orders take `auctionId`
 - `/machine` — what a machine can run and laptop upgrades: laptop models, `POST /machine/analyze` (DxDiag lines, laptop model or typed specs), `POST /machine/build`, `GET /machine/products/:id`
 - `/warranties` — public lookup by serial, the customer's warranties, admin registration
 - `/products/:id/price-history` — price changes over the last 180 days

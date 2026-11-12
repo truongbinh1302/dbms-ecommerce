@@ -173,6 +173,11 @@ export default function OrderDetailPage({ orderId, currentUser, onRequireLogin, 
               </p>
             ) : null}
             {order.deliveredAt ? <p className="mt-1 text-slate-500">Đã giao lúc {formatDateTime(order.deliveredAt)}</p> : null}
+            {order.auctionId ? (
+              <p className="mt-1 text-sm text-slate-500">
+                Đơn từ <a href={hrefFor(`/dau-gia/${order.auctionId}`)} className="font-semibold text-slate-700 hover:text-red-600">phiên đấu giá #{order.auctionId}</a>, tính theo giá thắng
+              </p>
+            ) : null}
             {order.quoteCode ? (
               <p className="mt-2 text-slate-500">
                 Giá theo báo giá <a href={hrefFor(`/bao-gia/${order.quoteCode}`)} className="font-semibold text-slate-700 hover:text-red-600">{order.quoteCode}</a>
