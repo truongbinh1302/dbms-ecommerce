@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import PageMessage from '../components/PageMessage'
 import CapabilityReport from '../components/CapabilityReport'
 import BuildPriceTrend from '../components/BuildPriceTrend'
+import BuildAgent from '../components/BuildAgent'
 import {
   adviseBuild,
   autoBuild,
@@ -29,6 +30,7 @@ import {
 
 const TABS = [
   { id: 'tu-chon', label: 'Tự chọn linh kiện' },
+  { id: 'nho-ai', label: 'Nhờ AI ráp máy' },
   { id: 'nhu-cau', label: 'Theo phần mềm cần dùng' },
   { id: 'nang-cap', label: 'Nâng cấp máy đang có' },
   { id: 'theo-doi', label: 'Cấu hình đang theo dõi giá' },
@@ -57,6 +59,8 @@ export default function BuildPcPage({ initialTab = 'tu-chon', onBuyBuild, onAddT
   const [tab, setTab] = useState(TABS.some((item) => item.id === initialTab) ? initialTab : 'tu-chon')
   const [catalog, setCatalog] = useState({ loaded: false, slots: [], components: [], error: '' })
   const [build, setBuild] = useState(loadSavedBuild)
+  // Giữ tab "Nhờ AI ráp máy" sau lần mở đầu để chuyển tab không mất kết quả hay dừng trợ lý giữa chừng.
+  const [agentOpened, setAgentOpened] = useState(tab === 'nho-ai')
 
   useEffect(() => {
     let cancelled = false
@@ -100,7 +104,10 @@ export default function BuildPcPage({ initialTab = 'tu-chon', onBuyBuild, onAddT
               type="button"
               role="tab"
               aria-selected={tab === item.id}
-              onClick={() => setTab(item.id)}
+              onClick={() => {
+                setTab(item.id)
+                if (item.id === 'nho-ai') setAgentOpened(true)
+              }}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${tab === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
               {item.label}
@@ -118,6 +125,11 @@ export default function BuildPcPage({ initialTab = 'tu-chon', onBuyBuild, onAddT
           currentUser={currentUser}
           onRequireLogin={onRequireLogin}
         />
+      ) : null}
+      {agentOpened ? (
+        <div hidden={tab !== 'nho-ai'}>
+          <BuildAgent onApplyParts={applyParts} onBuyBuild={onBuyBuild} />
+        </div>
       ) : null}
       {tab === 'nhu-cau' ? <PresetPicker onApplyParts={applyParts} /> : null}
       {tab === 'nang-cap' ? <UpgradeAdvisor onAddToCart={onAddToCart} /> : null}

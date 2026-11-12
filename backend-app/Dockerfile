@@ -12,6 +12,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY backend-app/src ./src
 COPY backend-app/run-migration.js backend-app/run-seed.js ./
+# Script đo trợ lý AI ráp máy cho báo cáo (scripts/eval-build-agent.js).
+COPY backend-app/scripts ./scripts
 COPY database /srv/database
 
 # Ảnh sản phẩm tải lên nằm ở uploads/ (gắn volume để không mất khi tạo lại container).

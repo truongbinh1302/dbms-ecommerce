@@ -2325,3 +2325,33 @@ hoặc khi cả bộ đã về lại mức ban đầu rồi giảm lần nữa.
 `capabilities.groups[].items[]`: `id`, `label`, `verdict` (`good` | `ok` | `slow` | `no`), `verdictLabel`, `detail`, `note`.
 `upgrade` (khi có model laptop): `ram.options[]` (`action` `replace` | `add`, `resultGB`, `improves`: các việc được nâng hạng), `storage.options[]`.
 Ước tính theo dung lượng bộ nhớ (mô hình AI nén 4-bit khoảng 0,6 GB mỗi tỉ tham số), không phải kết quả đo.
+
+## 25. Trợ lý AI ráp máy — `POST /builder/agent`
+
+Không cần đăng nhập. Dùng chung khoá, mô hình, bật/tắt và hạn mức ngày với trợ lý mua hàng; mỗi IP tối đa một nửa số câu/giờ của trợ lý mua hàng.
+
+Body: `{ request: string (5-600 ký tự), budget?: number (đồng, 3-500 triệu) }`. Không gửi `budget` thì máy chủ đọc ngân sách trong câu (`25tr5`, `15-20 triệu`...).
+
+Lỗi trước khi bắt đầu trả JSON như mọi API (400 yêu cầu không hợp lệ, 429 hết hạn mức, 503 `assistant_disabled`).
+Khi đã bắt đầu, trả `200` với `Content-Type: application/x-ndjson`, mỗi dòng một sự kiện:
+
+| `type` | Nội dung |
+| --- | --- |
+| `thinking` | `round`: lượt gọi mô hình thứ mấy |
+| `step` | `step: { index, tool, title, detail, ok, rejected?, ms }`, mô tả một lần dùng công cụ |
+| `done` | `result: { status, builds, note, trace, stats, request, budget, model }` |
+| `error` | `message` |
+
+`status`: `built` (có cấu hình chính), `declined` (không phải yêu cầu ráp PC máy bàn), `incomplete` (hết lượt hoặc mọi lần chốt đều bị trả lại; `note` nêu lý do của máy chủ).
+`builds[]`: `variant` (`main` | `alternative`), `title`, `summary`, `tradeoff`, `overBudgetReason`, `items[]` (`productId`, `type`, `name`, `price` đã tính Hot Deal, `listPrice`, `quantity`, `lineTotal`, `reason`, `specs`, `priceInsight`), `total`, `budget`, `withinBudget`, `difference`, `check` (`warnings`, `estimatedPowerW`, `recommendedPsuW`), `capabilities`.
+`stats`: `rounds`, `toolCalls`, `rejectedSubmissions`, `ms`, `inputTokens`, `outputTokens`.
+
+Công cụ mô hình được gọi (định nghĩa trong `src/utils/buildAgent.js`):
+
+| Công cụ | Việc |
+| --- | --- |
+| `find_parts` | Linh kiện máy bàn còn hàng theo loại, giá, socket, loại RAM, cỡ mainboard, hạng CPU, VRAM, hãng card, dung lượng, chuẩn ổ, công suất nguồn |
+| `check_build` | Tương thích, còn thiếu gì, tổng tiền so với ngân sách, máy chạy được gì |
+| `submit_build` | Chốt cấu hình; máy chủ kiểm tra lại toàn bộ, trả `problems` khi bị từ chối |
+
+Khách đóng trang thì máy chủ huỷ các lượt gọi OpenAI còn lại. Cả lần ráp dừng sau 110 giây.
