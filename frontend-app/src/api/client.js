@@ -753,3 +753,59 @@ export function deleteProduct(productId, token) {
 }
 
 export { getStoredToken, storeAuthSession, clearAuthSession, normalizeUser };
+
+// Trang xem được khi chưa đăng nhập nhưng hiện thêm thông tin riêng khi đã đăng nhập: máy chủ coi token hết hạn
+// là khách vãng lai (không báo 401), nên tự làm mới token sắp hết hạn trước khi gửi.
+async function freshTokenIfAny() {
+  const token = getStoredToken();
+  if (!token) return '';
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (payload.exp && payload.exp * 1000 > Date.now() + 15000) return token;
+  } catch {
+    return token;
+  }
+  return (await refreshAccessToken()) || '';
+}
+
+// Đấu giá. Đăng nhập để biết phiên nào mình đang dẫn đầu và giá tối đa của mình.
+export async function fetchAuctions(params = {}) {
+  const search = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+  const token = await freshTokenIfAny();
+  return request(`/auctions?${search.toString()}`, token ? { token } : {});
+}
+
+export async function fetchAuction(id) {
+  const token = await freshTokenIfAny();
+  return request(`/auctions/${encodeURIComponent(id)}`, token ? { token } : {});
+}
+
+/** Luồng giá trực tiếp (Server-Sent Events) của một phiên. */
+export function auctionEventsUrl(id) {
+  return `${API_BASE_URL}/auctions/${encodeURIComponent(id)}/events`;
+}
+
+export function placeAuctionBid(id, amount) {
+  return request(`/auctions/${encodeURIComponent(id)}/bids`, { method: 'POST', auth: true, body: JSON.stringify({ amount }) });
+}
+
+export function buyAuctionNow(id) {
+  return request(`/auctions/${encodeURIComponent(id)}/buy-now`, { method: 'POST', auth: true, body: '{}' });
+}
+
+export function fetchAuctionCheckout(id) {
+  return request(`/auctions/${encodeURIComponent(id)}/checkout`, { auth: true });
+}
+
+export function fetchAdminAuctions(params = {}, token) {
+  const search = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+  return request(`/auctions/admin/list?${search.toString()}`, { auth: true, token });
+}
+
+export function createAuction(payload, token) {
+  return request('/auctions/admin', { method: 'POST', auth: true, token, body: JSON.stringify(payload) });
+}
+
+export function cancelAuction(id, token) {
+  return request(`/auctions/admin/${encodeURIComponent(id)}/cancel`, { method: 'POST', auth: true, token, body: '{}' });
+}

@@ -45,14 +45,20 @@ test.before(async () => {
 
 test.after(async () => {
   const users = ctx.userIds.join(',') || '0';
-  await query(`
-    DELETE FROM ProductQuestions WHERE ProductID = @productId;
-    DELETE FROM Notifications WHERE UserID IN (${users});
-    DELETE FROM Users WHERE UserID IN (${users});
-    DELETE FROM Products WHERE ProductID = @productId;
-  `, { productId: [sql.Int, ctx.productId] });
-  await mongoose.disconnect();
-  await getPool().close();
+  try {
+    await query(`
+      DELETE FROM ProductQuestions WHERE ProductID = @productId;
+      DELETE FROM Notifications WHERE UserID IN (${users});
+      DELETE FROM Users WHERE UserID IN (${users});
+      DELETE FROM StockMovements WHERE ProductID = @productId;
+      DELETE FROM PriceHistory WHERE ProductID = @productId;
+      DELETE FROM Products WHERE ProductID = @productId;
+    `, { productId: [sql.Int, ctx.productId] });
+  } finally {
+    // Dọn dữ liệu lỗi cũng phải đóng kết nối, không thì tiến trình test treo và chặn cả bộ test trên CI.
+    await mongoose.disconnect();
+    await getPool().close();
+  }
 });
 
 test('hỏi đáp: câu chờ chỉ người hỏi thấy; trả lời thì công khai và báo người hỏi', async () => {

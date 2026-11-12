@@ -47,6 +47,7 @@ export default function CheckoutPage({
   priceLockCode = '',
   onClearPriceLock,
   onRefreshQuote,
+  auctionId = null,
 }) {
   const [provinces, setProvinces] = useState([])
   const [address, setAddress] = useState(EMPTY_ADDRESS)
@@ -149,9 +150,11 @@ export default function CheckoutPage({
       const order = await createOrder({
         items,
         paymentMethod,
-        voucherCode: voucherCode || undefined,
+        voucherCode: auctionId ? undefined : voucherCode || undefined,
         // Chỉ gửi mã báo giá khi server vừa xác nhận còn hạn, để khách không bị chặn vì mã cũ.
-        quoteCode: priceLockCode && quote?.priceLock ? priceLockCode : undefined,
+        quoteCode: !auctionId && priceLockCode && quote?.priceLock ? priceLockCode : undefined,
+        // Đơn của phiên đấu giá đã thắng: máy chủ tính đúng giá thắng cho sản phẩm của phiên.
+        auctionId: auctionId || undefined,
         shippingAddress: address,
         note: note.trim() || undefined,
         acceptTerms: true,
@@ -188,6 +191,10 @@ export default function CheckoutPage({
       if (err.status === 409 && err.details?.code === 'price_changed') {
         if (onRefreshQuote) onRefreshQuote()
         setFormError('Giá vừa thay đổi (ví dụ Hot Deal vừa hết suất hoặc hết giờ). Tổng tiền đã được tính lại, vui lòng kiểm tra rồi đặt lại.')
+        return
+      }
+      if (auctionId && ['auction_payment_expired', 'auction_already_ordered'].includes(err.details?.code)) {
+        setFormError(err.message)
         return
       }
       if (err.status === 410) {
@@ -292,6 +299,7 @@ export default function CheckoutPage({
                 <span className="text-slate-700">
                   <a href={hrefFor(`/san-pham/${item.id}`)} className="hover:text-red-600">{item.name}</a>
                   <span className="text-slate-500"> × {item.quantity}</span>
+                  {line?.auction ? <span className="mt-0.5 block text-xs font-bold text-emerald-700">Giá thắng phiên đấu giá #{line.auction.id}</span> : null}
                   {line?.promotion ? <span className="mt-0.5 block text-xs font-bold text-red-600">Hot Deal: {line.promotion.name}</span> : null}
                   {line?.promotionNote ? <span className="mt-0.5 block text-xs text-amber-700">{line.promotionNote}, tính giá thường</span> : null}
                 </span>
@@ -306,9 +314,13 @@ export default function CheckoutPage({
           })}
         </ul>
 
-        <div className="my-5 border-t border-slate-100 pt-5">
-          <VoucherField voucherCode={voucherCode} voucherError={quote?.voucherError?.message || ''} onApply={onApplyVoucher} />
-        </div>
+        {auctionId ? (
+          <p className="my-5 border-t border-slate-100 pt-5 text-xs text-slate-500">Đơn đấu giá tính đúng giá thắng, không dùng mã giảm giá.</p>
+        ) : (
+          <div className="my-5 border-t border-slate-100 pt-5">
+            <VoucherField voucherCode={voucherCode} voucherError={quote?.voucherError?.message || ''} onApply={onApplyVoucher} />
+          </div>
+        )}
 
         <PriceSummary subtotal={subtotal} quote={quote} quoteError={quoteError} onClearPriceLock={onClearPriceLock} />
         {storeInfo?.pricesIncludeTax ? <p className="mt-2 text-xs text-slate-500">Giá đã bao gồm thuế.</p> : null}

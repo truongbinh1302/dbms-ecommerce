@@ -36,6 +36,9 @@ const FAVORITES_STORAGE_KEY = 'binhtinhstore-favorites'
 // Mã báo giá Build PC đang giữ giá cho giỏ hàng (khách bấm "Mua theo báo giá").
 const BuildPcPage = lazy(() => import('./BuildPcPage'))
 const MachineCheckPage = lazy(() => import('./MachineCheckPage'))
+const AuctionsPage = lazy(() => import('./AuctionsPage'))
+const AuctionDetailPage = lazy(() => import('./AuctionDetailPage'))
+const AuctionCheckoutPage = lazy(() => import('./AuctionCheckoutPage'))
 const ServicesPage = lazy(() => import('./ServicesPage'))
 const AccountPage = lazy(() => import('./AccountPage'))
 const PrivacyPolicyPage = lazy(() => import('./PrivacyPolicyPage'))
@@ -53,6 +56,7 @@ const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
 const QUICK_LINK_ROUTES = {
   'Build PC': '/build-pc',
   'Nhờ AI ráp máy': '/build-pc/nho-ai',
+  'Đấu giá RAM': '/dau-gia',
   'Máy chạy được gì?': '/kiem-tra-may',
   'Dịch vụ kỹ thuật tại nhà': '/dich-vu/tai-nha',
   'Thu cũ đổi mới': '/dich-vu/thu-cu',
@@ -779,6 +783,7 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
     'don-hang': routeId > 0 ? `Đơn hàng #${routeId}` : 'Đơn hàng của tôi',
     'build-pc': 'Build PC',
     'kiem-tra-may': 'Máy này chạy được gì?',
+    'dau-gia': routeId > 0 ? `Phiên đấu giá #${routeId}` : 'Đấu giá RAM',
     'bao-gia': 'Báo giá cấu hình',
     'bao-hanh': 'Tra cứu bảo hành',
     'dich-vu': 'Dịch vụ sau bán',
@@ -859,6 +864,12 @@ export default function CustomerSite({ onOpenAdmin, onOpenProductManagement, isA
         onRequireLogin={requireLogin}
       />
     )
+  } else if (routeSection === 'dau-gia' && routeId > 0 && route.segments[2] === 'thanh-toan') {
+    routeContent = <AuctionCheckoutPage key={`auction-checkout-${routeId}`} auctionId={routeId} currentUser={currentUser} onRequireLogin={requireLogin} />
+  } else if (routeSection === 'dau-gia' && routeId > 0) {
+    routeContent = <AuctionDetailPage key={`auction-${routeId}`} auctionId={routeId} currentUser={currentUser} onRequireLogin={requireLogin} />
+  } else if (routeSection === 'dau-gia') {
+    routeContent = <AuctionsPage currentUser={currentUser} />
   } else if (routeSection === 'kiem-tra-may') {
     routeContent = (
       <MachineCheckPage

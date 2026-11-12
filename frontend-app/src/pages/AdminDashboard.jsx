@@ -3,6 +3,7 @@ import StoreGlyph from '../components/StoreGlyph'
 import DailyReport from '../components/admin/DailyReport'
 import InventoryPanel from '../components/admin/InventoryPanel'
 import PromotionsPanel from '../components/admin/PromotionsPanel'
+import AuctionsPanel from '../components/admin/AuctionsPanel'
 import ServiceRequestsPanel from '../components/admin/ServiceRequestsPanel'
 import ReturnsPanel from '../components/admin/ReturnsPanel'
 import VouchersPanel from '../components/admin/VouchersPanel'
@@ -274,6 +275,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                 <a href="#admin-report" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Báo cáo</a>
                 <a href="#admin-stock" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Kho hàng</a>
                 <a href="#admin-promotions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Hot Deal</a>
+                <a href="#admin-auctions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Đấu giá</a>
                 <a href="#admin-vouchers" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Mã giảm giá</a>
                 <a href="#admin-services" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Dịch vụ</a>
                 <a href="#admin-returns" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Đổi trả</a>
@@ -612,6 +614,10 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
 
         <div id="admin-promotions" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <PromotionsPanel token={token} />
+        </div>
+
+        <div id="admin-auctions" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <AuctionsPanel token={token} />
         </div>
 
         <div id="admin-vouchers" className="mt-6 scroll-mt-4 lg:scroll-mt-44">

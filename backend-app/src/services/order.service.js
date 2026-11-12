@@ -9,6 +9,7 @@ const inventoryService = require('./inventory.service');
 const promotionService = require('./promotion.service');
 const notificationService = require('./notification.service');
 const returnService = require('./return.service');
+const auctionService = require('./auction.service');
 const { assertShippingAddress } = require('./address.service');
 
 const allowedStatuses = ['pending', 'pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -90,7 +91,7 @@ const safeRollback = async (transaction) => {
  * Khoá và đọc giá, tồn kho của từng sản phẩm trong transaction.
  * Giá luôn lấy từ DB, không lấy từ request.
  */
-const lockProductsForOrder = async (transaction, items) => {
+const lockProductsForOrder = async (transaction, items, { heldProductId = null } = {}) => {
   const products = [];
   let subtotal = 0;
 
@@ -108,7 +109,9 @@ const lockProductsForOrder = async (transaction, items) => {
       throw createHttpError(404, `Product ${item.productId} not found`);
     }
 
-    if (Number(product.Stock) < item.quantity) {
+    // Sản phẩm của phiên đấu giá đã được giữ khỏi kho từ lúc mở phiên, không trừ hay kiểm tra lại.
+    const held = heldProductId !== null && item.productId === heldProductId;
+    if (!held && Number(product.Stock) < item.quantity) {
       throw createHttpError(
         409,
         `Product "${product.Name}" has only ${product.Stock} items in stock`,
@@ -135,7 +138,12 @@ const createOrder = async (userId, orderData = {}) => {
   const voucherCode = voucherService.normalizeVoucherCode(orderData.voucherCode);
   const shippingAddress = assertShippingAddress(orderData.shippingAddress);
   const note = orderData.note ? String(orderData.note).trim().slice(0, 500) || null : null;
-  const quoteCode = orderData.quoteCode ? String(orderData.quoteCode).trim().toUpperCase() : null;
+  const auctionId = orderData.auctionId === undefined || orderData.auctionId === null || orderData.auctionId === ''
+    ? null
+    : Number(orderData.auctionId);
+  if (auctionId !== null && (!Number.isInteger(auctionId) || auctionId <= 0)) throw createHttpError(400, 'Phiên đấu giá không hợp lệ');
+  if (auctionId !== null && voucherCode) throw createHttpError(400, 'Đơn đấu giá không dùng được voucher', { code: 'auction_no_voucher' });
+  const quoteCode = orderData.quoteCode && auctionId === null ? String(orderData.quoteCode).trim().toUpperCase() : null;
   const termsVersion = orderData.termsVersion ? String(orderData.termsVersion).slice(0, 20) : null;
   const rawExpected = orderData.expectedTotal;
   const expectedTotal = rawExpected === undefined || rawExpected === null || rawExpected === ''
@@ -158,7 +166,14 @@ const createOrder = async (userId, orderData = {}) => {
       throw createHttpError(401, 'Invalid user or user not found');
     }
 
-    const { products } = await lockProductsForOrder(transaction, items);
+    // Đơn của phiên đấu giá: khoá phiên trước khi khoá sản phẩm (cùng thứ tự Users → Auctions → Products
+    // với lúc chốt phiên và trả hàng về kho), kiểm tra đúng người thắng và còn hạn đặt hàng.
+    const auction = auctionId !== null ? await auctionService.lockForOrder(transaction, userId, auctionId) : null;
+    if (auction && !items.some((item) => item.productId === auction.productId && item.quantity === 1)) {
+      throw createHttpError(400, 'Đơn đấu giá phải có đúng 1 sản phẩm của phiên', { code: 'auction_item_mismatch' });
+    }
+
+    const { products } = await lockProductsForOrder(transaction, items, { heldProductId: auction ? auction.productId : null });
 
     // Đặt theo báo giá Build PC: báo giá hết hạn thì báo lỗi để khách xem lại giá mới,
     // không âm thầm tính giá khác với giá khách đã thấy.
@@ -174,7 +189,10 @@ const createOrder = async (userId, orderData = {}) => {
         promotions,
       ),
       lockedQuote ? lockedQuote.prices : null,
-    );
+    ).map((line) => (auction && line.productId === auction.productId
+      // Giá thắng đấu giá thay cho giá niêm yết, không cộng Hot Deal.
+      ? { ...line, unitPrice: auction.price, lineTotal: auction.price, promotionId: null, promotion: null, priceLocked: false }
+      : line));
     const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
 
     let voucher = null;
@@ -252,13 +270,17 @@ const createOrder = async (userId, orderData = {}) => {
         });
       }
 
-      await inventoryService.changeStock(transaction, {
-        productId: item.ProductID,
-        change: -item.quantity,
-        reason: 'sale',
-        orderId,
-      });
+      if (!auction || item.ProductID !== auction.productId) {
+        await inventoryService.changeStock(transaction, {
+          productId: item.ProductID,
+          change: -item.quantity,
+          reason: 'sale',
+          orderId,
+        });
+      }
     }
+
+    if (auction) await auctionService.markOrdered(transaction, auction.auctionId, orderId);
 
     if (voucher) {
       await new sql.Request(transaction)
@@ -292,6 +314,7 @@ const createOrder = async (userId, orderData = {}) => {
       ...quote,
       voucherCode: voucher ? voucher.Code : null,
       quoteCode: lockedQuote ? lockedQuote.code : null,
+      auctionId: auction ? auction.auctionId : null,
       createdAt,
     };
   } catch (err) {
@@ -457,6 +480,7 @@ const getOrderById = async (orderId, userId = null) => {
     SELECT o.OrderID AS id, o.OrderCode AS orderCode, o.Status, o.PaymentMethod, o.PaymentStatus,
            o.VNPayTxnRef AS txnRef, o.CancelReason,
            o.Subtotal, o.Discount, o.ShippingFee, o.Total, o.Note, o.QuoteCode AS quoteCode, o.TermsVersion AS termsVersion,
+           (SELECT TOP 1 AuctionID FROM Auctions au WHERE au.OrderID = o.OrderID) AS auctionId,
            o.ShippingAddress, o.CreatedAt, o.UpdatedAt,
            o.ShippingCarrier AS shippingCarrier, o.TrackingCode AS trackingCode,
            o.ShippedAt AS shippedAt, o.DeliveredAt AS deliveredAt,

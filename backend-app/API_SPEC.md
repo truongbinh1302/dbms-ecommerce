@@ -2355,3 +2355,25 @@ Công cụ mô hình được gọi (định nghĩa trong `src/utils/buildAgent.
 | `submit_build` | Chốt cấu hình; máy chủ kiểm tra lại toàn bộ, trả `problems` khi bị từ chối |
 
 Khách đóng trang thì máy chủ huỷ các lượt gọi OpenAI còn lại. Cả lần ráp dừng sau 110 giây.
+
+## 26. Đấu giá — `/auctions`
+
+Mỗi phiên bán 1 sản phẩm; mở phiên giữ 1 cái khỏi kho (sổ kho lý do `auction`). Giờ theo đồng hồ máy chủ DB, mọi phản hồi có `serverNow`.
+
+| Method | Endpoint | Ghi chú |
+| --- | --- | --- |
+| GET | `/auctions?phase=running\|upcoming\|ended\|all&category=ram&mine=1&page&limit` | Đăng nhập không bắt buộc (có thì `leader.isYou`, `winner.isYou`) |
+| GET | `/auctions/:id` | Chi tiết, `myMax` (giá tối đa của chính mình), `history` 30 lượt gần nhất (tên đã che, "Bạn" cho lượt của mình). Phiên vừa hết giờ được chốt ngay khi xem |
+| GET | `/auctions/:id/events` | Server-Sent Events: sự kiện `update` mang ảnh chụp công khai (giá, số lượt, giờ kết thúc, 10 lượt gần nhất), gộp các thay đổi trong 150 ms |
+| POST | `/auctions/:id/bids` | (đăng nhập) `{ amount }` là GIÁ TỐI ĐA. Trả `outcome`: `leading`, `outbid`, `raised` (người đang dẫn nâng giá tối đa), `extended`, `auction`. Lỗi: 400 `bid_too_low` (`minimum`), 400 `max_not_higher`, 409 `auction_closed` / `auction_not_started`. Tối đa 30 lượt/phút mỗi tài khoản |
+| POST | `/auctions/:id/buy-now` | (đăng nhập) Mua ngay theo `buyNowPrice` khi giá đấu còn thấp hơn; 409 `buy_now_closed` |
+| GET | `/auctions/:id/checkout` | (người thắng) Báo giá cùng dạng giỏ hàng: 1 dòng giá thắng. 410 `auction_payment_expired`, 409 `auction_already_ordered` |
+| GET | `/auctions/admin/list?status=` | (admin) Có tên thật người dẫn đầu, người thắng và mã đơn |
+| POST | `/auctions/admin` | (admin) `{ productId, title?, description?, startingPrice, bidIncrement, buyNowPrice?, startsAt?, endsAt, extendSeconds? }` |
+| POST | `/auctions/admin/:id/cancel` | (admin) Huỷ phiên đang mở, trả hàng về kho, báo người đã trả giá |
+
+Đặt giá tự động: giá hiện tại = min(giá tối đa cao nhất, giá tối đa cao nhì + bước giá); một người thì bằng giá khởi điểm; bằng nhau thì người đặt trước dẫn đầu.
+Có lượt trả giá trong `extendSeconds` giây cuối thì `endsAt` = lúc trả giá + `extendSeconds`.
+Hết giờ: có người trả giá thì `won` (người thắng có `AUCTION_PAYMENT_HOURS`, mặc định 24 giờ, để đặt hàng), không thì `unsold`. Quá hạn đặt hàng thì `expired`. `unsold`, `expired`, `cancelled` trả hàng về kho.
+Đặt hàng: `POST /orders` thêm `auctionId`; sản phẩm của phiên phải có số lượng 1, tính đúng giá thắng, không dùng voucher, không trừ kho lần hai. Phiên chuyển `ordered`, chi tiết đơn có `auctionId`.
+Thông báo loại `auction`: bị trả giá cao hơn, thắng phiên, phiên kết thúc, phiên bị huỷ, hết hạn đặt hàng.

@@ -108,6 +108,7 @@ app.use('/api/v1/promotions', promotionRoutes);
 app.use('/api/v1/services', afterSalesRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/assistant', assistantRoutes);
+app.use('/api/v1/auctions', require('./routes/auction.routes'));
 app.use('/api/v1/settings', settingsRoutes);
 
 app.use((req, res) => {
@@ -148,6 +149,22 @@ const startPriceWatchSweeper = () => {
     }
   };
   const timer = setInterval(run, config.priceWatch.sweepIntervalMs);
+  timer.unref();
+  run();
+};
+
+// Định kỳ chốt phiên đấu giá hết giờ và huỷ quyền mua quá hạn đặt hàng (trả hàng về kho).
+const startAuctionSweeper = () => {
+  const auctionService = require('./services/auction.service');
+  const run = async () => {
+    try {
+      const { finalized, expired } = await auctionService.sweepDue();
+      if (finalized || expired) console.log(`[auctions] Finalized ${finalized}, expired ${expired}`);
+    } catch (err) {
+      console.error('[auctions] Sweep failed:', err.message);
+    }
+  };
+  const timer = setInterval(run, Number(process.env.AUCTION_SWEEP_MS) > 0 ? Number(process.env.AUCTION_SWEEP_MS) : 15000);
   timer.unref();
   run();
 };
@@ -203,6 +220,7 @@ const startServer = async () => {
 
     startPaymentExpirySweeper();
     startPriceWatchSweeper();
+    startAuctionSweeper();
     backfillSearchIndex();
     syncRatings();
     warnDemoAdminPassword();

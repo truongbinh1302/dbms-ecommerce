@@ -96,12 +96,19 @@ const exportMyData = async (userId) => {
       WHERE o.UserID = @userId ORDER BY h.HistoryID;
 
       SELECT Title, ItemsJson, TotalAtWatch, CreatedAt FROM BuildWatches WHERE UserID = @userId ORDER BY BuildWatchID;
+
+      SELECT b.AuctionID, a.Title, b.Amount, b.Kind, b.CreatedAt, m.MaxAmount AS YourMaxAmount,
+             CASE WHEN a.WinnerUserID = @userId THEN 1 ELSE 0 END AS Won
+      FROM AuctionBids b
+      JOIN Auctions a ON a.AuctionID = b.AuctionID
+      LEFT JOIN AuctionMaxBids m ON m.AuctionID = b.AuctionID AND m.UserID = @userId
+      WHERE b.UserID = @userId ORDER BY b.BidID;
     `);
 
   const [
     users, orders, orderItems, cart, quotes, warranties, vouchers,
     serviceRequests = [], priceWatches = [], stockWatches = [], questions = [], notifications = [], returns = [], returnItems = [],
-    statusHistory = [], buildWatches = [],
+    statusHistory = [], buildWatches = [], auctionBids = [],
   ] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
@@ -143,6 +150,7 @@ const exportMyData = async (userId) => {
     priceWatches,
     stockWatches,
     buildWatches: buildWatches.map((watch) => ({ ...watch, ItemsJson: undefined, items: parseJson(watch.ItemsJson) })),
+    auctionBids: auctionBids.map((bid) => ({ ...bid, Won: Boolean(bid.Won) })),
     productQuestions: questions,
     notifications,
     returnRequests: returns.map(({ ReturnID, ...request }) => ({
@@ -196,6 +204,8 @@ const deleteAccount = async (userId, password) => {
         FROM Orders WHERE UserID = @userId;
         SELECT COUNT(*) AS OpenReturns FROM ReturnRequests
         WHERE UserID = @userId AND Status IN (N'pending', N'approved', N'received');
+        SELECT COUNT(*) AS OpenAuctions FROM Auctions
+        WHERE (Status = N'active' AND LeaderUserID = @userId) OR (Status = N'won' AND WinnerUserID = @userId);
       `);
     if (!locked.recordsets[0][0]) throw createHttpError(404, 'Không tìm thấy tài khoản');
     const counts = locked.recordsets[1][0];
@@ -212,6 +222,15 @@ const deleteAccount = async (userId, password) => {
         409,
         `Bạn còn ${openReturns} yêu cầu đổi trả đang xử lý. Hãy chờ cửa hàng xử lý xong (để hoàn tiền hoặc gửi hàng đổi) rồi xoá tài khoản.`,
         { code: 'open_returns', openReturns },
+      );
+    }
+    // Đang dẫn đầu hoặc vừa thắng một phiên đấu giá: xoá tài khoản lúc này làm phiên mất người mua.
+    const openAuctions = Number(locked.recordsets[3][0].OpenAuctions);
+    if (openAuctions > 0) {
+      throw createHttpError(
+        409,
+        `Bạn đang dẫn đầu hoặc vừa thắng ${openAuctions} phiên đấu giá. Hãy chờ phiên kết thúc và đặt hàng (hoặc hết hạn đặt hàng) rồi xoá tài khoản.`,
+        { code: 'open_auctions', openAuctions },
       );
     }
     retainedOrders = Number(counts.AllOrders);

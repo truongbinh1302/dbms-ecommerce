@@ -75,7 +75,7 @@ const askQuestion = async (userId, productId, text) => {
     .query('SELECT FullName FROM Users WHERE UserID = @userId AND IsActive = 1');
   if (!user.recordset[0]) throw createHttpError(404, 'Không tìm thấy tài khoản');
 
-  // Đếm câu đang chờ và thêm câu mới trong một transaction (khoá HOLDLOCK) để không vượt giới hạn khi gửi dồn.
+  // Đếm câu đang chờ và thêm câu mới trong một transaction để không vượt giới hạn khi gửi dồn.
   const result = await new sql.Request(getPool())
     .input('userId', sql.Int, Number(userId))
     .input('productId', sql.Int, id)
@@ -85,6 +85,9 @@ const askQuestion = async (userId, productId, text) => {
     .query(`
       SET XACT_ABORT ON;
       BEGIN TRANSACTION;
+      -- Khoá dòng Users trước: các câu hỏi gửi dồn của cùng một người xếp hàng ở đây, không tranh khoá
+      -- khoảng (HOLDLOCK) trên ProductQuestions với nhau rồi deadlock (từng gặp trên CI).
+      DECLARE @lockedUser INT = (SELECT UserID FROM Users WITH (UPDLOCK, ROWLOCK) WHERE UserID = @userId);
       DECLARE @pending INT = (
         SELECT COUNT(*) FROM ProductQuestions WITH (UPDLOCK, HOLDLOCK)
         WHERE UserID = @userId AND Status = N'pending'
