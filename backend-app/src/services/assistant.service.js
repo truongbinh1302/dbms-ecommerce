@@ -206,17 +206,21 @@ const createToolRunner = () => {
   };
 };
 
-/** Gọi OpenAI Chat Completions. Lỗi của OpenAI không đưa nguyên văn ra cho khách. */
-const callModel = async (fetchImpl, messages, settings) => {
+/**
+ * Gọi OpenAI Chat Completions, trả { message, usage }. Lỗi của OpenAI không đưa nguyên văn ra cho khách.
+ * Dùng chung cho trợ lý mua hàng và trợ lý ráp máy (công cụ, số token tối đa, tín hiệu huỷ khác nhau).
+ */
+const requestCompletion = async (fetchImpl, messages, settings, { tools = TOOLS, maxTokens = 1200, signal = null } = {}) => {
   const { apiKey, model } = settings;
   const { baseUrl, timeoutMs } = config.assistant;
+  const timeout = AbortSignal.timeout(timeoutMs);
   let response;
   try {
     response = await fetchImpl(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages, tools: TOOLS, tool_choice: 'auto', max_completion_tokens: 1200 }),
-      signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify({ model, messages, tools, tool_choice: 'auto', max_completion_tokens: maxTokens }),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
   } catch (err) {
     console.warn('[assistant] OpenAI request failed:', err.name === 'TimeoutError' ? 'timeout' : err.message);
@@ -230,8 +234,10 @@ const callModel = async (fetchImpl, messages, settings) => {
   const data = await response.json();
   const message = data?.choices?.[0]?.message;
   if (!message) throw createHttpError(503, 'Trợ lý chưa trả lời được, bạn thử lại nhé.', 'assistant_unavailable');
-  return message;
+  return { message, usage: data.usage || null };
 };
+
+const callModel = async (fetchImpl, messages, settings) => (await requestCompletion(fetchImpl, messages, settings)).message;
 
 const parseArguments = (raw) => {
   try {
@@ -313,6 +319,8 @@ module.exports = {
   loadSettings,
   validateMessages,
   takeDailyQuota,
+  requestCompletion,
+  vietnamDay,
   createToolRunner,
   chat,
   resetUsage,

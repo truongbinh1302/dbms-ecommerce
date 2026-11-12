@@ -611,6 +611,53 @@ export function askAssistant(messages) {
   return request('/assistant/chat', { method: 'POST', body: JSON.stringify({ messages }) });
 }
 
+/**
+ * Trợ lý AI ráp máy: máy chủ trả luồng NDJSON, mỗi dòng một sự kiện ("thinking", "step", "done", "error").
+ * onEvent nhận từng sự kiện "thinking"/"step" ngay khi tới; hàm trả kết quả của sự kiện "done".
+ * signal (AbortController) để khách dừng giữa chừng.
+ */
+export async function streamBuildAgent(body, onEvent, signal) {
+  const response = await fetch(`${API_BASE_URL}/builder/agent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok || !response.body || !contentType.includes('ndjson')) {
+    const payload = await parsePayload(response);
+    const err = new Error(payload.message || `API request failed with status ${response.status}`);
+    err.status = response.status;
+    throw err;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = null;
+  const handle = (line) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line);
+    if (event.type === 'done') result = event.result;
+    else if (event.type === 'error') throw new Error(event.message || 'Trợ lý đang bận, bạn thử lại sau nhé.');
+    else onEvent(event);
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline = buffer.indexOf('\n');
+    while (newline >= 0) {
+      handle(buffer.slice(0, newline));
+      buffer = buffer.slice(newline + 1);
+      newline = buffer.indexOf('\n');
+    }
+  }
+  handle(buffer + decoder.decode());
+  if (!result) throw new Error('Mất kết nối giữa chừng, bạn thử lại nhé.');
+  return result;
+}
+
 export function fetchReviews(productId, { page = 1, rating = null, limit = 5 } = {}) {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (rating) params.set('rating', String(rating));

@@ -6,6 +6,7 @@ const {
   compareCapabilities,
   threadsForTier,
   gpuKindFromName,
+  profileFromParts,
 } = require('../utils/workloads');
 const { keepRelevantLines, parseDxDiag, matchLaptopModel, MAX_TEXT } = require('../utils/dxdiag');
 const { ramUpgrade, storageUpgrade } = require('../utils/laptopUpgrade');
@@ -100,21 +101,6 @@ const profileFromModel = (model) => ({
   cpuThreads: model.cpuThreads,
   unifiedMemory: model.unifiedMemory,
 });
-
-/** Hồ sơ máy từ các linh kiện của cấu hình Build PC (kể cả linh kiện khách đã có). */
-const profileFromParts = (parts) => {
-  const ramGB = parts.filter((part) => part.type === 'ram').reduce((sum, part) => sum + (part.capacityGB || 0) * (part.quantity || 1), 0);
-  const cpu = parts.find((part) => part.type === 'cpu');
-  const gpu = parts.filter((part) => part.type === 'gpu').sort((a, b) => (b.vramGB || 0) - (a.vramGB || 0))[0];
-  return {
-    ramGB,
-    vramGB: gpu ? gpu.vramGB || 0 : 0,
-    gpuKind: gpu ? gpuKindFromName(gpu.name) || 'nvidia' : null,
-    gpuName: gpu ? gpu.name : null,
-    cpuName: cpu ? cpu.name : null,
-    cpuThreads: cpu ? threadsForTier(cpu.tier) : null,
-  };
-};
 
 // VRAM của card máy bàn hay gặp trong thông số PC bán sẵn. Card có hai bản VRAM (4060 Ti 8/16 GB) lấy bản nhỏ.
 const DESKTOP_GPUS = [

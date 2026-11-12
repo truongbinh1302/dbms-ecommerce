@@ -24,6 +24,21 @@ features and DBMS demonstrations.
   server and the parts and prices always come from stock), upgrade advice for
   an existing PC, and 48-hour price-locked quotes with a shareable link.
 - Price history on every product page and warranty lookup by serial number.
+- "Nhờ AI ráp máy" (`#/build-pc/nho-ai`): the customer describes what the PC is
+  for in their own words ("chơi game và stream, chạy AI 8B, tầm 25 triệu") and
+  an OpenAI model assembles a build by calling the store's own tools:
+  `find_parts` (in-stock parts, Hot Deal prices, 90-day price labels),
+  `check_build` (the same compatibility check and "what it can run" estimate
+  as Build PC) and `submit_build`. The model only proposes; the server checks
+  every submitted build again (ids from stock, enough units, compatible,
+  complete, within the budget read from the sentence) and sends back the
+  reasons when it fails, so the model corrects itself. Prices, names and specs
+  shown come from the database, never from the model's text. Each step
+  streams to the page as it happens (NDJSON), with a second option to compare,
+  "open in Build PC" and "buy the whole build". `scripts/eval-build-agent.js`
+  runs 30 sample requests with automatic checks (budget, GPU brand, VRAM, RAM,
+  form factor...) and compares the result with the keyword rules
+  (`DANH-GIA-TRO-LY-AI.bat` on Windows writes `bao-cao-tro-ly-ai.md`).
 - "Nên mua lúc nào?" (when to buy): each product and Build PC part is labelled
   against its last 90 days (lowest, below/above the time-weighted average,
   change against 30 days ago). The average weights each price by how long it
@@ -182,6 +197,7 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/don-hang?trang-thai=` | Order history with tabs: all, being processed (`dang-xu-ly`), shipping (`dang-giao`), delivered (`da-giao`), cancelled (`da-huy`), each with a count |
 | `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, carrier and tracking code, warranty serials, return requests |
 | `#/build-pc` | Build PC: pick parts, compatibility check, what the build can run, build price over 90 days, suggested builds, upgrade advice, save a quote |
+| `#/build-pc/nho-ai` | Ask the AI to assemble a build from a sentence: live steps, checked builds, open in Build PC or buy |
 | `#/build-pc/theo-doi` | Builds the signed-in customer watches, with the total then and now |
 | `#/kiem-tra-may?model=` | What a machine can run (DxDiag file, laptop model or typed specs) and laptop RAM/SSD upgrades |
 | `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |
@@ -438,7 +454,7 @@ The API is mounted under `/api/v1` and includes:
 - `/products` — catalog and product management, product Q&A (`/products/:id/questions`, admin `/products/admin/questions`)
 - `/cart` — saved cart (`GET`/`PUT /cart`), validation and server-side price quote (`POST /cart/quote`)
 - `/locations/provinces` — the 34 provinces and cities used by the address form
-- `/builder` — Build PC parts (with 90-day price labels), compatibility check, suggested builds, upgrade advice, price-locked quotes, build price trend (`POST /builder/price-trend`), watched builds (`/builder/watches`)
+- `/builder` — Build PC parts (with 90-day price labels), compatibility check, suggested builds, upgrade advice, price-locked quotes, build price trend (`POST /builder/price-trend`), watched builds (`/builder/watches`), AI build assistant (`POST /builder/agent`, NDJSON stream)
 - `/machine` — what a machine can run and laptop upgrades: laptop models, `POST /machine/analyze` (DxDiag lines, laptop model or typed specs), `POST /machine/build`, `GET /machine/products/:id`
 - `/warranties` — public lookup by serial, the customer's warranties, admin registration
 - `/products/:id/price-history` — price changes over the last 180 days

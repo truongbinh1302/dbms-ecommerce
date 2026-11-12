@@ -52,6 +52,7 @@ const PRICE_LOCK_STORAGE_KEY = 'binhtinhstore-price-lock'
 // Nút nhanh dưới header có trang riêng.
 const QUICK_LINK_ROUTES = {
   'Build PC': '/build-pc',
+  'Nhờ AI ráp máy': '/build-pc/nho-ai',
   'Máy chạy được gì?': '/kiem-tra-may',
   'Dịch vụ kỹ thuật tại nhà': '/dich-vu/tai-nha',
   'Thu cũ đổi mới': '/dich-vu/thu-cu',

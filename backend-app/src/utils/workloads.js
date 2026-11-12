@@ -232,6 +232,21 @@ const gpuKindFromName = (name) => {
   return null;
 };
 
+/** Hồ sơ máy từ các linh kiện của cấu hình Build PC (kể cả linh kiện khách đã có). */
+const profileFromParts = (parts) => {
+  const ramGB = parts.filter((part) => part.type === 'ram').reduce((sum, part) => sum + (part.capacityGB || 0) * (part.quantity || 1), 0);
+  const cpu = parts.find((part) => part.type === 'cpu');
+  const gpu = parts.filter((part) => part.type === 'gpu').sort((a, b) => (b.vramGB || 0) - (a.vramGB || 0))[0];
+  return {
+    ramGB,
+    vramGB: gpu ? gpu.vramGB || 0 : 0,
+    gpuKind: gpu ? gpuKindFromName(gpu.name) || 'nvidia' : null,
+    gpuName: gpu ? gpu.name : null,
+    cpuName: cpu ? cpu.name : null,
+    cpuThreads: cpu ? threadsForTier(cpu.tier) : null,
+  };
+};
+
 module.exports = {
   VERDICTS,
   LLM_SIZES,
@@ -244,4 +259,5 @@ module.exports = {
   cpuTierFromThreads,
   threadsForTier,
   gpuKindFromName,
+  profileFromParts,
 };
