@@ -59,7 +59,8 @@ test.after(async () => {
   const users = ctx.users.join(',') || '0';
   const auctionList = ctx.auctionIds.join(',') || '0';
   const orders = ctx.orderIds.join(',') || '0';
-  await query(`
+  try {
+    await query(`
     UPDATE Auctions SET OrderID = NULL WHERE AuctionID IN (${auctionList});
     DELETE FROM OrderStatusHistory WHERE OrderID IN (${orders});
     DELETE FROM StockMovements WHERE OrderID IN (${orders}) OR ProductID = @productId;
@@ -74,7 +75,9 @@ test.after(async () => {
     DELETE FROM PriceHistory WHERE ProductID = @productId;
     DELETE FROM Products WHERE ProductID = @productId;
   `, { productId: [sql.Int, ctx.productId] });
-  await getPool().close();
+  } finally {
+    await getPool().close();
+  }
 });
 
 test('mở phiên: giữ 1 sản phẩm khỏi kho, ghi sổ kho; dữ liệu sai bị từ chối', async () => {
