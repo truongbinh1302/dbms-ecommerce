@@ -38,3 +38,6 @@ docker
 nodemon
 npm
 backups/
+
+# Đánh dấu đã nạp dữ liệu mẫu (scripts/start-docker.ps1)
+.seeded
