@@ -370,6 +370,12 @@ docker compose run --rm backend node run-seed.js
 docker compose up -d --build
 ```
 
+On Windows with Docker Desktop running, double-click `CHAY-WEBSITE.bat` (or run
+`powershell -ExecutionPolicy Bypass -File .\scripts\start-docker.ps1`): it creates
+`.env` with random passwords and keys on the first run, builds the images, applies
+migrations and new seed files, and starts everything. Run it again after updating
+the code.
+
 Open `http://localhost:8080`. The API refuses to start in production mode
 without `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`. Uploaded product images
 are kept in the `uploads` volume.
