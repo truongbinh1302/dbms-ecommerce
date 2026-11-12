@@ -7,6 +7,8 @@
   3) BuildWatches: khách theo dõi tổng giá cả một cấu hình, báo khi cả bộ rẻ đi.
   4) Notifications: thêm loại 'build_price_drop'.
   5) SeedHistory: run-seed.js ghi file seed đã nạp, để lần sau chỉ nạp file mới (không nạp lại 50.000 sản phẩm).
+  6) Products.IsGenerated: 50.000 "Demo Product" sinh tự động để thử chỉ mục. Trang khách, tìm kiếm và trợ lý AI
+     mặc định bỏ qua chúng (vẫn xem được khi gọi API với includeGenerated=true).
   Chạy lại nhiều lần vẫn an toàn.
 */
 IF OBJECT_ID(N'dbo.LaptopModels', N'U') IS NULL
@@ -104,4 +106,11 @@ CREATE TABLE dbo.SeedHistory (
   AppliedAt DATETIME2 NOT NULL CONSTRAINT DF_SeedHistory_AppliedAt DEFAULT SYSDATETIME()
 );
 END
+GO
+
+IF COL_LENGTH('dbo.Products', 'IsGenerated') IS NULL
+  ALTER TABLE dbo.Products ADD IsGenerated BIT NOT NULL CONSTRAINT DF_Products_IsGenerated DEFAULT 0;
+GO
+-- Database đã nạp dữ liệu mẫu: đánh dấu ngay. Database mới: seed 010 đánh dấu sau khi 002 sinh sản phẩm.
+UPDATE dbo.Products SET IsGenerated = 1 WHERE IsGenerated = 0 AND Slug LIKE N'demo-product-%';
 GO

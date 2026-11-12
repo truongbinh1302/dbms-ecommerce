@@ -24,6 +24,28 @@ features and DBMS demonstrations.
   server and the parts and prices always come from stock), upgrade advice for
   an existing PC, and 48-hour price-locked quotes with a shareable link.
 - Price history on every product page and warranty lookup by serial number.
+- "Nên mua lúc nào?" (when to buy): each product and Build PC part is labelled
+  against its last 90 days (lowest, below/above the time-weighted average,
+  change against 30 days ago). The average weights each price by how long it
+  was in effect, computed in one query with `LEAD()` over `PriceHistory`.
+  Build PC charts the total of the whole build per day (Vietnam days) and a
+  signed-in customer can watch the whole build: they are notified once when
+  the build gets cheaper, again only if it drops further, and again after it
+  has gone back to the starting total and dropped once more.
+- "Máy này chạy được gì?" (what can this machine run, `#/kiem-tra-may`): from a
+  Windows DxDiag report, a laptop model, or RAM/GPU typed in, the store
+  estimates which local AI models (by memory needed for a 4-bit model),
+  image models, Docker, Android Studio, virtual machines, Blender and video
+  editing will run well, slowly, or not at all. The same estimate appears on
+  PC and laptop product pages and live in Build PC. For laptops in
+  `LaptopModels` (RAM soldered or in slots, maximum, M.2 size and PCIe
+  generation) it lists the RAM and SSD in stock that fit, and what each RAM
+  upgrade unlocks. The DxDiag file is read in the browser: only the
+  manufacturer, model, CPU, RAM and GPU lines are sent, and nothing is stored.
+- The 50,000 generated "Demo Product" rows (kept for index experiments) are
+  flagged `IsGenerated` and left out of the storefront, search, suggestions
+  and the assistant; the admin product list can include them, and the API
+  returns them with `includeGenerated=true` or when asked by id.
 - Admin workflows for product, image, order, warranty, user, and analytics management.
   The order list searches by order code, customer or recipient name (without
   accents) and phone, filters by status, and opens an order detail panel with a
@@ -159,7 +181,9 @@ The React app uses hash routes so it needs no router library or server rewrite r
 | `#/thanh-toan` | Checkout: shipping address, payment method, voucher |
 | `#/don-hang?trang-thai=` | Order history with tabs: all, being processed (`dang-xu-ly`), shipping (`dang-giao`), delivered (`da-giao`), cancelled (`da-huy`), each with a count |
 | `#/don-hang/:id` | Order detail: cancel, retry VNPay payment, carrier and tracking code, warranty serials, return requests |
-| `#/build-pc` | Build PC: pick parts, compatibility check, suggested builds, upgrade advice, save a quote |
+| `#/build-pc` | Build PC: pick parts, compatibility check, what the build can run, build price over 90 days, suggested builds, upgrade advice, save a quote |
+| `#/build-pc/theo-doi` | Builds the signed-in customer watches, with the total then and now |
+| `#/kiem-tra-may?model=` | What a machine can run (DxDiag file, laptop model or typed specs) and laptop RAM/SSD upgrades |
 | `#/bao-gia/:code` | Shared quote: quoted vs current price, buy at the locked price |
 | `#/bao-hanh` | Warranty lookup by serial; the signed-in customer's warranties, warranty claims and repair history |
 | `#/dich-vu/:tab` | After-sales services: technician at home (`tai-nha`), trade-in (`thu-cu`), my requests (`cua-toi`) |
@@ -309,8 +333,10 @@ cd ..
 `run-migration.js` creates the schema on an empty server. On a database that
 already has tables it keeps the data and only applies the newer, re-runnable
 migrations. To drop everything and start over, run
-`node run-migration.js --reset` (this deletes all data). Run `run-seed.js`
-only once on a fresh database; running it again adds duplicate demo orders.
+`node run-migration.js --reset` (this deletes all data). `run-seed.js` records
+each seed file it loads in `SeedHistory`, so running it again only loads seed
+files added since (a database seeded before this table existed is treated as
+having files `002`–`009`).
 
 ### 5. Run the application
 
@@ -406,7 +432,8 @@ The API is mounted under `/api/v1` and includes:
 - `/products` — catalog and product management, product Q&A (`/products/:id/questions`, admin `/products/admin/questions`)
 - `/cart` — saved cart (`GET`/`PUT /cart`), validation and server-side price quote (`POST /cart/quote`)
 - `/locations/provinces` — the 34 provinces and cities used by the address form
-- `/builder` — Build PC parts, compatibility check, suggested builds, upgrade advice, price-locked quotes
+- `/builder` — Build PC parts (with 90-day price labels), compatibility check, suggested builds, upgrade advice, price-locked quotes, build price trend (`POST /builder/price-trend`), watched builds (`/builder/watches`)
+- `/machine` — what a machine can run and laptop upgrades: laptop models, `POST /machine/analyze` (DxDiag lines, laptop model or typed specs), `POST /machine/build`, `GET /machine/products/:id`
 - `/warranties` — public lookup by serial, the customer's warranties, admin registration
 - `/products/:id/price-history` — price changes over the last 180 days
 - `/orders` — checkout, order history, status (with carrier and tracking code), cancellation, return requests (`/orders/:id/returns`, admin `/orders/admin/returns`)

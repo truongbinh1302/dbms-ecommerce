@@ -85,6 +85,9 @@ const listLaptopModels = async () => (await loadLaptopModels()).map((model) => (
   cpuName: model.cpuName,
   gpuName: model.gpuName,
   ramGB: model.ramGB,
+  ramSolderedGB: model.ramSolderedGB,
+  ramSlots: model.ramSlots,
+  maxRamGB: model.maxRamGB,
   productId: model.productId,
 }));
 

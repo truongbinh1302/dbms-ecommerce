@@ -13,6 +13,9 @@ GO
 */
 SET NOCOUNT ON;
 
+-- Sản phẩm sinh tự động ở 002 (thử chỉ mục): ẩn khỏi trang khách và trợ lý AI.
+UPDATE dbo.Products SET IsGenerated = 1 WHERE IsGenerated = 0 AND Slug LIKE N'demo-product-%';
+
 DECLARE @ComponentsCat INT = (SELECT CategoryID FROM dbo.Categories WHERE Slug = N'components');
 DECLARE @StorageCat INT = (SELECT CategoryID FROM dbo.Categories WHERE Slug = N'storage');
 

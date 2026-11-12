@@ -5,6 +5,12 @@ import { formatCurrency } from '../utils/format'
 const WIDTH = 640
 const HEIGHT = 170
 const PAD = { top: 16, right: 12, bottom: 26, left: 12 }
+// "Nên mua lúc nào?": màu chỉ để nhìn nhanh, nội dung nằm ở câu chữ.
+const INSIGHT_CLASS = {
+  good: 'bg-emerald-50 text-emerald-900',
+  warn: 'bg-amber-50 text-amber-900',
+  neutral: 'bg-slate-50 text-slate-700',
+}
 
 function formatDate(value) {
   const date = new Date(value)
@@ -100,7 +106,16 @@ export default function PriceHistory({ productId }) {
         </p>
       </div>
 
-      {data.currentPrice <= data.lowestPrice && changes > 0 ? (
+      {data.insight && data.insight.label !== 'new' ? (
+        <div className={`mt-3 rounded-2xl px-4 py-3 text-sm ${INSIGHT_CLASS[data.insight.tone] || INSIGHT_CLASS.neutral}`}>
+          <p className="font-semibold">Nên mua lúc nào? {data.insight.text}</p>
+          {data.insight.label !== 'stable' ? (
+            <p className="mt-1 text-xs opacity-90">
+              Trong {data.insight.windowDays} ngày: thấp nhất {formatCurrency(data.insight.lowest)} · trung bình {formatCurrency(data.insight.average)} (tính theo số ngày giữ mỗi mức giá) · cao nhất {formatCurrency(data.insight.highest)}.
+            </p>
+          ) : null}
+        </div>
+      ) : data.currentPrice <= data.lowestPrice && changes > 0 ? (
         <p className="mt-2 text-sm font-semibold text-emerald-700">Giá hiện tại là mức thấp nhất trong {data.days} ngày qua.</p>
       ) : null}
 

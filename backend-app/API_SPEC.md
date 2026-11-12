@@ -2247,6 +2247,10 @@ Công suất ước tính = 75 W (mainboard, RAM, ổ, quạt) + CPU + card; ngu
 
 Mốc giá được ghi trong cùng transaction với câu `INSERT`/`UPDATE` sản phẩm qua API, chỉ khi giá bán thay đổi.
 
+Kèm `insight` ("Nên mua lúc nào?", cửa sổ 90 ngày): `label` là `lowest` | `below_avg` | `average` | `above_avg` | `stable` | `new`,
+`tone`, `text`, `lowest`, `highest`, `average` (trung bình theo số ngày giữ mỗi mức giá), `vs30` (% so với giá 30 ngày trước).
+Danh sách `GET /products` và `GET /builder/components` có `priceInsight` rút gọn (`label`, `tone`, `text`) cho từng sản phẩm.
+
 ### Bảo hành — `/warranties`
 
 | Method | Path | Quyền | Mô tả |
@@ -2294,3 +2298,30 @@ luôn khớp với cách hệ thống tính tiền.
 - `GET /health`: tiến trình còn chạy.
 - `GET /health/ready`: kiểm tra SQL Server và MongoDB, trả 503 `DEGRADED` khi một trong hai lỗi.
 - Lỗi 5xx ghi một dòng JSON vào log, có `errorId`. Ở production khách chỉ nhận thông báo chung kèm `errorId`.
+
+## 24. "Nên mua lúc nào?" cho cả cấu hình và "Máy này chạy được gì?"
+
+### Tổng giá cấu hình — `/builder`
+
+| Method | Endpoint | Ghi chú |
+| --- | --- | --- |
+| POST | `/builder/price-trend` | `{ items: [{ productId, quantity, owned }] }` → `points: [{ date, total }]` 91 ngày (giờ Việt Nam; `total` null khi còn linh kiện chưa lên kệ), `current`, `lowest`, `highest`, `average`, `insight` |
+| GET | `/builder/watches` | (đăng nhập) cấu hình đang theo dõi: `totalAtWatch`, `currentTotal` (tính cả Hot Deal, null khi có linh kiện ngừng bán) |
+| POST | `/builder/watches` | (đăng nhập) `{ items, title }`. Cùng danh sách linh kiện thì đặt lại mốc. Tối đa 10 cấu hình (409 `too_many_build_watches`) |
+| DELETE | `/builder/watches/:id` | (đăng nhập) bỏ theo dõi |
+
+Thông báo `build_price_drop` khi tổng thấp hơn lúc bắt đầu theo dõi; chỉ báo lại khi thấp hơn lần báo trước,
+hoặc khi cả bộ đã về lại mức ban đầu rồi giảm lần nữa.
+
+### Máy này chạy được gì — `/machine` (không cần đăng nhập, không lưu gì)
+
+| Method | Endpoint | Ghi chú |
+| --- | --- | --- |
+| GET | `/machine/laptops` | Model laptop có thông số nâng cấp |
+| POST | `/machine/analyze` | `{ source: 'dxdiag', text, slotsUsed }` (chỉ các dòng System Manufacturer, System Model, Processor, Memory, Card name, Chip type, Dedicated Memory), `{ source: 'laptop', laptopModelId, ramGB, slotsUsed }` hoặc `{ source: 'manual', ramGB, gpuKind, vramGB }` |
+| POST | `/machine/build` | `{ items }` của Build PC → `capabilities` |
+| GET | `/machine/products/:id` | PC/laptop của cửa hàng → `source` (`laptop_model` / `specs` / null), `laptopModel`, `capabilities` |
+
+`capabilities.groups[].items[]`: `id`, `label`, `verdict` (`good` | `ok` | `slow` | `no`), `verdictLabel`, `detail`, `note`.
+`upgrade` (khi có model laptop): `ram.options[]` (`action` `replace` | `add`, `resultGB`, `improves`: các việc được nâng hạng), `storage.options[]`.
+Ước tính theo dung lượng bộ nhớ (mô hình AI nén 4-bit khoảng 0,6 GB mỗi tỉ tham số), không phải kết quả đo.

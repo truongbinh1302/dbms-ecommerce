@@ -36,7 +36,7 @@ FROM dbo.Products p
 LEFT JOIN dbo.ComponentSpecs cs ON cs.ProductID = p.ProductID
 LEFT JOIN dbo.Categories c ON c.CategoryID = p.CategoryID
 WHERE p.IsDeleted = 0
-  AND p.Slug NOT LIKE N'demo-product-%'
+  AND p.IsGenerated = 0
   AND (SELECT COUNT(*) FROM dbo.PriceHistory h WHERE h.ProductID = p.ProductID) = 1
   AND EXISTS (SELECT 1 FROM dbo.PriceHistory h WHERE h.ProductID = p.ProductID AND h.Price = p.Price);
 

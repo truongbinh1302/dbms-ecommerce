@@ -64,6 +64,7 @@ const buildProductFilter = (request, filters, tokens, ids) => {
     maxPrice = null,
     inStock = null,
     featured = null,
+    includeGenerated = null,
   } = filters;
 
   request.input('q', sql.NVarChar, q ? String(q).trim() : null);
@@ -82,6 +83,11 @@ const buildProductFilter = (request, filters, tokens, ids) => {
   const idFilter = ids.length > 0
     ? `AND p.ProductID IN (${ids.map((_, index) => `@id${index}`).join(', ')})`
     : '';
+  // 50.000 sản phẩm sinh tự động (thử chỉ mục) không hiện ở trang khách. Vẫn lấy được khi hỏi theo mã
+  // (yêu thích, so sánh, giỏ cũ) hoặc khi gọi với includeGenerated=true (trang quản trị, thử hiệu năng).
+  const generatedFilter = ids.length > 0 || includeGenerated === 'true' || includeGenerated === true
+    ? ''
+    : 'AND p.IsGenerated = 0';
 
   return `
     WHERE p.IsDeleted = 0
@@ -95,6 +101,7 @@ const buildProductFilter = (request, filters, tokens, ids) => {
       AND (@inStock IS NULL OR p.Stock > 0)
       AND (@featured IS NULL OR p.IsFeatured = @featured)
       ${idFilter}
+      ${generatedFilter}
   `;
 };
 
@@ -130,7 +137,7 @@ const getProducts = async (filters = {}, { countTotal = true } = {}) => {
 
   const result = await request.query(`
     SELECT p.ProductID AS id, p.Name, p.Slug, p.Brand, p.Description, p.Price, p.OldPrice,
-           p.Stock, p.Specs, p.Images, p.IsFeatured, p.Rating, p.ReviewsCount,
+           p.Stock, p.Specs, p.Images, p.IsFeatured, p.IsGenerated, p.Rating, p.ReviewsCount,
            p.CreatedAt, p.UpdatedAt,
            c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug,
            ${PROMO_COLUMNS}
@@ -191,7 +198,7 @@ const getProductById = async (id) => {
     .query(`
       SELECT p.ProductID AS id, p.Name, p.Slug, p.Brand, p.Description,
              p.Price, p.OldPrice, p.Stock, p.Specs, p.Images,
-             p.IsFeatured, p.Rating, p.ReviewsCount, p.CreatedAt, p.UpdatedAt,
+             p.IsFeatured, p.IsGenerated, p.Rating, p.ReviewsCount, p.CreatedAt, p.UpdatedAt,
              c.CategoryID AS categoryId, c.Name AS categoryName, c.Slug AS categorySlug,
              ${PROMO_COLUMNS}
       FROM Products p

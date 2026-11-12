@@ -9,6 +9,7 @@ const POLL_MS = 60000
 // Nhãn loại thông báo để khách lướt nhanh.
 const TYPE_LABELS = {
   price_drop: { label: 'Giá giảm', className: 'bg-emerald-50 text-emerald-800' },
+  build_price_drop: { label: 'Cấu hình rẻ hơn', className: 'bg-emerald-50 text-emerald-800' },
   back_in_stock: { label: 'Có hàng', className: 'bg-sky-50 text-sky-800' },
   order_status: { label: 'Đơn hàng', className: 'bg-slate-100 text-slate-700' },
   service_update: { label: 'Dịch vụ', className: 'bg-violet-50 text-violet-800' },

@@ -1,7 +1,7 @@
 ﻿# Chạy BinhTinhStore bằng Docker Desktop trên Windows (PowerShell 5 trở lên).
 #   powershell -ExecutionPolicy Bypass -File .\scripts\start-docker.ps1
 # Lần đầu: tạo .env với mật khẩu/khoá ngẫu nhiên, dựng image, tạo cơ sở dữ liệu, nạp dữ liệu mẫu (10-20 phút).
-# Các lần sau: chỉ cập nhật cơ sở dữ liệu (migration) và khởi động lại, giữ nguyên dữ liệu.
+# Các lần sau: cập nhật cơ sở dữ liệu (migration, dữ liệu mẫu mới nếu có) và khởi động lại, giữ nguyên dữ liệu.
 # Không dùng 'Stop': PowerShell 5 coi thông báo tiến trình của docker (ghi ra stderr) là lỗi. Mã thoát được kiểm tra sau mỗi bước.
 $ErrorActionPreference = 'Continue'
 Set-Location (Split-Path -Parent $PSScriptRoot)
@@ -48,11 +48,9 @@ docker compose build; Check 'dựng image'
 Step 'Tạo/cập nhật cơ sở dữ liệu (migration)'
 docker compose run --rm backend node run-migration.js; Check 'chạy migration'
 
-if (-not (Test-Path .seeded)) {
-  Step 'Nạp dữ liệu mẫu: 50.000 sản phẩm, 5.000 đơn (2-5 phút, chỉ làm lần đầu)'
-  docker compose run --rm backend node run-seed.js; Check 'nạp dữ liệu mẫu'
-  Set-Content .seeded (Get-Date -Format s)
-}
+# run-seed.js ghi lại file seed đã nạp: lần đầu nạp 50.000 sản phẩm (2-5 phút), các lần sau chỉ nạp file seed mới.
+Step 'Nạp dữ liệu mẫu (lần đầu 2-5 phút, các lần sau chỉ nạp phần mới)'
+docker compose run --rm backend node run-seed.js; Check 'nạp dữ liệu mẫu'
 
 Step 'Khởi động API và website'
 docker compose up -d --wait; Check 'khởi động website'

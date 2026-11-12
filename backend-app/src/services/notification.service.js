@@ -156,7 +156,8 @@ const listWatches = async (userId) => {
 /**
  * Ghi thông báo giá giảm cho mọi lượt theo dõi đạt điều kiện. Trả về số thông báo mới.
  * Điều kiện: giá hiện tại <= giá mong muốn (hoặc < giá lúc bắt đầu theo dõi nếu không đặt),
- * và thấp hơn lần báo trước. Giá tăng lại cao hơn lần báo trước thì xoá mốc để lần giảm sau lại được báo.
+ * và thấp hơn lần báo trước. Giá lên lại trên giá mong muốn (hoặc về giá lúc bắt đầu theo dõi) thì xoá mốc
+ * để lần giảm sau lại được báo.
  */
 const sweepPriceWatches = async () => {
   const result = await new sql.Request(getPool()).query(`
@@ -164,11 +165,15 @@ const sweepPriceWatches = async () => {
     BEGIN TRANSACTION;
     DECLARE @hits TABLE (UserID INT, ProductID INT, Name NVARCHAR(220), Price DECIMAL(18,2), PriceAtWatch DECIMAL(18,2));
 
+    -- Mở lại lượt báo khi giá đã hết "giảm" (lên trên giá mong muốn, hoặc về lại giá lúc bắt đầu theo dõi).
+    -- Giá chỉ nhích lên mà vẫn dưới mức đó thì không mở lại, để không báo "giá giảm" khi giá đang tăng.
     UPDATE w
     SET LastNotifiedPrice = NULL, LastNotifiedAt = NULL
     FROM PriceWatches w WITH (UPDLOCK)
     JOIN (${EFFECTIVE_PRICE_SQL}) cur ON cur.ProductID = w.ProductID
-    WHERE w.LastNotifiedPrice IS NOT NULL AND cur.EffectivePrice > w.LastNotifiedPrice;
+    WHERE w.LastNotifiedPrice IS NOT NULL
+      AND ((w.TargetPrice IS NOT NULL AND cur.EffectivePrice > w.TargetPrice)
+        OR (w.TargetPrice IS NULL AND cur.EffectivePrice >= w.PriceAtWatch));
 
     UPDATE w
     SET LastNotifiedPrice = cur.EffectivePrice, LastNotifiedAt = SYSDATETIME()

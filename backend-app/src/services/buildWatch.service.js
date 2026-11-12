@@ -5,7 +5,8 @@ const { normalizeBuildItems } = require('./builder.service');
 /*
   Theo dõi giá cả một cấu hình: khách lưu danh sách linh kiện cần mua, khi tổng giá khách trả được
   (giá Hot Deal nếu có) thấp hơn lúc bắt đầu theo dõi thì báo trong tài khoản.
-  Chống báo trùng giống PriceWatches: chỉ báo lại khi tổng xuống thấp hơn lần báo trước, hoặc sau khi đã tăng lại.
+  Chống báo trùng giống PriceWatches: chỉ báo lại khi tổng xuống thấp hơn lần báo trước, hoặc khi cả bộ đã về lại
+  mức lúc bắt đầu theo dõi rồi giảm lần nữa.
 */
 
 const MAX_BUILD_WATCHES = 10;
@@ -139,7 +140,7 @@ const unwatchBuild = async (userId, watchId) => {
 
 /**
  * Ghi thông báo cho mọi cấu hình có tổng giá thấp hơn lúc bắt đầu theo dõi và thấp hơn lần báo trước.
- * Tổng tăng lại cao hơn lần báo trước thì xoá mốc để lần giảm sau lại được báo. Trả về số thông báo mới.
+ * Tổng về lại mức lúc bắt đầu theo dõi thì xoá mốc để lần giảm sau lại được báo. Trả về số thông báo mới.
  */
 const sweepBuildWatches = async () => {
   const result = await new sql.Request(getPool()).query(`
@@ -152,11 +153,12 @@ const sweepBuildWatches = async () => {
     ${CURRENT_TOTAL_APPLY}
     WHERE t.Missing = 0 AND t.Total IS NOT NULL;
 
+    -- Cả bộ về lại mức lúc bắt đầu theo dõi (hoặc cao hơn): mở lại lượt báo cho lần giảm sau.
     UPDATE w
     SET LastNotifiedTotal = NULL, LastNotifiedAt = NULL
     FROM BuildWatches w
     JOIN @cur c ON c.BuildWatchID = w.BuildWatchID
-    WHERE w.LastNotifiedTotal IS NOT NULL AND c.Total > w.LastNotifiedTotal;
+    WHERE w.LastNotifiedTotal IS NOT NULL AND c.Total >= w.TotalAtWatch;
 
     DECLARE @hits TABLE (UserID INT, Title NVARCHAR(120), Total DECIMAL(18,2), TotalAtWatch DECIMAL(18,2));
     UPDATE w

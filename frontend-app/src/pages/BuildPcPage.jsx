@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import PageMessage from '../components/PageMessage'
+import CapabilityReport from '../components/CapabilityReport'
+import BuildPriceTrend from '../components/BuildPriceTrend'
 import {
   adviseBuild,
   autoBuild,
   checkBuild,
   createBuildQuote,
+  fetchBuildCapabilities,
+  fetchBuildWatches,
   fetchBuilderComponents,
   fetchBuilderPresets,
   suggestUpgrades,
+  unwatchBuild,
 } from '../api/client'
 import { hrefFor } from '../hooks/useHashRoute'
 import { formatCurrency } from '../utils/format'
@@ -26,7 +31,20 @@ const TABS = [
   { id: 'tu-chon', label: 'Tự chọn linh kiện' },
   { id: 'nhu-cau', label: 'Theo phần mềm cần dùng' },
   { id: 'nang-cap', label: 'Nâng cấp máy đang có' },
+  { id: 'theo-doi', label: 'Cấu hình đang theo dõi giá' },
 ]
+
+// Nhãn giá ngắn trong danh sách chọn linh kiện ("Nên mua lúc nào?").
+const INSIGHT_SHORT = {
+  lowest: 'thấp nhất 90 ngày',
+  below_avg: 'dưới giá trung bình',
+  above_avg: 'đang cao hơn trung bình',
+}
+const INSIGHT_TONE = {
+  good: 'text-emerald-700',
+  warn: 'text-amber-800',
+  neutral: 'text-slate-500',
+}
 
 const CARD = 'rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]'
 
@@ -35,7 +53,7 @@ const CARD = 'rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08
   tư vấn nâng cấp, và lưu báo giá giữ giá 48 giờ.
   Mọi giá và kết quả kiểm tra đều do server tính.
 */
-export default function BuildPcPage({ initialTab = 'tu-chon', onBuyBuild, onAddToCart }) {
+export default function BuildPcPage({ initialTab = 'tu-chon', onBuyBuild, onAddToCart, currentUser = null, onRequireLogin }) {
   const [tab, setTab] = useState(TABS.some((item) => item.id === initialTab) ? initialTab : 'tu-chon')
   const [catalog, setCatalog] = useState({ loaded: false, slots: [], components: [], error: '' })
   const [build, setBuild] = useState(loadSavedBuild)
@@ -92,17 +110,28 @@ export default function BuildPcPage({ initialTab = 'tu-chon', onBuyBuild, onAddT
       </section>
 
       {tab === 'tu-chon' ? (
-        <Builder catalog={catalog} build={build} setBuild={setBuild} onBuyBuild={onBuyBuild} />
+        <Builder
+          catalog={catalog}
+          build={build}
+          setBuild={setBuild}
+          onBuyBuild={onBuyBuild}
+          currentUser={currentUser}
+          onRequireLogin={onRequireLogin}
+        />
       ) : null}
       {tab === 'nhu-cau' ? <PresetPicker onApplyParts={applyParts} /> : null}
       {tab === 'nang-cap' ? <UpgradeAdvisor onAddToCart={onAddToCart} /> : null}
+      {tab === 'theo-doi' ? (
+        <WatchedBuilds catalog={catalog} currentUser={currentUser} onRequireLogin={onRequireLogin} onApplyParts={applyParts} />
+      ) : null}
     </div>
   )
 }
 
-function Builder({ catalog, build, setBuild, onBuyBuild }) {
+function Builder({ catalog, build, setBuild, onBuyBuild, currentUser, onRequireLogin }) {
   const [onlyCompatible, setOnlyCompatible] = useState(true)
   const [result, setResult] = useState({ key: '', data: null, error: '' })
+  const [capability, setCapability] = useState({ key: '', data: null })
   const [quote, setQuote] = useState({ busy: false, data: null, error: '' })
   const [title, setTitle] = useState('')
 
@@ -138,7 +167,23 @@ function Builder({ catalog, build, setBuild, onBuyBuild }) {
     }
   }, [itemsKey, items.length])
 
+  // "Máy này chạy được gì?" cho cấu hình đang ráp (gồm cả linh kiện khách đã có).
+  useEffect(() => {
+    if (items.length === 0) return undefined
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      fetchBuildCapabilities(JSON.parse(itemsKey))
+        .then((data) => !cancelled && setCapability({ key: itemsKey, data }))
+        .catch(() => !cancelled && setCapability({ key: itemsKey, data: null }))
+    }, 300)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [itemsKey, items.length])
+
   const current = items.length > 0 && result.key === itemsKey ? result : null
+  const capabilityData = items.length > 0 && capability.key === itemsKey ? capability.data : null
   const check = current?.data?.check
   const errorTypes = new Set((check?.errors || []).flatMap((error) => error.types))
   const toBuy = items.filter((item) => !item.owned)
@@ -182,7 +227,7 @@ function Builder({ catalog, build, setBuild, onBuyBuild }) {
               Chỉ hiện linh kiện hợp với lựa chọn
             </label>
             {items.length > 0 ? (
-              <button type="button" onClick={() => setBuild({})} className="font-semibold text-slate-400 hover:text-red-600">
+              <button type="button" onClick={() => setBuild({})} className="font-semibold text-slate-500 hover:text-red-600">
                 Xoá hết
               </button>
             ) : null}
@@ -216,10 +261,15 @@ function Builder({ catalog, build, setBuild, onBuyBuild }) {
                       <option value="">— Chưa chọn —</option>
                       {options.map((item) => (
                         <option key={item.productId} value={item.productId} disabled={item.stock <= 0 && item.productId !== part?.productId}>
-                          {item.name} — {formatCurrency(item.price)}{item.stock <= 0 ? ' (hết hàng)' : ''}
+                          {item.name} — {formatCurrency(item.price)}
+                          {INSIGHT_SHORT[item.priceInsight?.label] ? ` · ${INSIGHT_SHORT[item.priceInsight.label]}` : ''}
+                          {item.stock <= 0 ? ' (hết hàng)' : ''}
                         </option>
                       ))}
                     </select>
+                    {part?.priceInsight && part.priceInsight.label !== 'new' ? (
+                      <p className={`mt-2 text-xs ${INSIGHT_TONE[part.priceInsight.tone] || INSIGHT_TONE.neutral}`}>{part.priceInsight.text}</p>
+                    ) : null}
                     {part ? (
                       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
                         <span>{describePart(part)}</span>
@@ -246,7 +296,7 @@ function Builder({ catalog, build, setBuild, onBuyBuild }) {
                     ) : null}
                   </div>
                   <div className="w-32 shrink-0 text-right text-sm font-bold text-slate-900 sm:pt-2">
-                    {part ? (slot.owned ? <span className="font-normal text-slate-400">Đã có</span> : formatCurrency(part.price * (slot.quantity || 1))) : null}
+                    {part ? (slot.owned ? <span className="font-normal text-slate-500">Đã có</span> : formatCurrency(part.price * (slot.quantity || 1))) : null}
                   </div>
                 </div>
               </li>
@@ -262,7 +312,7 @@ function Builder({ catalog, build, setBuild, onBuyBuild }) {
           <p className="text-sm text-slate-500">Chọn linh kiện bên trái, hoặc dùng tab “Theo phần mềm cần dùng” để hệ thống ráp sẵn.</p>
         ) : null}
         {current?.error ? <p className="text-sm text-red-600">{current.error}</p> : null}
-        {items.length > 0 && !current ? <p className="text-sm text-slate-400">Đang kiểm tra...</p> : null}
+        {items.length > 0 && !current ? <p className="text-sm text-slate-500">Đang kiểm tra...</p> : null}
 
         {check ? (
           <div className="space-y-3 text-sm">
@@ -299,6 +349,17 @@ function Builder({ catalog, build, setBuild, onBuyBuild }) {
           </p>
         ) : null}
 
+        {capabilityData ? (
+          <div className="space-y-2 rounded-2xl border border-slate-200 p-4">
+            <h3 className="font-bold text-slate-900">Máy này chạy được gì?</h3>
+            {capabilityData.capabilities ? (
+              <CapabilityReport capabilities={capabilityData.capabilities} compact headingLevel={4} />
+            ) : (
+              <p className="text-sm text-slate-500">{capabilityData.message}</p>
+            )}
+          </div>
+        ) : null}
+
         <div className="flex items-center justify-between border-t border-dashed border-slate-200 pt-4">
           <span className="font-semibold text-slate-700">Tạm tính ({toBuy.length} linh kiện cần mua)</span>
           <span className="text-2xl font-black text-red-600">{formatCurrency(current?.data?.subtotal || 0)}</span>
@@ -316,6 +377,8 @@ function Builder({ catalog, build, setBuild, onBuyBuild }) {
         {check && check.errors.length > 0 && toBuy.length > 0 ? (
           <p className="text-xs text-amber-700">Cấu hình đang có lỗi tương thích. Bạn vẫn có thể mua, nhưng nên sửa trước.</p>
         ) : null}
+
+        <BuildPriceTrend items={items} title={title.trim()} currentUser={currentUser} onRequireLogin={onRequireLogin} />
 
         <div className="space-y-2 rounded-2xl border border-slate-200 p-4">
           <h3 className="font-bold text-slate-900">Lưu báo giá giữ giá 48 giờ</h3>
@@ -559,6 +622,10 @@ function UpgradeAdvisor({ onAddToCart }) {
       <form onSubmit={handleSubmit} className={CARD}>
         <h2 className="text-xl font-black text-slate-900">Máy bạn đang có</h2>
         <p className="mt-1 text-sm text-slate-500">Điền những gì bạn biết; ô để trống sẽ không dùng để lọc. Thông tin có trên hộp linh kiện hoặc trong CPU-Z.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Dùng laptop, hoặc muốn biết máy chạy được AI, Docker hay Blender không?{' '}
+          <a href={hrefFor('/kiem-tra-may')} className="font-semibold text-red-600 underline">Kiểm tra bằng file DxDiag</a>
+        </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className="block text-sm">
             <span className="font-semibold text-slate-700">Socket CPU / mainboard</span>
@@ -662,5 +729,90 @@ function NumberField({ label, value, onChange, placeholder }) {
         className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
       />
     </label>
+  )
+}
+
+/* Cấu hình đang theo dõi giá: tổng lúc bắt đầu, tổng hiện tại (tính cả Hot Deal), mở lại trong Build PC. */
+function WatchedBuilds({ catalog, currentUser, onRequireLogin, onApplyParts }) {
+  const [state, setState] = useState({ loaded: false, items: [], error: '' })
+  const [version, setVersion] = useState(0)
+  const byId = useMemo(() => new Map(catalog.components.map((part) => [part.productId, part])), [catalog.components])
+
+  useEffect(() => {
+    if (!currentUser) return undefined
+    let cancelled = false
+    fetchBuildWatches()
+      .then((items) => !cancelled && setState({ loaded: true, items: Array.isArray(items) ? items : [], error: '' }))
+      .catch((err) => !cancelled && setState({ loaded: true, items: [], error: err.message || 'Không tải được danh sách' }))
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser, version])
+
+  if (!currentUser) {
+    return (
+      <section className={CARD}>
+        <h2 className="text-xl font-black text-slate-900">Cấu hình đang theo dõi giá</h2>
+        <p className="mt-2 text-sm text-slate-600">Đăng nhập để xem các cấu hình bạn đã bật “Báo khi cả bộ rẻ hơn”.</p>
+        <button type="button" onClick={() => onRequireLogin?.()} className="mt-4 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white">Đăng nhập</button>
+      </section>
+    )
+  }
+
+  async function handleRemove(id) {
+    try {
+      await unwatchBuild(id)
+      setVersion((value) => value + 1)
+    } catch (err) {
+      setState((current) => ({ ...current, error: err.message || 'Không bỏ theo dõi được' }))
+    }
+  }
+
+  return (
+    <section className={CARD} aria-labelledby="watched-builds-title">
+      <h2 id="watched-builds-title" className="text-xl font-black text-slate-900">Cấu hình đang theo dõi giá</h2>
+      <p className="mt-1 text-sm text-slate-600">Khi tổng giá các linh kiện (tính cả Hot Deal) thấp hơn lúc bắt đầu theo dõi, bạn nhận thông báo trong tài khoản. Tối đa 10 cấu hình.</p>
+      {!state.loaded ? <p className="mt-4 text-sm text-slate-500">Đang tải...</p> : null}
+      {state.error ? <p className="mt-4 text-sm font-semibold text-red-600" role="alert">{state.error}</p> : null}
+      {state.loaded && !state.error && state.items.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-600">Chưa có cấu hình nào. Ráp cấu hình ở tab “Tự chọn linh kiện” rồi bấm “Báo khi cả bộ rẻ hơn”.</p>
+      ) : null}
+      {state.items.length > 0 ? (
+        <ul className="mt-4 divide-y divide-slate-100">
+          {state.items.map((watch) => {
+            const diff = watch.currentTotal === null ? null : watch.currentTotal - watch.totalAtWatch
+            const parts = watch.items.map((item) => byId.get(item.productId)).filter(Boolean)
+            return (
+              <li key={watch.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 text-sm">
+                  <p className="font-bold text-slate-900">{watch.title || `Cấu hình ${watch.items.length} linh kiện`}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{parts.map((part) => part.name).join(' · ')}</p>
+                  <p className="mt-1 text-slate-700">
+                    Lúc bắt đầu {formatCurrency(watch.totalAtWatch)}
+                    {watch.currentTotal === null ? ' · có linh kiện đã ngừng bán' : ` · hiện tại ${formatCurrency(watch.currentTotal)}`}
+                  </p>
+                  {diff !== null && diff !== 0 ? (
+                    <p className={`text-xs font-semibold ${diff < 0 ? 'text-emerald-700' : 'text-amber-800'}`}>
+                      {diff < 0 ? `Rẻ hơn ${formatCurrency(-diff)}` : `Đắt hơn ${formatCurrency(diff)}`}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 gap-3 text-sm">
+                  <button
+                    type="button"
+                    disabled={parts.length === 0}
+                    onClick={() => onApplyParts(watch.items.map((item) => ({ ...byId.get(item.productId), quantity: item.quantity })).filter((part) => part.type))}
+                    className="font-bold text-red-600 hover:underline disabled:text-slate-400"
+                  >
+                    Mở trong Build PC
+                  </button>
+                  <button type="button" onClick={() => handleRemove(watch.id)} className="font-semibold text-slate-500 hover:text-red-600">Bỏ theo dõi</button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+    </section>
   )
 }

@@ -59,7 +59,11 @@ export function describePart(part) {
     case 'gpu':
       return [part.vramGB && `${part.vramGB} GB VRAM`, part.lengthMm && `dài ${part.lengthMm} mm`, part.powerW && `${part.powerW} W`].filter(Boolean).join(' · ')
     case 'storage':
-      return [part.capacityGB && (part.capacityGB >= 1000 ? `${part.capacityGB / 1000} TB` : `${part.capacityGB} GB`), part.storageInterface].filter(Boolean).join(' · ')
+      return [
+        part.capacityGB && (part.capacityGB >= 1000 ? `${part.capacityGB / 1000} TB` : `${part.capacityGB} GB`),
+        part.storageInterface === 'M.2' && part.m2Size ? `M.2 ${part.m2Size}` : part.storageInterface,
+        part.pcieGen && `PCIe ${part.pcieGen}.0`,
+      ].filter(Boolean).join(' · ')
     case 'cooler':
       return [part.heightMm && `cao ${part.heightMm} mm`, part.supportedSockets].filter(Boolean).join(' · ')
     case 'psu':
@@ -104,4 +108,14 @@ export function buildToItems(build) {
   return Object.values(build)
     .filter((slot) => slot && slot.productId)
     .map((slot) => ({ productId: Number(slot.productId), quantity: slot.quantity || 1, owned: Boolean(slot.owned) }))
+}
+
+/** Linh kiện cần mua, gộp theo sản phẩm và sắp theo mã: cùng cách server lưu cấu hình đang theo dõi giá. */
+export function canonicalItems(items) {
+  const merged = new Map()
+  for (const item of items) {
+    if (item.owned) continue
+    merged.set(item.productId, (merged.get(item.productId) || 0) + (item.quantity || 1))
+  }
+  return [...merged.entries()].sort((a, b) => a[0] - b[0]).map(([productId, quantity]) => ({ productId, quantity }))
 }
