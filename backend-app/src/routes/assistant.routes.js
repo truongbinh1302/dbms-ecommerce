@@ -30,7 +30,8 @@ router.post('/chat', chatLimiter, async (req, res) => {
     const result = await assistantService.chat((req.body || {}).messages);
     return success(res, result, 'Assistant replied');
   } catch (err) {
-    if (err.status) return error(res, err.message, err.status, err.data);
+    // Lỗi do trợ lý tự tạo (bận, quá tải, chưa bật) là câu viết sẵn cho khách: giữ nguyên cả ở production.
+    if (err.status) return error(res, err.message, err.status, err.data, { expose: true });
     console.error('[assistant] unexpected error:', err.message);
     return error(res, 'Trợ lý đang bận, bạn thử lại sau ít phút nhé.', 503);
   }
