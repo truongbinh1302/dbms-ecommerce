@@ -66,22 +66,25 @@ const CHECKS = [
   },
 ];
 
-/** Chạy mọi kiểm tra trong một lần đọc (snapshot nhất quán theo từng câu). */
+/**
+ * Chạy mọi kiểm tra. Mỗi kiểm tra là MỘT câu lệnh: dòng mẫu và tổng số dòng sai (COUNT(*) OVER ())
+ * tính trên cùng một lần đọc, nên hai con số luôn khớp nhau dù đơn hàng đang được tạo song song.
+ */
 const runChecks = async () => {
   const startedAt = Date.now();
   const batch = CHECKS.map((check) => `
-    SELECT COUNT(*) AS Problems FROM (${check.sql}) x;
-    SELECT TOP (${SAMPLE}) * FROM (${check.sql}) x ORDER BY ${check.order};`).join('\n');
+    SELECT TOP (${SAMPLE}) x.*, COUNT(*) OVER () AS __problems FROM (${check.sql}) x ORDER BY ${check.order};`).join('\n');
   const result = await new sql.Request(getPool()).query(batch);
   const checks = CHECKS.map((check, index) => {
-    const problems = Number(result.recordsets[index * 2][0].Problems);
+    const rows = result.recordsets[index];
+    const problems = rows.length ? Number(rows[0].__problems) : 0;
     return {
       key: check.key,
       label: check.label,
       rule: check.rule,
       ok: problems === 0,
       problems,
-      sample: result.recordsets[index * 2 + 1],
+      sample: rows.map(({ __problems, ...row }) => row),
     };
   });
   return {

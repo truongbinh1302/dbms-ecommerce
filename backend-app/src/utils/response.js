@@ -12,6 +12,8 @@ const success = (res, data, message = 'OK', statusCode = 200) => {
   Lỗi 5xx: ghi một dòng JSON vào log (mã lỗi, request, chi tiết) để tra cứu, và ở production
   chỉ trả cho khách thông báo chung kèm mã lỗi, không lộ câu SQL hay đường dẫn file.
   Lỗi 4xx là lỗi của request nên trả nguyên thông báo như trước.
+  options.expose = true: thông báo 5xx do code viết sẵn cho khách (vd. "Trợ lý đang bận"), không chứa chi tiết
+  nội bộ, nên giữ nguyên cả ở production (vẫn ghi log kèm mã lỗi).
 */
 const logServerError = (res, message, statusCode) => {
     const errorId = crypto.randomBytes(4).toString('hex');
@@ -29,12 +31,12 @@ const logServerError = (res, message, statusCode) => {
     return errorId;
 };
 
-const error = (res, message = 'Internal Server Error', statusCode = 500, errors = null) => {
+const error = (res, message = 'Internal Server Error', statusCode = 500, errors = null, options = {}) => {
     let publicMessage = message;
     let errorId;
     if (statusCode >= 500) {
         errorId = logServerError(res, message, statusCode);
-        if (process.env.NODE_ENV === 'production') {
+        if (process.env.NODE_ENV === 'production' && !options.expose) {
             publicMessage = 'Hệ thống đang gặp lỗi, vui lòng thử lại sau';
         }
     }
