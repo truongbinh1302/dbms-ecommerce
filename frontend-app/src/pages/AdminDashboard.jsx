@@ -9,6 +9,7 @@ import VouchersPanel from '../components/admin/VouchersPanel'
 import QuestionsPanel from '../components/admin/QuestionsPanel'
 import ReviewsPanel from '../components/admin/ReviewsPanel'
 import IntegrityPanel from '../components/admin/IntegrityPanel'
+import AssistantSettingsPanel from '../components/admin/AssistantSettingsPanel'
 import TodoPanel from '../components/admin/TodoPanel'
 import useDocumentTitle from '../hooks/useDocumentTitle'
 import OrderDetailDrawer from '../components/admin/OrderDetailDrawer'
@@ -279,6 +280,7 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
                 <a href="#admin-questions" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Hỏi đáp</a>
                 <a href="#admin-reviews" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Đánh giá</a>
                 <a href="#admin-integrity" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Kiểm tra dữ liệu</a>
+                <a href="#admin-assistant" className="rounded-full px-3 py-1.5 text-slate-200 hover:bg-white/10">Trợ lý AI</a>
               </nav>
               <button
                 type="button"
@@ -634,6 +636,10 @@ export default function AdminDashboard({ onBackToStore, onGoToProductManagement,
 
         <div id="admin-integrity" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
           <IntegrityPanel token={token} />
+        </div>
+
+        <div id="admin-assistant" className="mt-6 scroll-mt-4 lg:scroll-mt-44">
+          <AssistantSettingsPanel token={token} />
         </div>
       </div>
     </div>

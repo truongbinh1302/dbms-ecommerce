@@ -464,6 +464,19 @@ export function fetchAdminDashboard(token) {
   return adminGet('/analytics/dashboard', {}, token);
 }
 
+// Cài đặt trợ lý AI (admin): khoá OpenAI không bao giờ được trả về, chỉ 4 ký tự cuối.
+export function fetchAssistantSettings(token) {
+  return request('/settings/assistant', { auth: true, token });
+}
+
+export function saveAssistantSettings(payload, token) {
+  return request('/settings/assistant', { method: 'PUT', auth: true, token, body: JSON.stringify(payload) });
+}
+
+export function testAssistantSettings(apiKey, token) {
+  return request('/settings/assistant/test', { method: 'POST', auth: true, token, body: JSON.stringify(apiKey ? { apiKey } : {}) });
+}
+
 export function fetchIntegrityReport(token) {
   return adminGet('/analytics/integrity', {}, token);
 }

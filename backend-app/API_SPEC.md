@@ -1596,6 +1596,14 @@ Lỗi phía OpenAI (khoá sai, quá tải, mất mạng) → `503` với lời n
 
 ---
 
+### Cài đặt trợ lý (admin)
+
+- `GET /settings/assistant` → `{ hasKey, keySource: "admin"|"env"|null, keyHint: "…abcd", keyUnreadable, model, switchedOn, enabled, perHour, dailyLimit, usageToday, updatedAt, updatedByName }`. Không bao giờ có khoá.
+- `PUT /settings/assistant` với một hoặc nhiều trường: `apiKey` (bắt đầu `sk-`; `""` hoặc `null` để xoá), `model`, `enabled` (bool), `perHour` (1–1000), `dailyLimit` (1–100000). Khoá được mã hoá AES-256-GCM (`SETTINGS_SECRET`, không có thì suy ra từ `JWT_ACCESS_SECRET`) rồi lưu vào `AppSettings` (migration `021`). Khoá lưu ở đây được ưu tiên hơn `OPENAI_API_KEY`.
+- `POST /settings/assistant/test` (body tuỳ chọn `{ apiKey }` để thử khoá chưa lưu) → `{ ok, message }`: gọi `GET /models/{model}` của OpenAI (không tốn phí).
+
+---
+
 ## 16. Analytics & Inventory APIs (admin)
 
 Tất cả cần `Authorization: Bearer <admin token>`.

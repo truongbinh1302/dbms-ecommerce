@@ -66,7 +66,9 @@ features and DBMS demonstrations.
   VNPay result, admin update, cancellation, payment expiry) is recorded with
   who made it, in the same transaction as the change; the order page shows
   the steps reached and the history, the admin drawer shows notes too.
-- Shopping assistant on OpenAI (on when `OPENAI_API_KEY` is set): it answers
+- Shopping assistant on OpenAI, switched on by pasting an OpenAI key in the
+  admin dashboard (Trợ lý AI; stored encrypted, only the last four characters
+  are ever shown; `OPENAI_API_KEY` in `.env` is the fallback). It answers
   through the site's own functions (product search with Hot Deal prices, product
   detail, the Build PC advisor, store policies), so prices and stock on its
   product cards come from the database, not from the model. Per-IP hourly and
