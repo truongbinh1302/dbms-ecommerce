@@ -23,6 +23,7 @@ const reviewRoutes = require('./routes/review.route');
 const analyticsRoutes = require('./routes/analytics.route');
 const locationRoutes = require('./routes/location.routes');
 const builderRoutes = require('./routes/builder.routes');
+const machineRoutes = require('./routes/machine.routes');
 const warrantyRoutes = require('./routes/warranty.routes');
 const storeRoutes = require('./routes/store.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
@@ -99,6 +100,7 @@ app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/locations', locationRoutes);
 app.use('/api/v1/builder', builderRoutes);
+app.use('/api/v1/machine', machineRoutes);
 app.use('/api/v1/warranties', warrantyRoutes);
 app.use('/api/v1/store', storeRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
@@ -139,6 +141,8 @@ const startPriceWatchSweeper = () => {
       if (sent > 0) console.log(`[price-watch] Sent ${sent} price drop notification(s)`);
       const restocked = await notificationService.sweepStockWatches();
       if (restocked > 0) console.log(`[stock-watch] Sent ${restocked} back-in-stock notification(s)`);
+      const builds = await require('./services/buildWatch.service').sweepBuildWatches();
+      if (builds > 0) console.log(`[build-watch] Sent ${builds} build price drop notification(s)`);
     } catch (err) {
       console.error('[price-watch] Sweep failed:', err.message);
     }

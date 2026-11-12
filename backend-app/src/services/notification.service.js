@@ -1,5 +1,5 @@
 const { getPool, sql } = require('../config/db.sql');
-const { ACTIVE_CONDITION } = require('./promotionSql');
+const { EFFECTIVE_PRICE_SQL } = require('./promotionSql');
 
 /*
   Thông báo trong tài khoản và theo dõi giá.
@@ -75,19 +75,6 @@ const markRead = async (userId, notificationId = null) => {
 };
 
 // ---------- Theo dõi giá ----------
-
-// Giá khách đang trả được: giá Hot Deal đang chạy (còn suất) nếu thấp hơn giá niêm yết.
-const EFFECTIVE_PRICE_SQL = `
-  SELECT p.ProductID, p.Name, p.Price,
-         CASE WHEN deal.SalePrice IS NOT NULL AND deal.SalePrice < p.Price THEN deal.SalePrice ELSE p.Price END AS EffectivePrice
-  FROM Products p
-  OUTER APPLY (
-    SELECT MIN(pi.SalePrice) AS SalePrice
-    FROM PromotionItems pi JOIN Promotions pr ON pr.PromotionID = pi.PromotionID
-    WHERE pi.ProductID = p.ProductID AND ${ACTIVE_CONDITION}
-      AND (pi.QuantityLimit IS NULL OR pi.SoldCount < pi.QuantityLimit)
-  ) deal
-  WHERE p.IsDeleted = 0`;
 
 const currentPrice = async (productId) => {
   const result = await new sql.Request(getPool())
@@ -299,6 +286,9 @@ const sweepSoon = () => {
   setImmediate(() => {
     sweepPriceWatches().catch((err) => console.warn('[price-watch] sweep failed:', err.message));
     sweepStockWatches().catch((err) => console.warn('[stock-watch] sweep failed:', err.message));
+    // Nạp muộn để tránh vòng require (buildWatch.service dùng notify của file này).
+    require('./buildWatch.service').sweepBuildWatches()
+      .catch((err) => console.warn('[build-watch] sweep failed:', err.message));
   });
 };
 

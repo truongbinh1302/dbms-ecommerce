@@ -5,6 +5,7 @@ const { promoApply, PROMO_COLUMNS } = require('./promotionSql');
 const { tokenizeQuery } = require('../utils/searchText');
 const { refreshSearchText } = require('./searchIndex.service');
 const notificationService = require('./notification.service');
+const priceInsightService = require('./priceInsight.service');
 
 const slugify = (value) => String(value || '')
   .toLowerCase()
@@ -146,6 +147,8 @@ const getProducts = async (filters = {}, { countTotal = true } = {}) => {
   if (!countTotal) {
     return { items, pagination: { page, limit, totalItems: null, totalPages: null } };
   }
+  // Nhãn "Nên mua lúc nào?" (thấp nhất 90 ngày...) cho các sản phẩm của trang này.
+  await priceInsightService.attachInsights(items);
 
   const countRequest = new sql.Request(pool);
   const countWhere = buildProductFilter(countRequest, { ...filters, q: q || null }, tokens, ids);
@@ -426,6 +429,12 @@ const getPriceHistory = async (id, days = 180) => {
     changedAt: row.ChangedAt,
   }));
   const prices = points.map((point) => point.price).concat(Number(product.Price));
+  let insight = null;
+  try {
+    insight = (await priceInsightService.getInsights([productId])).get(productId) || null;
+  } catch (err) {
+    console.warn('Price insight skipped:', err.message);
+  }
   return {
     productId,
     days: windowDays,
@@ -433,6 +442,7 @@ const getPriceHistory = async (id, days = 180) => {
     lowestPrice: Math.min(...prices),
     highestPrice: Math.max(...prices),
     points,
+    insight,
   };
 };
 

@@ -24,7 +24,7 @@ const COMPONENT_SELECT = `
          cs.SupportedSockets, cs.PowerW, cs.PsuWatts, cs.LengthMm, cs.MaxGpuLengthMm,
          cs.HeightMm, cs.MaxCoolerHeightMm, cs.MemorySlots, cs.Modules, cs.CapacityGB,
          cs.M2Slots, cs.StorageInterface, cs.HasIntegratedGraphics, cs.IncludesCooler,
-         cs.Tier, cs.VramGB
+         cs.Tier, cs.VramGB, cs.M2Size, cs.PcieGen
   FROM ComponentSpecs cs
   JOIN Products p ON p.ProductID = cs.ProductID
   WHERE p.IsDeleted = 0
@@ -64,6 +64,8 @@ const toPart = (row) => ({
   includesCooler: boolOrNull(row.IncludesCooler),
   tier: intOrNull(row.Tier),
   vramGB: intOrNull(row.VramGB),
+  m2Size: row.M2Size || null,
+  pcieGen: intOrNull(row.PcieGen),
 });
 
 const loadComponents = async (executor = getPool(), productIds = null) => {
@@ -137,10 +139,27 @@ const checkConfiguration = async (rawItems) => {
   return evaluateBuild(items, components);
 };
 
-const listComponents = async () => ({
-  slots: SLOT_ORDER.map((type) => ({ type, label: SLOT_LABELS[type] })),
-  components: await loadComponents(),
-});
+/**
+ * Linh kiện cho trang Build PC (không gồm RAM laptop), kèm nhãn giá 90 ngày ("Nên mua lúc nào?").
+ * Nhãn giá là thông tin phụ: lỗi khi tính thì vẫn trả danh sách.
+ */
+const listComponents = async () => {
+  const components = (await loadComponents()).filter((part) => part.type !== 'laptop_ram');
+  let insights = new Map();
+  try {
+    // Nạp muộn: priceInsight.service không phụ thuộc file này nhưng giữ thứ tự nạp đơn giản.
+    insights = await require('./priceInsight.service').getInsights(components.map((part) => part.productId));
+  } catch (err) {
+    console.warn('Component price insight skipped:', err.message);
+  }
+  return {
+    slots: SLOT_ORDER.map((type) => ({ type, label: SLOT_LABELS[type] })),
+    components: components.map((part) => {
+      const insight = insights.get(part.productId);
+      return { ...part, priceInsight: insight ? { label: insight.label, tone: insight.tone, text: insight.text } : null };
+    }),
+  };
+};
 
 const listPresets = () => PRESETS.map(({ id, name, software, reason, needs }) => ({
   id,

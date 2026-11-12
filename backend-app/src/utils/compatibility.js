@@ -123,6 +123,14 @@ const checkBuild = (parts) => {
     add(warnings, 'no_cooler', 'CPU này không kèm tản nhiệt, nên chọn thêm tản', ['cooler', 'cpu']);
   }
 
+  if (parts.some((part) => part.type === 'laptop_ram')) {
+    add(errors, 'laptop_ram', 'RAM laptop (SO-DIMM) không cắm được vào mainboard máy bàn, hãy chọn RAM DIMM', ['ram']);
+  }
+  const shortM2 = groups.storage.filter((drive) => String(drive.storageInterface || '').toUpperCase() === 'M.2' && drive.m2Size && drive.m2Size !== '2280');
+  if (shortM2.length > 0) {
+    add(warnings, 'm2_size', `Ổ M.2 cỡ ${[...new Set(shortM2.map((drive) => drive.m2Size))].join(', ')}: mainboard máy bàn thường có khe 2280, cần miếng chuyển để cố định ổ`, ['storage']);
+  }
+
   if (cpu && groups.gpu.length === 0 && cpu.hasIntegratedGraphics === false) {
     add(errors, 'no_display_output', 'CPU không có nhân đồ hoạ tích hợp, cần chọn card đồ hoạ để có hình', ['gpu', 'cpu']);
   }

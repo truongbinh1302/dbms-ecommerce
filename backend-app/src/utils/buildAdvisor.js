@@ -49,6 +49,8 @@ const byPrice = (a, b) => a.price - b.price || a.productId - b.productId;
 const inStock = (part) => part.stock > 0;
 const ofType = (parts, type) => parts.filter((part) => part.type === type && inStock(part)).sort(byPrice);
 const isNvidia = (part) => /geforce|\brtx\b|\bgtx\b/i.test(part.name || '');
+// Mainboard desktop có khe M.2 2280; ổ 2230/2242 (cho laptop) cần miếng chuyển nên không tự gợi ý.
+const fitsDesktopM2 = (drive) => drive.storageInterface !== 'M.2' || !drive.m2Size || drive.m2Size === '2280';
 const supports = (list, value) => String(list || '').toUpperCase().split(',').map((s) => s.trim()).includes(String(value || '').toUpperCase());
 
 /** Ráp cấu hình rẻ nhất thoả preset. Trả về null nếu kho không đủ linh kiện phù hợp. */
@@ -78,7 +80,7 @@ const autoBuild = (preset, components) => {
         if (!gpu) continue;
       }
 
-      const drives = ofType(components, 'storage').filter((drive) => (drive.capacityGB || 0) >= needs.storageGB);
+      const drives = ofType(components, 'storage').filter((drive) => (drive.capacityGB || 0) >= needs.storageGB && fitsDesktopM2(drive));
       const storage = (board.m2Slots > 0 ? drives.find((drive) => drive.storageInterface === 'M.2') : null)
         || drives.find((drive) => drive.storageInterface !== 'M.2')
         || null;
@@ -139,10 +141,11 @@ const upgradeOptions = (current, components) => {
     }
     if (part.type === 'storage') {
       if (part.storageInterface === 'M.2' && current.hasM2Slot === false) continue;
+      if (!fitsDesktopM2(part)) continue;
       result.storage.push({ ...part, note: null });
     }
   }
   return result;
 };
 
-module.exports = { PRESETS, isNvidia, autoBuild, upgradeOptions };
+module.exports = { PRESETS, isNvidia, fitsDesktopM2, autoBuild, upgradeOptions };

@@ -94,12 +94,14 @@ const exportMyData = async (userId) => {
       SELECT h.OrderID, h.FromStatus, h.ToStatus, h.ChangedBy, h.Note, h.ChangedAt
       FROM OrderStatusHistory h JOIN Orders o ON o.OrderID = h.OrderID
       WHERE o.UserID = @userId ORDER BY h.HistoryID;
+
+      SELECT Title, ItemsJson, TotalAtWatch, CreatedAt FROM BuildWatches WHERE UserID = @userId ORDER BY BuildWatchID;
     `);
 
   const [
     users, orders, orderItems, cart, quotes, warranties, vouchers,
     serviceRequests = [], priceWatches = [], stockWatches = [], questions = [], notifications = [], returns = [], returnItems = [],
-    statusHistory = [],
+    statusHistory = [], buildWatches = [],
   ] = result.recordsets;
   const user = users[0];
   if (!user) throw createHttpError(404, 'Không tìm thấy tài khoản');
@@ -140,6 +142,7 @@ const exportMyData = async (userId) => {
     })),
     priceWatches,
     stockWatches,
+    buildWatches: buildWatches.map((watch) => ({ ...watch, ItemsJson: undefined, items: parseJson(watch.ItemsJson) })),
     productQuestions: questions,
     notifications,
     returnRequests: returns.map(({ ReturnID, ...request }) => ({
@@ -222,6 +225,7 @@ const deleteAccount = async (userId, password) => {
         DELETE FROM CartItems WHERE UserID = @userId;
         DELETE FROM PriceWatches WHERE UserID = @userId;
         DELETE FROM StockWatches WHERE UserID = @userId;
+        DELETE FROM BuildWatches WHERE UserID = @userId;
         -- Hỏi đáp: câu chưa trả lời bị xoá; câu đã trả lời giữ lại cho người mua sau nhưng không còn gắn với tài khoản.
         DELETE FROM ProductQuestions WHERE UserID = @userId AND Status <> N'answered';
         UPDATE ProductQuestions SET UserID = NULL, AskerName = N'Khách hàng' WHERE UserID = @userId;
