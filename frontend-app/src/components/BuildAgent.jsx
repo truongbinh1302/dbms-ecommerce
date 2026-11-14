@@ -8,11 +8,11 @@ const CARD = 'rounded-[36px] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08
 const MAX_CHARS = 600
 
 const EXAMPLES = [
-  'Chơi game eSports và stream lên YouTube, tầm 25 triệu',
-  'Chạy mô hình AI cỡ 8B và Stable Diffusion trên máy, khoảng 40 triệu',
-  'Sinh viên CNTT code web, chạy Docker và máy ảo Android, dưới 20 triệu',
+  'Chơi game eSports và stream lên YouTube, tầm 40 triệu',
+  'Chạy mô hình AI cỡ 8B và Stable Diffusion trên máy, khoảng 70 triệu',
+  'Sinh viên CNTT code web, chạy Docker và máy ảo Android, dưới 30 triệu',
   'Máy văn phòng cho bố mẹ xem phim, học online, càng rẻ càng tốt',
-  'Dựng video 4K bằng DaVinci Resolve, ngân sách 35 triệu',
+  'Dựng video 4K bằng DaVinci Resolve, ngân sách 55 triệu',
 ]
 
 const STEP_MARK = {
@@ -115,7 +115,7 @@ export default function BuildAgent({ onApplyParts, onBuyBuild }) {
               value={request}
               onChange={(event) => setRequest(event.target.value.slice(0, MAX_CHARS))}
               rows={3}
-              placeholder="Ví dụ: chơi game eSports và stream, chạy thử mô hình AI cỡ 8B, ngân sách tầm 25 triệu"
+              placeholder="Ví dụ: chơi game eSports và stream, chạy thử mô hình AI cỡ 8B, ngân sách tầm 40 triệu"
               className="mt-1 w-full resize-y rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-red-500"
             />
           </div>

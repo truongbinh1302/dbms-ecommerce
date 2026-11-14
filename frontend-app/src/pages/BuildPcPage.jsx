@@ -524,7 +524,7 @@ function PresetPicker({ onApplyParts }) {
             value={need}
             onChange={(event) => setNeed(event.target.value)}
             maxLength={500}
-            placeholder="Ví dụ: sinh viên CNTT, code web và chạy Docker, tầm 20 triệu"
+            placeholder="Ví dụ: sinh viên CNTT, code web và chạy Docker, tầm 30 triệu"
             className="min-w-0 flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-red-500"
           />
           <button type="submit" disabled={advice.busy || need.trim().length < 3} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white disabled:bg-slate-300">
