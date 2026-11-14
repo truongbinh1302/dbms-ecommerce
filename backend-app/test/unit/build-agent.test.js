@@ -52,6 +52,8 @@ test('find_parts lọc theo socket, loại RAM, VRAM, hãng card, giá và sắp
   assert.deepEqual(ids({ type: 'psu', minWatts: 600 }), [11]);
   assert.deepEqual(ids({ type: 'storage', storageInterface: 'm.2', minCapacityGB: 1000 }), [8]);
   assert.deepEqual(ids({ type: 'storage', storageInterface: 'SATA' }), []);
+  assert.deepEqual(ids({ type: 'cpu', integratedGraphics: true }), [1]);
+  assert.match(agent.describeStep('find_parts', { type: 'cpu', integratedGraphics: true }, agent.findParts(catalog(), { type: 'cpu', integratedGraphics: true })).title, /có đồ hoạ tích hợp/);
   assert.match(agent.findParts(catalog(), { type: 'laptop' }).error, /type phải/);
   const gpu = agent.findParts(catalog(), { type: 'gpu' }).parts[0];
   assert.deepEqual(Object.keys(gpu).sort(), ['brand', 'id', 'lengthMm', 'name', 'powerW', 'price', 'stock', 'vramGB']);
@@ -81,10 +83,13 @@ test('submit_build: máy chủ kiểm tra lại, trả lý do để mô hình s�
   assert.match(submit({ variant: 'alternative', tradeoff: 'rẻ hơn', items: OFFICE }).problems[0], /cấu hình chính/);
   assert.match(submit({ variant: 'main', items: OFFICE.map(({ productId }) => ({ productId })) }).problems[0], /Thiếu reason/);
   assert.ok(submit({ variant: 'main', items: [{ productId: 2, reason: 'x' }, ...OFFICE.slice(1)] }).problems.some((item) => /socket/.test(item)));
+  // CPU không có đồ hoạ tích hợp, không card: trả lỗi kèm gợi ý dùng bộ lọc integratedGraphics.
+  const noScreen = submit({ variant: 'main', items: [{ productId: 2, reason: 'x' }, ...OFFICE.slice(1)] });
+  assert.match(noScreen.hint, /integratedGraphics: true/);
   assert.ok(submit({ variant: 'main', items: OFFICE.slice(0, 3) }).problems.some((item) => /Còn thiếu/.test(item)));
   assert.match(submit({ variant: 'main', items: AI_BUILD }, 15000000).problems.join(' '), /vượt ngân sách/);
   assert.match(submit({ variant: 'main', items: [{ productId: 13, reason: 'mạnh' }] }).problems[0], /không có trong danh sách/);
-  assert.equal(state.rejections, 6);
+  assert.equal(state.rejections, 7);
   assert.equal(state.builds.main, undefined);
 
   const accepted = submit({ variant: 'main', items: OFFICE });
