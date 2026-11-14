@@ -231,7 +231,10 @@ edited.
 
 Build PC data lives in `ComponentSpecs` (migration `007`, sample parts in
 `database/seeds/003_seed_components.sql`; specs and prices there are sample
-values for the demo). Compatibility rules are pure functions in
+values for the demo). `013_seed_catalog_2026.sql` brings the catalog to
+November 2026 market prices and product generations (Ryzen 9000, Core Ultra
+200S / LGA1851, RTX 50, RX 9000, 2026 laptops); sources and what changed are in
+`docs/cap-nhat-catalog-2026.md`. Compatibility rules are pure functions in
 `backend-app/src/utils/compatibility.js`, so they are unit tested without a
 database. A saved quote keeps each part's price for 48 hours
 (`QUOTE_VALID_HOURS`): the order uses the lower of the quoted and current

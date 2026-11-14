@@ -234,7 +234,7 @@ test('máy chạy được gì: DxDiag khớp model laptop, gợi ý RAM/SSD cò
 });
 
 test('máy chạy được gì trên trang sản phẩm: laptop theo model, PC theo thông số, sản phẩm khác không có', async () => {
-  const [legion] = await query("SELECT ProductID FROM Products WHERE Slug = N'legion-slim-5'");
+  const [legion] = await query("SELECT ProductID FROM Products WHERE Slug = N'lenovo-legion-5-15iax11'");
   const laptop = await machineService.capabilitiesForProduct(legion.ProductID);
   assert.equal(laptop.source, 'laptop_model');
   assert.match(laptop.laptopModel.upgradeSummary, /2 khe RAM DDR5, tối đa 32 GB/);
@@ -247,7 +247,7 @@ test('máy chạy được gì trên trang sản phẩm: laptop theo model, PC t
   assert.equal(desktop.source, 'specs');
   assert.ok(desktop.capabilities.profile.ramGB >= 8);
 
-  const [monitor] = await query("SELECT ProductID FROM Products WHERE Slug = N'ultrasharp-27-4k-usb-c'");
+  const [monitor] = await query("SELECT ProductID FROM Products WHERE Slug = N'dell-ultrasharp-u2724de'");
   assert.equal((await machineService.capabilitiesForProduct(monitor.ProductID)).capabilities, null);
 });
 
