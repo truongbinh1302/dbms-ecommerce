@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="BarraCuda 2TB HDD">
+  <title>BarraCuda 2TB HDD</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#8cfcc3"/></linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2e8f0"/><stop offset="0.5" stop-color="#cbd5e1"/><stop offset="1" stop-color="#94a3b8"/></linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#005b22"/><stop offset="0.55" stop-color="#2b9b62"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.5"><stop offset="0" stop-color="#2b9b62" stop-opacity="0.22"/><stop offset="1" stop-color="#2b9b62" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="800" height="800" rx="48" fill="url(#bg)"/>
+  <circle cx="400" cy="350" r="300" fill="url(#glow)"/>
+  <ellipse cx="400" cy="585" rx="250" ry="22" fill="#0f172a" fill-opacity="0.12"/>
+  <g><rect x="215" y="160" width="370" height="400" rx="18" fill="#334155"/><rect x="232" y="178" width="336" height="364" rx="12" fill="url(#metal)"/>
+    <circle cx="400" cy="330" r="130" fill="#cbd5e1" stroke="#94a3b8" stroke-width="4"/><circle cx="400" cy="330" r="34" fill="#64748b"/><path d="M520 470 L420 340" stroke="#2b9b62" stroke-width="16" stroke-linecap="round"/><circle cx="525" cy="475" r="20" fill="#475569"/></g>
+  <text x="56" y="84" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="30" font-weight="800" fill="#006d34" letter-spacing="3">SEAGATE</text>
+  <text x="744" y="84" text-anchor="end" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="24" font-weight="600" fill="#475569">HDD</text>
+  <text x="400" y="660" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="46" font-weight="900" fill="#0f172a">BarraCuda 2TB HDD</text>
+  <text x="400" y="736" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="26" font-weight="600" fill="#475569">2TB · HDD · SATA</text>
+  <text x="744" y="768" text-anchor="end" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="18" fill="#64748b">Ảnh minh hoạ</text>
+</svg>

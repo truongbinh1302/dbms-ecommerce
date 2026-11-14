@@ -38,6 +38,16 @@ function getDemoVisualKind(productId, categorySlug = '', brand = '') {
   return kinds[id % kinds.length]
 }
 
+const CATEGORY_IMAGES = new Set([
+  'pc-gaming', 'gaming-laptops', 'office-laptops', 'monitors', 'keyboards', 'mice', 'headsets', 'components',
+  'storage', 'networking', 'cameras', 'printers', 'chairs', 'smart-devices', 'accessories',
+])
+
+/** Ảnh minh hoạ theo danh mục (frontend-app/public/images/products/category-*.svg). */
+export function categoryImage(categorySlug) {
+  return `/images/products/category-${CATEGORY_IMAGES.has(categorySlug) ? categorySlug : 'accessories'}.svg`
+}
+
 export function mapApiProductToStoreProduct(product) {
   const id = Number(product.id || product.ProductID || product.productId)
   const categorySlug = product.category?.slug || product.CategorySlug || product.categorySlug || ''
@@ -56,6 +66,7 @@ export function mapApiProductToStoreProduct(product) {
   const rawOldPrice = Number(product.oldPrice ?? product.OldPrice ?? 0)
   const oldPrice = promoActive ? listPrice : rawOldPrice > price ? rawOldPrice : null
   const specs = Array.isArray(product.specs) ? product.specs.map(String) : []
+  const ownImages = Array.isArray(product.images) ? product.images.filter(Boolean) : []
 
   return {
     id,
@@ -68,7 +79,9 @@ export function mapApiProductToStoreProduct(product) {
     stock: Number(product.stock ?? product.Stock ?? 0),
     specs,
     description: product.description || '',
-    images: Array.isArray(product.images) ? product.images : [],
+    // Sản phẩm chưa có ảnh: dùng ảnh minh hoạ theo danh mục để không có ô ảnh trống.
+    images: ownImages.length > 0 ? ownImages : [categoryImage(categorySlug)],
+    hasOwnImage: ownImages.length > 0,
     badge: promoActive ? 'Hot Deal' : product.isFeatured ? 'Nổi bật' : '',
     // Điểm sao tính từ đánh giá thật của người đã mua (0 khi chưa có đánh giá).
     rating: Number(product.rating ?? product.Rating ?? 0),

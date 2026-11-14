@@ -67,7 +67,7 @@ export function ProductVisual({ product, className = '' }) {
               alt={product.name}
               loading="lazy"
               decoding="async"
-              className="max-w-28 max-h-28 object-contain rounded-[2rem] shadow-2xl"
+              className="size-40 max-w-full rounded-[2rem] object-contain shadow-2xl"
             />
           ) : (
             <div
