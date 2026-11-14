@@ -41,3 +41,6 @@ backups/
 
 # Đánh dấu đã nạp dữ liệu mẫu (scripts/start-docker.ps1)
 .seeded
+
+# Ảnh sản phẩm thêm hàng loạt (THEM-ANH-SAN-PHAM.bat): ảnh của hãng/shop, không đưa lên repo
+anh-san-pham/

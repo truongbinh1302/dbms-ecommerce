@@ -1,5 +1,20 @@
 # Hướng Dẫn Upload Ảnh Sản Phẩm
 
+## Thêm ảnh hàng loạt (Windows)
+
+Chạy `CHAY-WEBSITE.bat` trước, rồi:
+
+1. Bấm đúp `THEM-ANH-SAN-PHAM.bat`. Lần đầu nó tạo thư mục `anh-san-pham` và file `anh-san-pham\danh-sach-ma-san-pham.csv` (mở bằng Excel) liệt kê mã của mọi sản phẩm đang bán và sản phẩm nào đang dùng ảnh minh hoạ.
+2. Bỏ ảnh vào thư mục `anh-san-pham`, đặt tên file theo mã sản phẩm: `amd-ryzen-7-9700x.jpg`. Ảnh phụ: `amd-ryzen-7-9700x-2.jpg` đến `-6.jpg`. Nhận JPG, PNG, WebP, GIF, tối đa 5 MB mỗi ảnh.
+3. Bấm đúp `THEM-ANH-SAN-PHAM.bat` lần nữa. Ảnh được chép vào `uploads/products/` (volume Docker, không mất khi chạy lại) và gắn vào sản phẩm.
+
+- Chỉ thay ảnh minh hoạ hoặc ô chưa có ảnh; ảnh đã tải lên ở trang quản trị được giữ. Muốn thay cả những ảnh đó: chạy `THEM-ANH-SAN-PHAM.bat --ghi-de` trong cửa sổ lệnh.
+- Tên file gõ sai thì báo cáo gợi ý mã gần đúng; file không phải ảnh (kiểm tra theo nội dung, không theo đuôi) bị bỏ qua.
+- Chạy thử không sửa gì: `THEM-ANH-SAN-PHAM.bat --thu`.
+- Thư mục `anh-san-pham` không đưa lên Git. Ảnh lấy từ hãng hoặc shop là ảnh có bản quyền: ưu tiên ảnh trong trang press kit/media của hãng, ghi nguồn khi dùng cho báo cáo.
+
+Không dùng Windows: `docker compose cp anh-san-pham backend:/tmp/anh-san-pham` rồi `docker compose exec backend node scripts/import-product-images.js /tmp/anh-san-pham`.
+
 ## Cách sử dụng
 
 ### 1. **Backend - API Upload**
