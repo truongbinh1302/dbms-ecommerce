@@ -257,3 +257,19 @@ test('chạy với OpenAI giả: gửi đủ công cụ, đọc token, kết qu�
     (err) => err.status === 503,
   );
 });
+
+test('hỏi về laptop: từ chối bằng quy tắc, không gọi mô hình, không tính hạn mức', async () => {
+  assert.equal(agent.isLaptopRequest('Tư vấn giúp mình laptop gaming tầm 25 triệu'), true);
+  assert.equal(agent.isLaptopRequest('Nâng cấp RAM cho MacBook'), true);
+  assert.equal(agent.isLaptopRequest('Đang dùng laptop, muốn ráp thêm PC máy bàn chơi game'), false);
+  assert.equal(agent.isLaptopRequest('Máy chơi game 25 triệu'), false);
+
+  assistant.resetUsage();
+  const prepared = await buildAgentService.prepare({ request: 'Tư vấn giúp mình laptop gaming tầm 25 triệu' }, { settings: SETTINGS });
+  assert.equal(prepared.declined, true);
+  assert.equal(assistant.usageToday(), 0);
+  const result = await buildAgentService.run(prepared, { fetch: async () => { throw new Error('không được gọi OpenAI'); }, catalog: catalog() });
+  assert.equal(result.status, 'declined');
+  assert.match(result.note, /chỉ ráp PC máy bàn/);
+  assert.equal(result.stats.inputTokens, 0);
+});

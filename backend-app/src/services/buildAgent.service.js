@@ -4,7 +4,7 @@ const { getInsights } = require('./priceInsight.service');
 const { EFFECTIVE_PRICE_SQL } = require('./promotionSql');
 const assistant = require('./assistant.service');
 const { parseBudget } = require('../utils/needParser');
-const { MAX_REQUEST_CHARS, createCatalog, runBuildAgent } = require('../utils/buildAgent');
+const { MAX_REQUEST_CHARS, LAPTOP_NOTE, createCatalog, isLaptopRequest, runBuildAgent } = require('../utils/buildAgent');
 
 /*
   Trợ lý AI tự ráp cấu hình: nạp linh kiện thật (giá đã tính Hot Deal, nhãn giá 90 ngày) rồi chạy
@@ -68,6 +68,8 @@ const prepare = async (body = {}, { settings = null, now = new Date() } = {}) =>
   if (request.length < 5) throw createHttpError(400, 'Hãy mô tả bạn cần máy để làm gì');
   if (request.length > MAX_REQUEST_CHARS) throw createHttpError(400, `Yêu cầu tối đa ${MAX_REQUEST_CHARS} ký tự`);
   const budget = readBudget(body.budget, request);
+  // Hỏi về laptop: trả lời ngay bằng quy tắc, không gọi mô hình nên cũng không tính vào hạn mức.
+  if (isLaptopRequest(request)) return { request, budget, settings: current, declined: true };
   assistant.takeDailyQuota(now, current.dailyLimit);
   return { request, budget, settings: current };
 };
@@ -75,7 +77,19 @@ const prepare = async (body = {}, { settings = null, now = new Date() } = {}) =>
 /**
  * Chạy trợ lý. options: onEvent (gửi từng bước), signal (khách đóng trang), fetch, catalog (test).
  */
-const run = async ({ request, budget, settings }, { onEvent = () => {}, signal = null, fetch: fetchImpl = globalThis.fetch, catalog = null } = {}) => {
+const run = async ({ request, budget, settings, declined = false }, { onEvent = () => {}, signal = null, fetch: fetchImpl = globalThis.fetch, catalog = null } = {}) => {
+  if (declined) {
+    return {
+      status: 'declined',
+      builds: [],
+      note: LAPTOP_NOTE,
+      trace: [],
+      stats: { rounds: 0, toolCalls: 0, rejectedSubmissions: 0, ms: 0, inputTokens: 0, outputTokens: 0 },
+      request,
+      budget,
+      model: settings.model,
+    };
+  }
   const parts = catalog || await loadCatalog();
   if (parts.parts.length === 0) throw createHttpError(503, 'Kho hiện chưa có linh kiện máy bàn để ráp');
   const deadline = Date.now() + TOTAL_DEADLINE_MS;

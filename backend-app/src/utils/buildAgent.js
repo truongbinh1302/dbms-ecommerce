@@ -489,6 +489,19 @@ const presentBuild = (catalog, budget, saved) => {
   };
 };
 
+/* ------------------------- Lọc trước bằng quy tắc ------------------------- */
+
+const LAPTOP_WORDS = /laptop|máy tính xách tay|notebook|macbook|ultrabook/i;
+const DESKTOP_WORDS = /\b(pc|desktop)\b|máy bàn|thùng máy|case máy/i;
+const LAPTOP_NOTE = 'Mục này chỉ ráp PC máy bàn. Muốn chọn laptop, bạn dùng trợ lý mua hàng hoặc ô tìm kiếm; muốn nâng cấp laptop đang có, xem trang "Máy chạy được gì?".';
+
+/**
+ * Câu hỏi về laptop (không nhắc PC máy bàn): từ chối ngay, không gọi mô hình.
+ * Lần đo thứ 2 với mô hình thật, trợ lý ráp nhầm một PC cho câu "tư vấn laptop gaming";
+ * quy tắc này chắc chắn hơn prompt và không tốn token.
+ */
+const isLaptopRequest = (text) => LAPTOP_WORDS.test(String(text || '')) && !DESKTOP_WORDS.test(String(text || ''));
+
 /* ------------------------------ Vòng lặp ------------------------------ */
 
 const parseArguments = (raw) => {
@@ -604,6 +617,8 @@ const runBuildAgent = async ({
 };
 
 module.exports = {
+  LAPTOP_NOTE,
+  isLaptopRequest,
   MAX_ROUNDS,
   MAX_REQUEST_CHARS,
   TOOLS,
