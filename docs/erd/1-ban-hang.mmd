@@ -1,0 +1,125 @@
+erDiagram
+  Users ||--o{ CartItems : "UserID"
+  Products ||--o{ CartItems : "ProductID"
+  Products ||--o{ OrderItems : "ProductID"
+  Orders ||--o{ OrderItems : "OrderID"
+  Users ||--o{ Orders : "UserID"
+  Orders ||--o{ OrderStatusHistory : "OrderID"
+  Categories ||--o{ Products : "CategoryID"
+  Users ||--o{ VoucherUsages : "UserID"
+  Orders ||--o{ VoucherUsages : "OrderID"
+  Vouchers ||--o{ VoucherUsages : "VoucherID"
+  Users {
+    int UserID PK
+    string FullName
+    string Email
+    string Password
+    string Phone
+    string Role
+    string Address
+    string RefreshToken
+    bool IsActive
+    datetime CreatedAt
+    datetime UpdatedAt
+    datetime DeletedAt
+    datetime PrivacyConsentAt
+  }
+  Categories {
+    int CategoryID PK
+    string Name
+    string Slug
+    string Icon
+  }
+  Products {
+    int ProductID PK
+    string Name
+    string Slug
+    string Brand
+    string Description
+    decimal Price
+    decimal OldPrice
+    int Stock
+    int CategoryID FK
+    string Specs
+    string Images
+    bool IsFeatured
+    bool IsDeleted
+    int Version
+    decimal Rating
+    int ReviewsCount
+    datetime CreatedAt
+    datetime UpdatedAt
+    string SearchText
+    bool IsGenerated
+  }
+  CartItems {
+    int UserID PK
+    int ProductID PK
+    int Quantity
+    datetime UpdatedAt
+  }
+  Orders {
+    int OrderID PK
+    string OrderCode
+    int UserID FK
+    int CustomerID
+    string Status
+    string PaymentMethod
+    string PaymentStatus
+    string VNPayTxnRef
+    decimal Subtotal
+    decimal Discount
+    decimal ShippingFee
+    decimal Total
+    string ShippingAddress
+    string Note
+    string CancelReason
+    datetime CreatedAt
+    datetime UpdatedAt
+    string QuoteCode
+    string TermsVersion
+    string ShippingCarrier
+    string TrackingCode
+    datetime ShippedAt
+    datetime DeliveredAt
+    decimal RefundAmount
+    string RefundReference
+    datetime RefundedAt
+  }
+  OrderItems {
+    int OrderItemID PK
+    int OrderID FK
+    int ProductID FK
+    int Quantity
+    decimal UnitPrice
+    int PromotionID
+  }
+  OrderStatusHistory {
+    int HistoryID PK
+    int OrderID FK
+    string FromStatus
+    string ToStatus
+    string ChangedBy
+    string Note
+    datetime ChangedAt
+  }
+  Vouchers {
+    int VoucherID PK
+    string Code
+    string DiscountType
+    decimal DiscountValue
+    decimal MinOrderAmount
+    decimal MaxDiscount
+    int UsageLimit
+    int UsedCount
+    datetime StartDate
+    datetime EndDate
+    bool IsActive
+  }
+  VoucherUsages {
+    int UsageID PK
+    int VoucherID FK
+    int UserID FK
+    int OrderID FK
+    datetime UsedAt
+  }

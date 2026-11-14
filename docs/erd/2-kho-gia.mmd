@@ -1,0 +1,83 @@
+erDiagram
+  Products ||--o{ PriceHistory : "ProductID"
+  Products ||--o{ PriceWatches : "ProductID"
+  Users ||--o{ PriceWatches : "UserID"
+  Products ||--o{ PromotionItems : "ProductID"
+  Promotions ||--o{ PromotionItems : "PromotionID"
+  Products ||--o{ StockMovements : "ProductID"
+  Products ||--o{ StockReceiptItems : "ProductID"
+  StockReceipts ||--o{ StockReceiptItems : "ReceiptID"
+  Users ||--o{ StockWatches : "UserID"
+  Products ||--o{ StockWatches : "ProductID"
+  Products {
+    int ProductID PK
+  }
+  StockReceipts {
+    int ReceiptID PK
+    string ReceiptCode
+    string Supplier
+    string Note
+    int TotalQuantity
+    decimal TotalCost
+    int CreatedBy
+    datetime CreatedAt
+  }
+  StockReceiptItems {
+    int ReceiptID PK
+    int ProductID PK
+    int Quantity
+    decimal UnitCost
+  }
+  StockMovements {
+    bigint MovementID PK
+    int ProductID FK
+    int Change
+    int StockAfter
+    string Reason
+    int OrderID
+    int ReceiptID
+    string Note
+    int CreatedBy
+    datetime CreatedAt
+  }
+  Promotions {
+    int PromotionID PK
+    string Name
+    datetimeoffset StartsAt
+    datetimeoffset EndsAt
+    bool IsActive
+    int CreatedBy
+    datetime CreatedAt
+  }
+  PromotionItems {
+    int PromotionID PK
+    int ProductID PK
+    decimal SalePrice
+    int QuantityLimit
+    int SoldCount
+    int PerOrderLimit
+  }
+  PriceHistory {
+    bigint PriceHistoryID PK
+    int ProductID FK
+    decimal Price
+    decimal OldPrice
+    datetime ChangedAt
+  }
+  PriceWatches {
+    int UserID PK
+    int ProductID PK
+    decimal PriceAtWatch
+    decimal TargetPrice
+    decimal LastNotifiedPrice
+    datetime LastNotifiedAt
+    datetime CreatedAt
+  }
+  StockWatches {
+    int UserID PK
+    int ProductID PK
+    datetime CreatedAt
+  }
+  Users {
+    int UserID PK
+  }

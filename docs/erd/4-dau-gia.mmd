@@ -1,0 +1,59 @@
+erDiagram
+  Users ||--o{ AuctionBids : "UserID"
+  Auctions ||--o{ AuctionBids : "AuctionID"
+  Auctions ||--o{ AuctionMaxBids : "AuctionID"
+  Users ||--o{ AuctionMaxBids : "UserID"
+  Users ||--o{ Auctions : "LeaderUserID"
+  Users ||--o{ Auctions : "WinnerUserID"
+  Products ||--o{ Auctions : "ProductID"
+  Orders ||--o{ Auctions : "OrderID"
+  Users ||--o{ Orders : "UserID"
+  Users {
+    int UserID PK
+  }
+  Products {
+    int ProductID PK
+  }
+  Orders {
+    int OrderID PK
+  }
+  Auctions {
+    int AuctionID PK
+    int ProductID FK
+    string Title
+    string Description
+    decimal StartingPrice
+    decimal BidIncrement
+    decimal BuyNowPrice
+    datetime StartsAt
+    datetime EndsAt
+    datetime ScheduledEndsAt
+    int ExtendSeconds
+    string Status
+    decimal CurrentPrice
+    int LeaderUserID FK
+    int BidCount
+    int WinnerUserID FK
+    decimal WinningPrice
+    datetime EndedAt
+    datetime PaymentDueAt
+    int OrderID FK
+    int Version
+    int CreatedBy
+    datetime CreatedAt
+    datetime UpdatedAt
+  }
+  AuctionMaxBids {
+    int AuctionID PK
+    int UserID PK
+    decimal MaxAmount
+    datetime Since
+  }
+  AuctionBids {
+    bigint BidID PK
+    int AuctionID FK
+    int UserID FK
+    decimal Amount
+    string Kind
+    datetime CreatedAt
+  }

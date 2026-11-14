@@ -1,0 +1,105 @@
+erDiagram
+  Users ||--o{ Notifications : "UserID"
+  Users ||--o{ Orders : "UserID"
+  Users ||--o{ ProductQuestions : "UserID"
+  Products ||--o{ ProductQuestions : "ProductID"
+  Products ||--o{ ReturnRequestItems : "ProductID"
+  ReturnRequests ||--o{ ReturnRequestItems : "ReturnID"
+  Users ||--o{ ReturnRequests : "UserID"
+  Orders ||--o{ ReturnRequests : "OrderID"
+  ServiceRequests ||--o{ ServiceRequestEvents : "RequestID"
+  Users ||--o{ ServiceRequests : "UserID"
+  Orders ||--o{ Warranties : "OrderID"
+  Products ||--o{ Warranties : "ProductID"
+  Users {
+    int UserID PK
+  }
+  Products {
+    int ProductID PK
+  }
+  Orders {
+    int OrderID PK
+  }
+  ReturnRequests {
+    int ReturnID PK
+    string ReturnCode
+    int OrderID FK
+    int UserID FK
+    string Kind
+    string Reason
+    string Description
+    string Status
+    bool Restocked
+    decimal RefundAmount
+    string AdminNote
+    datetime CreatedAt
+    datetime UpdatedAt
+    datetime ResolvedAt
+  }
+  ReturnRequestItems {
+    int ReturnID PK
+    int ProductID PK
+    int Quantity
+    decimal UnitPrice
+  }
+  Warranties {
+    string SerialNumber PK
+    int ProductID FK
+    int OrderID FK
+    date StartDate
+    date EndDate
+    string Note
+    datetime CreatedAt
+  }
+  ServiceRequests {
+    int RequestID PK
+    string Code
+    int UserID FK
+    string Type
+    string Status
+    string ServiceKind
+    int OrderID
+    string SerialNumber
+    date ScheduledDate
+    string TimeSlot
+    string Address
+    string ContactPhone
+    string Description
+    string DeviceInfo
+    decimal EstimateLow
+    decimal EstimateHigh
+    decimal FinalPrice
+    datetime CreatedAt
+    datetime UpdatedAt
+  }
+  ServiceRequestEvents {
+    int EventID PK
+    int RequestID FK
+    string Status
+    string Note
+    bool IsCustomerVisible
+    int CreatedBy
+    datetime CreatedAt
+  }
+  ProductQuestions {
+    int QuestionID PK
+    int ProductID FK
+    int UserID FK
+    string AskerName
+    string Question
+    string Answer
+    int AnsweredBy
+    string Status
+    datetime CreatedAt
+    datetime AnsweredAt
+  }
+  Notifications {
+    bigint NotificationID PK
+    int UserID FK
+    string Type
+    string Title
+    string Body
+    string Link
+    bool IsRead
+    datetime CreatedAt
+  }
