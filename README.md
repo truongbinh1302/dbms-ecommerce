@@ -1,5 +1,10 @@
 # BinhTinhStore — E-commerce Database Management System
 
+> **Tiếng Việt:** viết báo cáo hoặc muốn chạy thử nhanh trên Windows, đọc
+> [`docs/HUONG-DAN-VIET-BAO-CAO.md`](docs/HUONG-DAN-VIET-BAO-CAO.md): cách chạy,
+> tài khoản mẫu, chức năng nằm ở file nào, sơ đồ CSDL, số liệu đã đo và những
+> điểm cần ghi rõ trong báo cáo.
+
 BinhTinhStore is a full-stack academic project that explores how an e-commerce
 application can use both a relational database and a document database. The
 application combines a React storefront and admin interface with an Express API,
@@ -20,7 +25,7 @@ features and DBMS demonstrations.
 - Build PC with compatibility checks (socket, RAM type and slots, M.2 slots,
   form factor, GPU length, cooler height, PSU headroom), suggested builds by
   the software a customer needs (picked from a preset or from a sentence such
-  as "code web và Docker, tầm 20 triệu": keywords and budget are parsed on the
+  as "code web và Docker, tầm 30 triệu": keywords and budget are parsed on the
   server and the parts and prices always come from stock), upgrade advice for
   an existing PC, and 48-hour price-locked quotes with a shareable link.
 - Price history on every product page and warranty lookup by serial number.
@@ -38,7 +43,7 @@ features and DBMS demonstrations.
   taken with `XLOCK` because the 50-bidders-plus-50-viewers test deadlocked with
   `UPDLOCK` (a viewer's shared lock on the row versus a bidder converting U→X).
 - "Nhờ AI ráp máy" (`#/build-pc/nho-ai`): the customer describes what the PC is
-  for in their own words ("chơi game và stream, chạy AI 8B, tầm 25 triệu") and
+  for in their own words ("chơi game và stream, chạy AI 8B, tầm 40 triệu") and
   an OpenAI model assembles a build by calling the store's own tools:
   `find_parts` (in-stock parts, Hot Deal prices, 90-day price labels),
   `check_build` (the same compatibility check and "what it can run" estimate
@@ -173,17 +178,26 @@ Node.js + Express server
 
 ### SQL Server ERD
 
-![SQL Server entity-relationship diagram](docs/sql_server_erd.png)
+32 tables, created by the 23 migrations in
+[`database/migrations`](database/migrations). The diagrams in
+[`docs/erd`](docs/erd) are generated from the live schema (Mermaid sources
+next to the images):
 
-The relational model covers users, categories, products, orders, order items,
-vouchers, and voucher usage. Migration scripts live in
-[`database/migrations`](database/migrations).
+![Tables by area and their foreign keys](docs/erd/0-tong-quan.png)
+
+Per area, with columns: [sales](docs/erd/1-ban-hang.png) (users, products,
+cart, orders, vouchers), [stock and prices](docs/erd/2-kho-gia.png),
+[Build PC](docs/erd/3-build-pc.png), [auctions](docs/erd/4-dau-gia.png),
+[after-sales](docs/erd/5-hau-mai.png) (returns, warranties, services,
+questions, notifications).
 
 ### MongoDB schema
 
 ![MongoDB schema](docs/mongoDb_schema.png)
 
-MongoDB is used for product logs and reviews, with additional scripts under
+The application uses two collections, `reviews` and `product_logs`; the
+diagram and `docs/mongodb_schema.md` are the initial design, which also
+sketched collections that now live in SQL Server. Additional scripts under
 [`database-demo/mongo_db_demo`](database-demo/mongo_db_demo) to demonstrate
 indexing, query processing, transactions, and concurrency behavior.
 

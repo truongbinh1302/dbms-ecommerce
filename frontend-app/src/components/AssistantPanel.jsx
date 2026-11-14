@@ -8,8 +8,8 @@ import { formatCurrency } from '../utils/format'
 const STORAGE_KEY = 'bt_assistant_chat'
 const MAX_KEPT = 12
 const SUGGESTIONS = [
-  'Laptop lập trình dưới 20 triệu',
-  'Build PC code web và Docker tầm 20 triệu',
+  'Laptop lập trình dưới 30 triệu',
+  'Build PC code web và Docker tầm 30 triệu',
   'Đổi trả và giao hàng thế nào?',
 ]
 
@@ -75,10 +75,7 @@ export default function AssistantPanel({ open, onClose, hotline }) {
       className="fixed inset-x-3 bottom-3 z-50 flex max-h-[min(640px,calc(100vh-24px))] flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] sm:inset-x-auto sm:right-5 sm:w-[400px]"
     >
       <div className="flex items-start justify-between gap-3 bg-slate-950 px-5 py-4 text-white">
-        <div>
-          <h2 id="assistant-title" className="text-lg font-black">Trợ lý mua hàng</h2>
-          <p className="text-xs text-slate-300">Dùng AI (OpenAI), có thể nhầm. Giá và tồn kho trên thẻ sản phẩm lấy từ cửa hàng.</p>
-        </div>
+        <h2 id="assistant-title" className="text-lg font-black">Trợ lý mua hàng</h2>
         <button type="button" onClick={onClose} aria-label="Đóng trợ lý" className="rounded-full bg-white/10 p-2 hover:bg-white/20">
           <StoreGlyph name="x" className="size-4" />
         </button>
@@ -153,11 +150,7 @@ export default function AssistantPanel({ open, onClose, hotline }) {
             Gửi
           </button>
         </div>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-          <span>
-            Đừng nhập thông tin cá nhân. Câu hỏi được gửi tới OpenAI để trả lời,{' '}
-            <a href={hrefFor('/chinh-sach-bao-mat')} onClick={onClose} className="font-semibold text-slate-700 underline">xem chính sách</a>.
-          </span>
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-xs text-slate-600">
           <span className="flex gap-3">
             {hotline ? <a href={`tel:${hotline.replace(/[^0-9+]/g, '')}`} className="font-semibold text-slate-700 underline">Gọi {hotline}</a> : null}
             {messages.length ? (

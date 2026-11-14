@@ -1,0 +1,88 @@
+flowchart LR
+  subgraph G0["Bán hàng"]
+    Users[Users]
+    Categories[Categories]
+    Products[Products]
+    CartItems[CartItems]
+    Orders[Orders]
+    OrderItems[OrderItems]
+    OrderStatusHistory[OrderStatusHistory]
+    Vouchers[Vouchers]
+    VoucherUsages[VoucherUsages]
+  end
+  subgraph G1["Kho và giá"]
+    StockReceipts[StockReceipts]
+    StockReceiptItems[StockReceiptItems]
+    StockMovements[StockMovements]
+    Promotions[Promotions]
+    PromotionItems[PromotionItems]
+    PriceHistory[PriceHistory]
+    PriceWatches[PriceWatches]
+    StockWatches[StockWatches]
+  end
+  subgraph G2["Build PC"]
+    ComponentSpecs[ComponentSpecs]
+    BuildQuotes[BuildQuotes]
+    BuildWatches[BuildWatches]
+    LaptopModels[LaptopModels]
+  end
+  subgraph G3["Đấu giá"]
+    Auctions[Auctions]
+    AuctionMaxBids[AuctionMaxBids]
+    AuctionBids[AuctionBids]
+  end
+  subgraph G4["Hậu mãi"]
+    ReturnRequests[ReturnRequests]
+    ReturnRequestItems[ReturnRequestItems]
+    Warranties[Warranties]
+    ServiceRequests[ServiceRequests]
+    ServiceRequestEvents[ServiceRequestEvents]
+    ProductQuestions[ProductQuestions]
+    Notifications[Notifications]
+  end
+  subgraph G5["Hệ thống"]
+    AppSettings[AppSettings]
+  end
+  Users --> AppSettings
+  Users --> AuctionBids
+  Auctions --> AuctionBids
+  Auctions --> AuctionMaxBids
+  Users --> AuctionMaxBids
+  Users --> Auctions
+  Products --> Auctions
+  Orders --> Auctions
+  Users --> BuildQuotes
+  Users --> BuildWatches
+  Users --> CartItems
+  Products --> CartItems
+  Products --> ComponentSpecs
+  Products --> LaptopModels
+  Users --> Notifications
+  Products --> OrderItems
+  Orders --> OrderItems
+  Users --> Orders
+  Orders --> OrderStatusHistory
+  Products --> PriceHistory
+  Products --> PriceWatches
+  Users --> PriceWatches
+  Users --> ProductQuestions
+  Products --> ProductQuestions
+  Categories --> Products
+  Products --> PromotionItems
+  Promotions --> PromotionItems
+  Products --> ReturnRequestItems
+  ReturnRequests --> ReturnRequestItems
+  Users --> ReturnRequests
+  Orders --> ReturnRequests
+  ServiceRequests --> ServiceRequestEvents
+  Users --> ServiceRequests
+  Products --> StockMovements
+  Products --> StockReceiptItems
+  StockReceipts --> StockReceiptItems
+  Users --> StockWatches
+  Products --> StockWatches
+  Users --> VoucherUsages
+  Orders --> VoucherUsages
+  Vouchers --> VoucherUsages
+  Orders --> Warranties
+  Products --> Warranties

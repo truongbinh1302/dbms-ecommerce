@@ -1,0 +1,80 @@
+erDiagram
+  Users ||--o{ BuildQuotes : "UserID"
+  Users ||--o{ BuildWatches : "UserID"
+  Products ||--o{ ComponentSpecs : "ProductID"
+  Products ||--o{ LaptopModels : "ProductID"
+  Products {
+    int ProductID PK
+  }
+  ComponentSpecs {
+    int ProductID PK
+    string ComponentType
+    string Socket
+    string MemoryType
+    string FormFactor
+    string SupportedFormFactors
+    string SupportedSockets
+    int PowerW
+    int PsuWatts
+    int LengthMm
+    int MaxGpuLengthMm
+    int HeightMm
+    int MaxCoolerHeightMm
+    int MemorySlots
+    int Modules
+    int CapacityGB
+    int M2Slots
+    string StorageInterface
+    bool HasIntegratedGraphics
+    bool IncludesCooler
+    int Tier
+    int VramGB
+    string M2Size
+    int PcieGen
+  }
+  BuildQuotes {
+    int QuoteID PK
+    string Code
+    int UserID FK
+    string Title
+    string ItemsJson
+    decimal Subtotal
+    datetime CreatedAt
+    datetime ExpiresAt
+  }
+  BuildWatches {
+    int BuildWatchID PK
+    int UserID FK
+    string Title
+    string ItemsJson
+    decimal TotalAtWatch
+    decimal LastNotifiedTotal
+    datetime LastNotifiedAt
+    datetime CreatedAt
+  }
+  LaptopModels {
+    int LaptopModelID PK
+    string Slug
+    string Brand
+    string Name
+    string MatchKeys
+    int ProductID FK
+    string CpuName
+    int CpuThreads
+    string GpuName
+    int VramGB
+    int RamGB
+    string RamType
+    int RamSolderedGB
+    int RamSlots
+    int MaxRamGB
+    int M2Slots
+    string M2Size
+    int PcieGen
+    int StorageGB
+    bool UnifiedMemory
+    string Note
+  }
+  Users {
+    int UserID PK
+  }
