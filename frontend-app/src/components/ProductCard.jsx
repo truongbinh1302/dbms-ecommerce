@@ -41,13 +41,13 @@ export function ProductVisual({ product, className = '' }) {
   // Ảnh sản phẩm (ảnh thật hoặc ảnh minh hoạ đã ghi sẵn hãng, tên): phủ kín khung, không chồng chữ lên ảnh.
   if (productImage) {
     return (
-      <div className={classNames('relative overflow-hidden rounded-[28px] bg-slate-100', className)}>
+      <div className={classNames('relative overflow-hidden rounded-[28px] bg-slate-50', className)}>
         <img
           src={productImage}
           alt={product.name}
           loading="lazy"
           decoding="async"
-          className="absolute inset-0 size-full object-cover"
+          className="absolute inset-0 size-full object-contain p-2"
         />
       </div>
     )
