@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="RM850e 850W ATX 3.1 80 Plus Gold">
+  <title>RM850e 850W ATX 3.1 80 Plus Gold</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#ffff81"/></linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2e8f0"/><stop offset="0.5" stop-color="#cbd5e1"/><stop offset="1" stop-color="#94a3b8"/></linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#996500"/><stop offset="0.55" stop-color="#d9a520"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.5"><stop offset="0" stop-color="#d9a520" stop-opacity="0.22"/><stop offset="1" stop-color="#d9a520" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="800" height="800" rx="48" fill="url(#bg)"/>
+  <circle cx="400" cy="350" r="300" fill="url(#glow)"/>
+  <ellipse cx="400" cy="585" rx="250" ry="22" fill="#0f172a" fill-opacity="0.12"/>
+  <g><rect x="200" y="200" width="400" height="300" rx="20" fill="#111827"/><rect x="200" y="200" width="400" height="300" rx="20" fill="none" stroke="#d9a520" stroke-width="4"/>
+    <circle cx="400" cy="350" r="110" fill="none" stroke="#475569" stroke-width="6"/><circle cx="400" cy="350" r="90" fill="none" stroke="#475569" stroke-width="6"/><circle cx="400" cy="350" r="70" fill="none" stroke="#475569" stroke-width="6"/><circle cx="400" cy="350" r="50" fill="none" stroke="#475569" stroke-width="6"/><path d="M290 350 h220 M400 240 v220" stroke="#475569" stroke-width="6"/><circle cx="400" cy="350" r="26" fill="#d9a520"/>
+    <rect x="200" y="460" width="400" height="40" rx="0" fill="#1f2937"/><rect x="226" y="470" width="52" height="20" rx="4" fill="#374151"/><rect x="298" y="470" width="52" height="20" rx="4" fill="#374151"/><rect x="370" y="470" width="52" height="20" rx="4" fill="#374151"/><rect x="442" y="470" width="52" height="20" rx="4" fill="#374151"/><rect x="514" y="470" width="52" height="20" rx="4" fill="#374151"/></g>
+  <text x="56" y="84" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="30" font-weight="800" fill="#ab7700" letter-spacing="3">CORSAIR</text>
+  <text x="744" y="84" text-anchor="end" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="24" font-weight="600" fill="#475569">Nguồn</text>
+  <text x="400" y="630" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="46" font-weight="900" fill="#0f172a">RM850e 850W ATX 3.1 80</text>
+  <text x="400" y="684" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="46" font-weight="900" fill="#0f172a">Plus Gold</text>
+  <text x="400" y="760" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="26" font-weight="600" fill="#475569">850W · 80 Plus Gold · ATX 3.1</text>
+  <text x="744" y="768" text-anchor="end" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="18" fill="#64748b">Ảnh minh hoạ</text>
+</svg>

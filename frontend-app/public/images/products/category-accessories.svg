@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="Phụ kiện">
+  <title>Phụ kiện</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#ff7ea9"/></linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2e8f0"/><stop offset="0.5" stop-color="#cbd5e1"/><stop offset="1" stop-color="#94a3b8"/></linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a10008"/><stop offset="0.55" stop-color="#e11d48"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.5"><stop offset="0" stop-color="#e11d48" stop-opacity="0.22"/><stop offset="1" stop-color="#e11d48" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="800" height="800" rx="48" fill="url(#bg)"/>
+  <circle cx="400" cy="350" r="300" fill="url(#glow)"/>
+  <ellipse cx="400" cy="585" rx="250" ry="22" fill="#0f172a" fill-opacity="0.12"/>
+  <g><path d="M400 160 L600 250 L600 470 L400 560 L200 470 L200 250 z" fill="#d6b88a"/><path d="M400 160 L600 250 L400 340 L200 250 z" fill="#e7cfa6"/><path d="M400 340 V560" stroke="#b8956a" stroke-width="4"/><path d="M300 205 L500 295" stroke="#e11d48" stroke-width="22"/></g>
+  <text x="56" y="84" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="30" font-weight="800" fill="#b3001a" letter-spacing="3">BINHTINHSTORE</text>
+  <text x="744" y="84" text-anchor="end" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="24" font-weight="600" fill="#475569">Phụ kiện</text>
+  <text x="400" y="660" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="46" font-weight="900" fill="#0f172a">Phụ kiện</text>
+  <text x="400" y="736" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="26" font-weight="600" fill="#475569">Ảnh minh hoạ theo danh mục</text>
+  <text x="744" y="768" text-anchor="end" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="18" fill="#64748b">Ảnh minh hoạ</text>
+</svg>

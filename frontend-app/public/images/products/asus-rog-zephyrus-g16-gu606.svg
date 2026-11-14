@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="ROG Zephyrus G16 (2026) GU606">
+  <title>ROG Zephyrus G16 (2026) GU606</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#a8b6ca"/></linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2e8f0"/><stop offset="0.5" stop-color="#cbd5e1"/><stop offset="1" stop-color="#94a3b8"/></linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#071529"/><stop offset="0.55" stop-color="#475569"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.5"><stop offset="0" stop-color="#475569" stop-opacity="0.22"/><stop offset="1" stop-color="#475569" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="800" height="800" rx="48" fill="url(#bg)"/>
+  <circle cx="400" cy="350" r="300" fill="url(#glow)"/>
+  <ellipse cx="400" cy="585" rx="250" ry="22" fill="#0f172a" fill-opacity="0.12"/>
+  <g><path d="M215 150 h370 a16 16 0 0 1 16 16 v270 h-402 v-270 a16 16 0 0 1 16 -16 z" fill="#1f2937"/>
+    <rect x="221" y="166" width="358" height="252" rx="6" fill="url(#screen)"/><path d="M221 418 l358 -252 v120 l-188 132 z" fill="#ffffff" fill-opacity="0.06"/>
+    <path d="M150 446 h500 l-34 70 a10 10 0 0 1 -9 6 h-414 a10 10 0 0 1 -9 -6 z" fill="url(#metal)"/><rect x="350" y="452" width="100" height="10" rx="5" fill="#94a3b8"/><rect x="150" y="440" width="500" height="10" rx="5" fill="#475569"/></g>
+  <text x="56" y="84" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="30" font-weight="800" fill="#19273b" letter-spacing="3">ASUS</text>
+  <text x="744" y="84" text-anchor="end" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="24" font-weight="600" fill="#475569">Laptop</text>
+  <text x="400" y="630" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="40" font-weight="900" fill="#0f172a">ROG Zephyrus G16 (2026)</text>
+  <text x="400" y="678" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="40" font-weight="900" fill="#0f172a">GU606</text>
+  <text x="400" y="748" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="26" font-weight="600" fill="#475569">Core Ultra 9 386H · RTX 5060 8GB</text>
+  <text x="744" y="768" text-anchor="end" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="18" fill="#64748b">Ảnh minh hoạ</text>
+</svg>
