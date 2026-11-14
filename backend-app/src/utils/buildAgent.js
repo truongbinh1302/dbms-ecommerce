@@ -14,7 +14,8 @@ const { estimateCapabilities, profileFromParts, gpuKindFromName } = require('./w
   Phần gọi OpenAI được truyền vào (callModel) để unit test giả lập được.
 */
 
-const MAX_ROUNDS = 10;
+// Catalog nhiều đời (AM4/AM5/LGA1700/LGA1851) cần nhiều lượt tra cứu hơn: 10 lượt làm 5/30 yêu cầu dừng giữa chừng.
+const MAX_ROUNDS = 14;
 const MAX_CALLS_PER_ROUND = 8;
 const MAX_REQUEST_CHARS = 600;
 const MAX_ITEMS = 12;
@@ -197,6 +198,9 @@ Cách làm:
 
 Nguyên tắc chọn:
 - Tổng tiền không vượt ngân sách. Dồn tiền vào phần quyết định nhu cầu, phần còn lại chọn vừa đủ.
+- Mức RAM tối thiểu theo nhu cầu bên dưới là bắt buộc, và ổ chính luôn là SSD (HDD chỉ làm ổ phụ). Thiếu tiền thì hạ CPU, card hoặc dung lượng SSD trước, không cắt RAM dưới mức tối thiểu.
+- RAM và SSD đang rất đắt (DDR5 32 GB khoảng 10 triệu). Ngân sách eo hẹp thì cân nhắc nền DDR4 (socket AM4, hoặc LGA1700 với mainboard DDR4): RAM DDR4 rẻ hơn nhiều.
+- Khách chỉ định hãng CPU (Intel, AMD Ryzen) hay hãng card (NVIDIA, Radeon) thì bắt buộc theo đúng hãng đó. CPU Intel gồm socket LGA1700 và LGA1851.
 - Chơi game, đồ hoạ 3D, dựng video: card đồ hoạ là phần quan trọng nhất; chơi game thì CPU hạng 1-2 thường đủ.
 - Chạy AI trên máy (mô hình ngôn ngữ, Stable Diffusion): VRAM quyết định cỡ mô hình chạy được; ưu tiên card NVIDIA vì công cụ AI hỗ trợ CUDA sẵn; RAM từ 32 GB. Khách nêu cỡ mô hình (8B, 14B, 32B...) thì xem canRun của check_build: chọn card để mục đó đạt "Tốt" nếu ngân sách cho phép, không thì ghi rõ trong summary là chạy chậm.
 - Lập trình, Docker, máy ảo, Android Studio: RAM từ 32 GB và CPU nhiều nhân; không cần card rời mạnh.
@@ -212,6 +216,7 @@ Không được:
 
 Khách nói cần máy để chơi game, học, làm việc mà không nhắc laptop thì đó là yêu cầu ráp PC máy bàn, kể cả khi mua cho người khác dùng.
 Yêu cầu không phải ráp PC máy bàn (mua laptop, hỏi chuyện khác): không gọi công cụ, trả lời một câu rằng mục này chỉ ráp PC máy bàn và gợi ý dùng trợ lý mua hàng hoặc ô tìm kiếm.
+Đã dùng công cụ (tức là yêu cầu ráp PC) thì không trả lời câu "mục này chỉ ráp PC máy bàn". Không ráp được trong ngân sách: gửi submit_build cấu hình rẻ nhất vẫn đạt nhu cầu kèm overBudgetReason nói rõ cần thêm bao nhiêu.
 Viết tiếng Việt.`;
 
 const REMINDER = 'Nếu đây là yêu cầu ráp PC máy bàn, hãy dùng find_parts, check_build rồi gọi submit_build. Nếu không phải, trả lời một câu ngắn.';
