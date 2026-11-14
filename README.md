@@ -52,6 +52,9 @@ features and DBMS demonstrations.
   runs 30 sample requests with automatic checks (budget, GPU brand, VRAM, RAM,
   form factor...) and compares the result with the keyword rules
   (`DANH-GIA-TRO-LY-AI.bat` on Windows writes `bao-cao-tro-ly-ai.md`).
+- Bulk product photos: put files named by product slug in `anh-san-pham/` and double-click
+  `THEM-ANH-SAN-PHAM.bat` (see `PRODUCT_IMAGE_UPLOAD_GUIDE.md`). Products without a photo show
+  a generated illustration.
 - "Nên mua lúc nào?" (when to buy): each product and Build PC part is labelled
   against its last 90 days (lowest, below/above the time-weighted average,
   change against 30 days ago). The average weights each price by how long it
